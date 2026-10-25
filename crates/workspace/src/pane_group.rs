@@ -18,7 +18,6 @@ use gpui::point;
 use gpui::size;
 use parking_lot::Mutex;
 use project::Project;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::Settings;
 use ui::prelude::*;
@@ -793,7 +792,7 @@ impl PaneAxis {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SplitDirection {
     Up,

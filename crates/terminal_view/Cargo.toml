@@ -26,7 +26,6 @@ log.workspace = true
 menu.workspace = true
 project.workspace = true
 regex.workspace = true
-schemars.workspace = true
 task.workspace = true
 
 serde.workspace = true

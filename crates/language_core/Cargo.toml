@@ -18,7 +18,6 @@ lru.workspace = true
 parking_lot.workspace = true
 path.workspace = true
 regex = { workspace = true, default-features = true }
-schemars = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 smallvec.workspace = true

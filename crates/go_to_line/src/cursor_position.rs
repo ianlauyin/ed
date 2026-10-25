@@ -14,7 +14,6 @@ use gpui::Styled;
 use gpui::Subscription;
 use gpui::Task;
 use gpui::WeakEntity;
-use settings::RegisterSetting;
 use settings::Settings;
 use text::Point;
 use text::Selection;
@@ -263,11 +262,13 @@ impl StatusItemView for CursorPosition {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, RegisterSetting)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LineIndicatorFormat {
     Short,
     Long,
 }
+
+settings::register_setting!(LineIndicatorFormat);
 
 impl From<settings::LineIndicatorFormat> for LineIndicatorFormat {
     fn from(format: settings::LineIndicatorFormat) -> Self {

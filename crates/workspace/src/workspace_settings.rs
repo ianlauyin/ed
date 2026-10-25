@@ -10,13 +10,11 @@ pub use settings::EncodingDisplayOptions;
 pub use settings::InactiveOpacity;
 pub use settings::PaneSplitDirectionHorizontal;
 pub use settings::PaneSplitDirectionVertical;
-pub use settings::RegisterSetting;
 pub use settings::RestoreOnStartupBehavior;
 pub use settings::Settings;
 
 use crate::DockPosition;
 
-#[derive(RegisterSetting)]
 pub struct WorkspaceSettings {
     pub active_pane_modifiers: ActivePanelModifiers,
     pub bottom_dock_layout: settings::BottomDockLayout,
@@ -46,6 +44,8 @@ pub struct WorkspaceSettings {
     pub focus_follows_mouse: FocusFollowsMouse,
 }
 
+settings::register_setting!(WorkspaceSettings);
+
 #[derive(Copy, Clone, Deserialize)]
 pub struct FocusFollowsMouse {
     pub enabled: bool,
@@ -71,13 +71,15 @@ pub struct ActivePanelModifiers {
     pub inactive_opacity: Option<InactiveOpacity>,
 }
 
-#[derive(Deserialize, RegisterSetting)]
+#[derive(Deserialize)]
 pub struct TabBarSettings {
     pub show: bool,
     pub show_nav_history_buttons: bool,
     pub show_tab_bar_buttons: bool,
     pub show_pinned_tabs_in_separate_row: bool,
 }
+
+settings::register_setting!(TabBarSettings);
 
 impl Settings for WorkspaceSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
@@ -137,7 +139,7 @@ impl Settings for TabBarSettings {
     }
 }
 
-#[derive(Deserialize, RegisterSetting)]
+#[derive(Deserialize)]
 pub struct StatusBarSettings {
     pub show: bool,
     pub active_language_button: bool,
@@ -145,6 +147,8 @@ pub struct StatusBarSettings {
     pub active_encoding_button: EncodingDisplayOptions,
     pub pending_keystrokes_indicator: bool,
 }
+
+settings::register_setting!(StatusBarSettings);
 
 impl Settings for StatusBarSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

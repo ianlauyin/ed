@@ -2,11 +2,10 @@ use gpui::Pixels;
 pub use settings::DockSide;
 pub use settings::FolderIndicator;
 use settings::IntoGpui;
-use settings::RegisterSetting;
 pub use settings::Settings;
 pub use settings::ShowIndentGuides;
 
-#[derive(Debug, Clone, Copy, PartialEq, RegisterSetting)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutlinePanelSettings {
     pub button: bool,
     pub default_width: Pixels,
@@ -21,6 +20,8 @@ pub struct OutlinePanelSettings {
     pub expand_outlines_with_depth: usize,
     pub multi_buffer_hide_symbols: bool,
 }
+
+settings::register_setting!(OutlinePanelSettings);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct IndentGuidesSettings {

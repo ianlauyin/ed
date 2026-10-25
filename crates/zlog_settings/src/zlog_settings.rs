@@ -1,7 +1,6 @@
 //! # zlog_settings
 use collections::HashMap;
 use gpui::App;
-use settings::RegisterSetting;
 use settings::Settings;
 use settings::SettingsStore;
 
@@ -13,7 +12,7 @@ pub fn init(cx: &mut App) {
     .detach();
 }
 
-#[derive(Clone, Debug, RegisterSetting)]
+#[derive(Clone, Debug)]
 pub struct ZlogSettings {
     /// A map of log scopes to the desired log level.
     /// Useful for filtering out noisy logs or enabling more verbose logging.
@@ -21,6 +20,8 @@ pub struct ZlogSettings {
     /// Example: {"log": {"client": "warn"}}
     pub scopes: HashMap<String, String>,
 }
+
+settings::register_setting!(ZlogSettings);
 
 impl Settings for ZlogSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

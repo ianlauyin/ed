@@ -5,17 +5,14 @@ use anyhow::Context;
 use collections::BTreeMap;
 use collections::HashMap;
 use gpui::Rgba;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use settings_macros::MergeFrom;
 use util::serde::default_true;
 
 use crate::AllLanguageSettingsContent;
 use crate::DelayMs;
-use crate::SplicingVec;
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LspSettingsMap(pub HashMap<Arc<str>, LspSettings>);
 
 impl IntoIterator for LspSettingsMap {
@@ -27,7 +24,7 @@ impl IntoIterator for LspSettingsMap {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectSettingsContent {
     #[serde(flatten)]
     pub all_languages: AllLanguageSettingsContent,
@@ -49,18 +46,7 @@ pub struct ProjectSettingsContent {
 
 /// When to scan content of linked directories.
 #[derive(
-    Copy,
-    Clone,
-    Default,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ScanSymlinksSetting {
@@ -71,7 +57,7 @@ pub enum ScanSymlinksSetting {
     Expanded,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WorktreeSettingsContent {
     /// Exclude files matching these glob patterns from file scans, file searches,
     /// and the project file tree. Takes precedence over `file_scan_inclusions`.
@@ -108,7 +94,7 @@ pub struct WorktreeSettingsContent {
     ///
     /// Inherited patterns are inserted at `"..."`, and duplicates keep their first
     /// occurrence.
-    pub file_scan_exclusions: Option<SplicingVec>,
+    pub file_scan_exclusions: Option<Vec<String>>,
 
     /// Include files matching these glob patterns when scanning, even if ignored
     /// by Git. Note that broad patterns can slow file scanning.
@@ -134,7 +120,7 @@ pub struct WorktreeSettingsContent {
     ///
     /// Inherited patterns are inserted at `"..."`, and duplicates keep their first
     /// occurrence.
-    pub file_scan_inclusions: Option<SplicingVec>,
+    pub file_scan_inclusions: Option<Vec<String>>,
 
     /// When to scan content of linked directories.
     ///
@@ -180,7 +166,7 @@ pub struct WorktreeSettingsContent {
     ///
     /// Inherited patterns are inserted at `"..."`, and duplicates keep their first
     /// occurrence.
-    pub hidden_files: Option<SplicingVec>,
+    pub hidden_files: Option<Vec<String>>,
 
     /// Treat files matching these glob patterns as read-only when opened. You can
     /// view but not edit them, which is useful for build outputs, external
@@ -206,10 +192,10 @@ pub struct WorktreeSettingsContent {
     ///
     /// Inherited patterns are inserted at `"..."`, and duplicates keep their first
     /// occurrence.
-    pub read_only_files: Option<SplicingVec>,
+    pub read_only_files: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub struct LspSettings {
     pub binary: Option<BinarySettings>,
@@ -238,14 +224,14 @@ impl Default for LspSettings {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BinarySettings {
     pub arguments: Option<Vec<String>>,
     pub env: Option<BTreeMap<String, String>>,
 }
 
 /// Common language server settings.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlobalLspSettingsContent {
     /// Whether to show the LSP servers button in the status bar.
     ///
@@ -259,7 +245,6 @@ pub struct GlobalLspSettingsContent {
     /// The maximum line length a buffer may contain before language server features are disabled for the entire buffer.
     ///
     /// Default: `20000`
-    #[schemars(range(min = 1))]
     pub max_buffer_line_length: Option<u32>,
     /// Settings for language server notifications
     pub notifications: Option<LspNotificationSettingsContent>,
@@ -267,7 +252,7 @@ pub struct GlobalLspSettingsContent {
     pub semantic_token_rules: Option<SemanticTokenRules>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LspNotificationSettingsContent {
     /// Timeout in milliseconds for automatically dismissing language server notifications.
     /// Set to 0 to disable auto-dismiss.
@@ -277,7 +262,7 @@ pub struct LspNotificationSettingsContent {
 }
 
 /// Custom rules for rendering LSP semantic tokens.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(transparent)]
 pub struct SemanticTokenRules {
     pub rules: Vec<SemanticTokenRule>,
@@ -299,13 +284,7 @@ impl SemanticTokenRules {
     }
 }
 
-impl crate::merge_from::MergeFrom for SemanticTokenRules {
-    fn merge_from(&mut self, other: &Self) {
-        self.rules.splice(0..0, other.rules.iter().cloned());
-    }
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct SemanticTokenRule {
     pub token_type: Option<String>,
@@ -333,7 +312,7 @@ impl SemanticTokenRule {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum SemanticTokenColorOverride {
     InheritForeground(bool),
@@ -341,18 +320,7 @@ pub enum SemanticTokenColorOverride {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticTokenFontWeight {
@@ -362,18 +330,7 @@ pub enum SemanticTokenFontWeight {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticTokenFontStyle {
@@ -382,7 +339,7 @@ pub enum SemanticTokenFontStyle {
     Italic,
 }
 
-#[derive(Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct SessionSettingsContent {
     /// Whether or not to restore unsaved buffers on restart.
     ///
@@ -399,7 +356,7 @@ pub struct SessionSettingsContent {
     pub trust_all_worktrees: Option<bool>,
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GitSettings {
     /// Whether or not to enable git integration.
     ///
@@ -455,7 +412,7 @@ pub struct GitSettings {
     pub worktree_directory: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct GitEnabledSettings {
     pub disable_git: Option<bool>,
@@ -473,19 +430,7 @@ impl GitEnabledSettings {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum GitGutterSetting {
     /// Show git gutter in tracked files.
@@ -495,7 +440,7 @@ pub enum GitGutterSetting {
     Hide,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct BranchPickerSettingsContent {
     /// Whether to show author name as part of the commit information.
@@ -504,7 +449,7 @@ pub struct BranchPickerSettingsContent {
     pub show_author_name: Option<bool>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FileDiffSettingsContent {
     /// Whether newly opened file diffs show the full file instead of changes only.
@@ -513,19 +458,7 @@ pub struct FileDiffSettingsContent {
     pub show_full_file: Option<bool>,
 }
 
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum GitHunkStyleSetting {
     /// Show unstaged hunks with a filled background and staged hunks hollow.
@@ -535,19 +468,7 @@ pub enum GitHunkStyleSetting {
     UnstagedHollow,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum GitPathStyle {
     /// Show file name first, then path
@@ -557,7 +478,7 @@ pub enum GitPathStyle {
     FilePathFirst,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DiagnosticsSettingsContent {
     /// Whether to show the project diagnostics button in the status bar.
     pub button: Option<bool>,
@@ -574,7 +495,7 @@ pub struct DiagnosticsSettingsContent {
     pub inline: Option<InlineDiagnosticsSettingsContent>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LspPullDiagnosticsSettingsContent {
     /// Whether to pull for diagnostics or not.
     ///
@@ -587,7 +508,7 @@ pub struct LspPullDiagnosticsSettingsContent {
     pub debounce_ms: Option<DelayMs>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, Eq)]
 pub struct InlineDiagnosticsSettingsContent {
     /// Whether or not to show inline diagnostics
     ///
@@ -614,19 +535,7 @@ pub struct InlineDiagnosticsSettingsContent {
 }
 
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticSeverityContent {

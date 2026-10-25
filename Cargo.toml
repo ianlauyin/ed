@@ -75,7 +75,6 @@ members = [
     "crates/session",
     "crates/settings",
     "crates/settings_content",
-    "crates/settings_macros",
     "crates/snippet",
     "crates/spell_check",
     "crates/sqlez",
@@ -187,7 +186,6 @@ search = { path = "crates/search" }
 session = { path = "crates/session" }
 settings = { path = "crates/settings" }
 settings_content = { path = "crates/settings_content" }
-settings_macros = { path = "crates/settings_macros" }
 snippet = { path = "crates/snippet" }
 spell_check = { path = "crates/spell_check" }
 sqlez = { path = "crates/sqlez" }
@@ -353,7 +351,6 @@ resvg = { version = "0.48.1", default-features = false, features = [
 rust-embed = { version = "8.11", features = ["include-exclude", "compression"] }
 rustc-hash = "2.1.0"
 rustix = { version = "1.1", features = ["fs"] }
-schemars = { version = "1.0", default-features = false, features = ["std", "indexmap2"] }
 semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0", features = ["rc"] }
 serde_json = { version = "1.0.144", features = ["preserve_order", "raw_value"] }
@@ -428,7 +425,6 @@ debug = "none"
 # proc-macros start
 gpui_macros = { opt-level = 3 }
 derive_refineable = { opt-level = 3 }
-settings_macros = { opt-level = 3 }
 sqlez_macros = { opt-level = 3, codegen-units = 1 }
 ui_macros = { opt-level = 3 }
 quote = { opt-level = 3 }

@@ -1,17 +1,15 @@
 use std::fmt::Display;
 use std::num;
 
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use settings_macros::MergeFrom;
 
 use crate::DelayMs;
 use crate::DiagnosticSeverityContent;
 use crate::ShowScrollbar;
 use crate::serialize_f32_with_two_decimal_places;
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct EditorSettingsContent {
     /// Whether the cursor blinks in the editor.
     ///
@@ -143,7 +141,6 @@ pub struct EditorSettingsContent {
     ///
     /// Values range from 0 to 106. Set to 0 to disable adjustments.
     /// Default: 45
-    #[schemars(range(min = 0, max = 106))]
     pub minimum_contrast_for_highlights: Option<MinimumContrast>,
 
     /// Whether to follow-up empty go to definition responses from the language server or not.
@@ -200,7 +197,7 @@ pub struct EditorSettingsContent {
     ///
     /// 1. Show the scrollbar if there's important information or
     ///    follow the system's configured behavior
-    ///   "auto"
+    ///    "auto"
     /// 2. Match the system's configured behavior:
     ///    "system"
     /// 3. Always show the scrollbar:
@@ -239,18 +236,7 @@ pub struct EditorSettingsContent {
 }
 
 #[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum CompletionDetailAlignment {
@@ -260,18 +246,7 @@ pub enum CompletionDetailAlignment {
 }
 
 #[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum CompletionMenuItemKind {
@@ -280,7 +255,7 @@ pub enum CompletionMenuItemKind {
     Symbol,
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CursorAnimationSettingsContent {
     /// Whether cursor movement animation is enabled.
     ///
@@ -289,7 +264,7 @@ pub struct CursorAnimationSettingsContent {
 }
 
 // Toolbar related settings
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ToolbarContent {
     /// Whether to display breadcrumbs in the editor toolbar.
     ///
@@ -306,7 +281,7 @@ pub struct ToolbarContent {
 }
 
 /// Minimap related settings
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MinimapContent {
     /// When to show the minimap in the editor.
     ///
@@ -341,18 +316,7 @@ pub struct MinimapContent {
 
 /// How to render LSP `textDocument/documentColor` colors in the editor.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentColorsRenderMode {
@@ -367,19 +331,7 @@ pub enum DocumentColorsRenderMode {
     Background,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum CurrentLineHighlight {
     // Don't highlight the current line.
@@ -393,19 +345,7 @@ pub enum CurrentLineHighlight {
 }
 
 /// When to populate a new search's query based on the text under the cursor.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum SeedQuerySetting {
     /// Always populate the search query with the word under the cursor.
@@ -418,18 +358,7 @@ pub enum SeedQuerySetting {
 
 /// What to do when multibuffer is double clicked in some of its excerpts (parts of singleton buffers).
 #[derive(
-    Default,
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Default, Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DoubleClickInMultibuffer {
@@ -445,18 +374,7 @@ pub enum DoubleClickInMultibuffer {
 ///
 /// Default: always
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum MinimapThumb {
@@ -471,18 +389,7 @@ pub enum MinimapThumb {
 ///
 /// Default: left_open
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum MinimapThumbBorder {
@@ -502,19 +409,7 @@ pub enum MinimapThumbBorder {
 /// The key to use for adding multiple cursors
 ///
 /// Default: alt
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum MultiCursorModifier {
     Alt,
@@ -525,19 +420,7 @@ pub enum MultiCursorModifier {
 /// Whether the editor will scroll beyond the last line.
 ///
 /// Default: one_page
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum ScrollBeyondLastLine {
     /// The editor will not scroll beyond the last line.
@@ -552,18 +435,7 @@ pub enum ScrollBeyondLastLine {
 
 /// The shape of a selection cursor.
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum CursorShape {
@@ -580,18 +452,7 @@ pub enum CursorShape {
 
 /// What to do when go to definition yields no results.
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GoToDefinitionFallback {
@@ -604,18 +465,7 @@ pub enum GoToDefinitionFallback {
 
 /// Where to show LSP results that can contain multiple locations.
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum OpenResultsIn {
@@ -630,18 +480,7 @@ pub enum OpenResultsIn {
 ///
 /// Default: center
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GoToDefinitionScrollStrategy {
@@ -661,18 +500,7 @@ pub enum GoToDefinitionScrollStrategy {
 ///
 /// Default: inline
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum SnippetSortOrder {
@@ -699,8 +527,6 @@ pub enum SnippetSortOrder {
     Eq,
     Serialize,
     Deserialize,
-    JsonSchema,
-    MergeFrom,
     strum::Display,
     strum::EnumIter,
     strum::VariantArray,
@@ -716,7 +542,7 @@ pub enum DiffViewStyle {
 }
 
 /// Default options for buffer and project search items.
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SearchSettingsContent {
     /// Whether to show the project search button in the status bar.
     pub button: Option<bool>,
@@ -735,7 +561,7 @@ pub struct SearchSettingsContent {
 }
 
 /// Whether to allow drag and drop text selection in buffer.
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DragAndDropSelectionContent {
     /// When true, enables drag and drop text selection in buffer.
     ///
@@ -752,18 +578,7 @@ pub struct DragAndDropSelectionContent {
 ///
 /// Default: never
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ShowMinimap {
@@ -780,18 +595,7 @@ pub enum ShowMinimap {
 ///
 /// Default: all_editors
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DisplayIn {
@@ -806,9 +610,7 @@ pub enum DisplayIn {
 ///
 /// Valid range: 0.0 to 106.0
 /// Default: 45.0
-#[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, PartialOrd, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct MinimumContrast(#[serde(serialize_with = "crate::serialize_f32_with_two_decimal_places")] pub f32);
 
@@ -828,9 +630,7 @@ impl From<f32> for MinimumContrast {
 ///
 /// Valid range: 0.0 to 1.0
 /// Default: 1.0
-#[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, PartialOrd, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct InactiveOpacity(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
 
@@ -850,7 +650,7 @@ impl From<f32> for InactiveOpacity {
 ///
 /// Valid range: 0.0 to 0.4
 /// Default: 2.0
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, PartialOrd, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct CenteredPaddingSettings(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
 
@@ -876,22 +676,5 @@ impl From<f32> for CenteredPaddingSettings {
 impl Default for CenteredPaddingSettings {
     fn default() -> Self {
         Self(Self::DEFAULT_PADDING as f32)
-    }
-}
-
-impl schemars::JsonSchema for CenteredPaddingSettings {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "CenteredPaddingSettings".into()
-    }
-
-    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        use schemars::json_schema;
-        json_schema!({
-            "type": "number",
-            "minimum": Self::MIN_PADDING,
-            "maximum": Self::MAX_PADDING,
-            "default": Self::DEFAULT_PADDING,
-            "description": "Centered layout related setting (left/right)."
-        })
     }
 }

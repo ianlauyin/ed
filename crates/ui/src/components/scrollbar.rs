@@ -82,14 +82,13 @@ const BORDER_WIDTH: Pixels = px(1.);
 pub mod scrollbars {
     use gpui::App;
     use gpui::Global;
-    use schemars::JsonSchema;
     use serde::Deserialize;
     use serde::Serialize;
 
     /// When to show the scrollbar in the editor.
     ///
     /// Default: auto
-    #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+    #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
     #[serde(rename_all = "snake_case")]
     pub enum ShowScrollbar {
         /// Show the scrollbar if there's important information or

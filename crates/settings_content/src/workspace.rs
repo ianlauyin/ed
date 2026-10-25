@@ -1,10 +1,8 @@
 use std::num::NonZeroUsize;
 
 use collections::HashMap;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use settings_macros::MergeFrom;
 
 use crate::CenteredPaddingSettings;
 use crate::CommandAliasTarget;
@@ -15,7 +13,7 @@ use crate::InactiveOpacity;
 use crate::ShowIndentGuides;
 use crate::serialize_optional_f32_with_two_decimal_places;
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct WorkspaceSettingsContent {
     /// Active pane styling settings.
     pub active_pane_modifiers: Option<ActivePaneModifiers>,
@@ -141,7 +139,7 @@ pub struct WorkspaceSettingsContent {
     pub focus_follows_mouse: Option<FocusFollowsMouse>,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ItemSettingsContent {
     /// Whether to show the Git file status on a tab item.
     ///
@@ -170,7 +168,7 @@ pub struct ItemSettingsContent {
     pub show_close_button: Option<ShowCloseButton>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PreviewTabsSettingsContent {
     /// Whether to show opened editors as preview tabs.
     /// Preview tabs do not stay open, are reused until explicitly set to be kept open opened (via double-click or editing) and show file names in italic.
@@ -205,19 +203,7 @@ pub struct PreviewTabsSettingsContent {
     pub enable_keep_preview_on_code_navigation: Option<bool>,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "lowercase")]
 pub enum ClosePosition {
     Left,
@@ -225,19 +211,7 @@ pub enum ClosePosition {
     Right,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "lowercase")]
 pub enum ShowCloseButton {
     Always,
@@ -247,18 +221,7 @@ pub enum ShowCloseButton {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ShowDiagnostics {
@@ -268,19 +231,7 @@ pub enum ShowDiagnostics {
     All,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum ActivateOnClose {
     #[default]
@@ -289,7 +240,7 @@ pub enum ActivateOnClose {
     LeftNeighbour,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Copy, Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ActivePaneModifiers {
     /// Size of the border surrounding the active pane.
@@ -304,23 +255,10 @@ pub struct ActivePaneModifiers {
     /// Values are clamped to the [0.0, 1.0] range.
     ///
     /// Default: `1.0`
-    #[schemars(range(min = 0.0, max = 1.0))]
     pub inactive_opacity: Option<InactiveOpacity>,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum BottomDockLayout {
     /// Contained between the left and right docks
@@ -334,19 +272,7 @@ pub enum BottomDockLayout {
     RightAligned,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Default,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize, PartialEq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum FullscreenMode {
     /// Use macOS's native fullscreen, which moves the window into its own
@@ -360,19 +286,7 @@ pub enum FullscreenMode {
 
 /// Configures what draws Zed's window decorations on Linux.
 /// This setting has no effect on other platforms.
-#[derive(
-    Copy,
-    Clone,
-    Default,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize, PartialEq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowDecorations {
     /// Zed draws its own window decorations/titlebar (client-side decoration).
@@ -383,19 +297,7 @@ pub enum WindowDecorations {
     Server,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, PartialEq, Default, Serialize, Deserialize, Debug, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum CloseWindowWhenNoItems {
     /// Match platform conventions by default, so "on" on macOS and "off" everywhere else
@@ -418,18 +320,7 @@ impl CloseWindowWhenNoItems {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Debug, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DefaultOpenBehavior {
@@ -443,18 +334,7 @@ pub enum DefaultOpenBehavior {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Debug, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum RestoreOnStartupBehavior {
@@ -470,7 +350,7 @@ pub enum RestoreOnStartupBehavior {
     Launchpad,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
 pub struct TabBarSettingsContent {
     /// Whether or not to show the tab bar in the editor.
     ///
@@ -491,7 +371,7 @@ pub struct TabBarSettingsContent {
     pub show_pinned_tabs_in_separate_row: Option<bool>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct StatusBarSettingsContent {
     /// Whether to show the status bar.
     ///
@@ -518,18 +398,7 @@ pub struct StatusBarSettingsContent {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantNames,
-    strum::VariantArray,
+    Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize, strum::VariantNames, strum::VariantArray,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum EncodingDisplayOptions {
@@ -551,9 +420,7 @@ impl EncodingDisplayOptions {
     }
 }
 
-#[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, strum::EnumDiscriminants,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
 pub enum AutosaveSetting {
@@ -576,45 +443,21 @@ impl AutosaveSetting {
     }
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum PaneSplitDirectionHorizontal {
     Up,
     Down,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum PaneSplitDirectionVertical {
     Left,
     Right,
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Default)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CenteredLayoutSettings {
     /// The relative width of the left padding of the central pane from the
@@ -630,18 +473,7 @@ pub struct CenteredLayoutSettings {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Debug, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum OnNewWindow {
@@ -653,18 +485,7 @@ pub enum OnNewWindow {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Debug, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum TextRenderingMode {
@@ -677,7 +498,7 @@ pub enum TextRenderingMode {
     Grayscale,
 }
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct ProjectPanelAutoOpenSettings {
     /// Whether to automatically open newly created files in the editor.
     ///
@@ -693,7 +514,7 @@ pub struct ProjectPanelAutoOpenSettings {
     pub on_drop: Option<bool>,
 }
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct ProjectPanelSettingsContent {
     /// Whether to show the project panel button in the status bar.
     ///
@@ -793,9 +614,7 @@ pub struct ProjectPanelSettingsContent {
 }
 
 /// Controls the width of the git diff hunk indicators in the gutter.
-#[derive(
-    Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, strum::EnumDiscriminants,
-)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectPanelTitleTooltipDelay {
@@ -809,18 +628,7 @@ pub enum ProjectPanelTitleTooltipDelay {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectPanelEntrySpacing {
@@ -832,18 +640,7 @@ pub enum ProjectPanelEntrySpacing {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum FolderIndicator {
@@ -867,18 +664,7 @@ impl FolderIndicator {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectPanelSortMode {
@@ -892,18 +678,7 @@ pub enum ProjectPanelSortMode {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectPanelSortOrder {
@@ -943,7 +718,7 @@ impl From<ProjectPanelSortOrder> for util::paths::SortOrder {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ProjectPanelIndentGuidesSettings {
     pub show: Option<ShowIndentGuides>,
 }
@@ -958,8 +733,6 @@ pub struct ProjectPanelIndentGuidesSettings {
     Default,
     Serialize,
     Deserialize,
-    JsonSchema,
-    MergeFrom,
     strum::VariantArray,
     strum::VariantNames,
     strum::EnumMessage,
@@ -989,18 +762,7 @@ impl SemanticTokens {
 }
 
 #[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentFoldingRanges {
@@ -1019,18 +781,7 @@ impl DocumentFoldingRanges {
 }
 
 #[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentSymbols {
@@ -1051,7 +802,7 @@ impl DocumentSymbols {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+#[derive(Copy, Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct FocusFollowsMouse {
     pub enabled: Option<bool>,
     pub debounce_ms: Option<u64>,

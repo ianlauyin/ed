@@ -1,16 +1,13 @@
 use collections::HashMap;
-use collections::HashSet;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use settings_macros::MergeFrom;
 
 use crate::FontFamilyName;
 use crate::FontFeaturesContent;
 use crate::FontSize;
 use crate::FontWeightContent;
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ProjectTerminalSettingsContent {
     /// What shell to use when opening a terminal.
     ///
@@ -65,31 +62,8 @@ pub struct ProjectTerminalSettingsContent {
     /// }
     /// ```
     ///
-    /// Use `"..."` to add regexes without repeating Zed's defaults. In project
-    /// settings, it extends the user or parent configuration value. Omit
-    /// `"..."` to replace the inherited list. Set `[]` to clear it. Omitting this
-    /// setting keeps the inherited list.
-    ///
-    /// ```json
-    /// {
-    ///   "terminal": {
-    ///     "path_hyperlink_regexes": [
-    ///       "\\s+(-->|:::|at) (?<link>(?<path>.+?))(:$|$)",
-    ///       "\\s+(Compiling|Checking|Documenting) [^(]+\\((?<link>(?<path>.+))\\)",
-    ///       "..."
-    ///     ]
-    ///   }
-    /// }
-    /// ```
-    ///
-    /// Inherited regexes are inserted at `"..."`, and duplicates keep their first
-    /// occurrence. Regexes are duplicates when their text is identical after
-    /// joining multiline entries with newlines.
-    ///
     /// Each regex can be a single string or an array of strings joined with
-    /// newlines. The marker is recognized only as a top-level string. To use
-    /// `...` as a regex matching three characters, write `["..."]` as an entry.
-    /// A `"..."` line inside a multiline entry is always regex text.
+    /// newlines.
     ///
     /// The optional named capture `path` selects the hyperlink target. Without
     /// it, the entire match is the target. With `path`, `line` and `column`
@@ -103,14 +77,14 @@ pub struct ProjectTerminalSettingsContent {
     /// before broader ones. Regexes use Rust's `regex` syntax. Invalid regexes
     /// are logged and ignored. The `path_hyperlink_timeout_ms` setting controls
     /// the discovery timeout. Setting it to `0` disables path hyperlinks.
-    pub path_hyperlink_regexes: Option<PathHyperlinkRegexes>,
+    pub path_hyperlink_regexes: Option<Vec<PathHyperlinkRegex>>,
     /// Timeout for hover and Cmd-click path hyperlink discovery in milliseconds.
     ///
     /// Default: 1
     pub path_hyperlink_timeout_ms: Option<u64>,
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct TerminalSettingsContent {
     #[serde(flatten)]
     pub project: ProjectTerminalSettingsContent,
@@ -129,7 +103,6 @@ pub struct TerminalSettingsContent {
     ///
     /// If this option is not included,
     /// the terminal will default to matching the buffer's font fallbacks.
-    #[schemars(extend("uniqueItems" = true))]
     pub font_fallbacks: Option<Vec<FontFamilyName>>,
 
     /// Sets the terminal's line height.
@@ -220,9 +193,7 @@ pub struct TerminalSettingsContent {
 }
 
 /// Shell configuration to open the terminal with.
-#[derive(
-    Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, strum::EnumDiscriminants,
-)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
 pub enum Shell {
@@ -242,7 +213,7 @@ pub enum Shell {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, strum::EnumDiscriminants)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
 pub enum WorkingDirectory {
@@ -263,7 +234,7 @@ pub enum WorkingDirectory {
     Always { directory: String },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalLineHeight {
     /// Use a line height that's comfortable for reading, 1.618
@@ -290,18 +261,7 @@ impl TerminalLineHeight {
 ///
 /// Default: auto
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ShowScrollbar {
@@ -318,18 +278,7 @@ pub enum ShowScrollbar {
 }
 
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 // todo() -> combine with CursorShape
@@ -345,19 +294,7 @@ pub enum CursorShapeContent {
     Hollow,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalBlink {
     /// Never blink the cursor, ignoring the terminal mode.
@@ -369,77 +306,21 @@ pub enum TerminalBlink {
     On,
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum AlternateScroll {
     On,
     Off,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema)]
-#[serde(transparent)]
-pub struct PathHyperlinkRegexes(pub Vec<PathHyperlinkRegex>);
-
-impl crate::merge_from::MergeFrom for PathHyperlinkRegexes {
-    fn merge_from(&mut self, other: &Self) {
-        let inherited = std::mem::take(&mut self.0);
-        let mut seen = HashSet::default();
-        self.0 = other
-            .0
-            .iter()
-            .flat_map(|entry| if entry.is_rest() { inherited.as_slice() } else { std::slice::from_ref(entry) })
-            .filter(|entry| {
-                let regex = match entry {
-                    PathHyperlinkRegex::SingleLine(regex) => regex.clone(),
-                    PathHyperlinkRegex::MultiLine(lines) => lines.join("\n"),
-                };
-                // Project layers can still contain an unresolved marker, which must
-                // not collapse with the literal regex written as ["..."]
-                seen.insert((entry.is_rest(), regex))
-            })
-            .cloned()
-            .collect();
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum PathHyperlinkRegex {
     SingleLine(String),
     MultiLine(Vec<String>),
 }
 
-impl PathHyperlinkRegex {
-    fn is_rest(&self) -> bool {
-        matches!(self, Self::SingleLine(regex) if regex == crate::SplicingVec::REST)
-    }
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalDockPosition {
     Left,

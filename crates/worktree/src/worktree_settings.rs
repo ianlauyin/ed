@@ -1,13 +1,12 @@
 use std::path::Path;
 
-use settings::RegisterSetting;
 use settings::ScanSymlinksSetting;
 use settings::Settings;
 use util::paths::PathMatcher;
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
 
-#[derive(Clone, PartialEq, Eq, RegisterSetting)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WorktreeSettings {
     pub file_scan_exclusions: PathMatcher,
     pub file_scan_inclusions: PathMatcher,
@@ -19,6 +18,8 @@ pub struct WorktreeSettings {
     pub hidden_files: PathMatcher,
     pub read_only_files: PathMatcher,
 }
+
+settings::register_setting!(WorktreeSettings);
 
 impl WorktreeSettings {
     pub fn is_path_excluded(&self, path: &RelPath) -> bool {
@@ -45,10 +46,10 @@ impl WorktreeSettings {
 impl Settings for WorktreeSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let worktree = content.project.worktree.clone();
-        let file_scan_exclusions = worktree.file_scan_exclusions.unwrap().0;
-        let file_scan_inclusions = worktree.file_scan_inclusions.unwrap().0;
-        let hidden_files = worktree.hidden_files.unwrap().0;
-        let read_only_files = worktree.read_only_files.unwrap_or_default().0;
+        let file_scan_exclusions = worktree.file_scan_exclusions.unwrap();
+        let file_scan_inclusions = worktree.file_scan_inclusions.unwrap();
+        let hidden_files = worktree.hidden_files.unwrap();
+        let read_only_files = worktree.read_only_files.unwrap_or_default();
         let scan_symlinks = worktree.scan_symlinks.unwrap();
         let (file_scan_inclusions, parent_dir_scan_inclusions) = file_scan_inclusion_matchers(file_scan_inclusions);
 

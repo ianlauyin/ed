@@ -1,4 +1,3 @@
-mod action_schema;
 mod action_sequence;
 mod built_in;
 mod built_in_keymap;
@@ -10,8 +9,6 @@ mod keymap;
 mod settings_file;
 mod settings_store;
 
-pub use settings_macros::RegisterSetting;
-
 pub mod settings_content {
     pub use ::settings_content::*;
 }
@@ -21,13 +18,25 @@ pub mod private {
     pub use inventory;
 
     pub use crate::settings_store::RegisteredSetting;
-    pub use crate::settings_store::SettingValue;
+    pub use crate::settings_store::setting_value;
+}
+
+/// Registers a [`Settings`] type with every [`SettingsStore`] created afterwards.
+#[macro_export]
+macro_rules! register_setting {
+    ($type:ty) => {
+        $crate::private::inventory::submit! {
+            $crate::private::RegisteredSetting {
+                id: || ::std::any::TypeId::of::<$type>(),
+                setting_value: $crate::private::setting_value::<$type>,
+            }
+        }
+    };
 }
 
 use std::fmt;
 
 pub use ::settings_content::*;
-pub use action_schema::*;
 pub use action_sequence::ActionSequence;
 pub use built_in_keymap::keymap as built_in_keymap;
 pub use content_into_gpui::IntoGpui;

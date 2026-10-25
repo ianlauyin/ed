@@ -1,15 +1,16 @@
 pub use settings::ImageFileSizeUnit;
-use settings::RegisterSetting;
 use settings::Settings;
 
 /// The settings for the image viewer.
-#[derive(Clone, Debug, Default, RegisterSetting)]
+#[derive(Clone, Debug, Default)]
 pub struct ImageViewerSettings {
     /// The unit to use for displaying image file sizes.
     ///
     /// Default: "binary"
     pub unit: ImageFileSizeUnit,
 }
+
+settings::register_setting!(ImageViewerSettings);
 
 impl Settings for ImageViewerSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

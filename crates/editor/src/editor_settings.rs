@@ -16,7 +16,6 @@ pub use settings::MinimapThumb;
 pub use settings::MinimapThumbBorder;
 pub use settings::MultiCursorModifier;
 pub use settings::OpenResultsIn;
-use settings::RegisterSetting;
 pub use settings::ScrollBeyondLastLine;
 pub use settings::SeedQuerySetting;
 use settings::Settings;
@@ -26,7 +25,7 @@ use ui::scrollbars::ShowScrollbar;
 
 /// Imports from the VSCode settings at
 /// https://code.visualstudio.com/docs/reference/default-settings
-#[derive(Clone, RegisterSetting)]
+#[derive(Clone)]
 pub struct EditorSettings {
     pub cursor_blink: bool,
     pub cursor_shape: Option<CursorShape>,
@@ -73,6 +72,8 @@ pub struct EditorSettings {
     pub minimum_split_diff_width: f32,
     pub file_diff: FileDiffSettings,
 }
+
+settings::register_setting!(EditorSettings);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct CursorAnimationSettings {

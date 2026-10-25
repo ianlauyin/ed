@@ -3,13 +3,11 @@ use gpui::FontFallbacks;
 use gpui::FontFeatures;
 use gpui::FontWeight;
 use gpui::Pixels;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 pub use settings::AlternateScroll;
 use settings::IntoGpui;
 use settings::PathHyperlinkRegex;
-use settings::RegisterSetting;
 use settings::TerminalBlink;
 use settings::TerminalDockPosition;
 use settings::TerminalLineHeight;
@@ -17,7 +15,7 @@ use settings::WorkingDirectory;
 use task::Shell;
 use theme_settings::FontFamilyName;
 
-#[derive(Clone, Debug, Deserialize, RegisterSetting)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TerminalSettings {
     pub shell: Shell,
     pub working_directory: WorkingDirectory,
@@ -46,6 +44,8 @@ pub struct TerminalSettings {
     pub path_hyperlink_regexes: Vec<String>,
     pub path_hyperlink_timeout_ms: u64,
 }
+
+settings::register_setting!(TerminalSettings);
 
 fn settings_shell_to_task_shell(shell: settings::Shell) -> Shell {
     match shell {
@@ -91,7 +91,6 @@ impl settings::Settings for TerminalSettings {
             path_hyperlink_regexes: project_content
                 .path_hyperlink_regexes
                 .unwrap()
-                .0
                 .into_iter()
                 .map(|regex| match regex {
                     PathHyperlinkRegex::SingleLine(regex) => regex,
@@ -103,7 +102,7 @@ impl settings::Settings for TerminalSettings {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CursorShape {
     /// Cursor is a block like `█`.

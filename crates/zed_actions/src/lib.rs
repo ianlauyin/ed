@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use gpui::Action;
 use gpui::actions;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -17,7 +16,7 @@ use serde::Serialize;
 pub const fn init() {}
 
 /// Opens a URL in the system's default web browser.
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
+#[derive(Clone, PartialEq, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct OpenBrowser {
@@ -35,7 +34,7 @@ actions!(
 );
 
 /// Decreases the font size in the editor buffer.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct DecreaseBufferFontSize {
@@ -44,7 +43,7 @@ pub struct DecreaseBufferFontSize {
 }
 
 /// Increases the font size in the editor buffer.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct IncreaseBufferFontSize {
@@ -53,7 +52,7 @@ pub struct IncreaseBufferFontSize {
 }
 
 /// Resets the buffer font size to the default value.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct ResetBufferFontSize {
@@ -62,7 +61,7 @@ pub struct ResetBufferFontSize {
 }
 
 /// Decreases the font size of the user interface.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct DecreaseUiFontSize {
@@ -71,7 +70,7 @@ pub struct DecreaseUiFontSize {
 }
 
 /// Increases the font size of the user interface.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct IncreaseUiFontSize {
@@ -80,7 +79,7 @@ pub struct IncreaseUiFontSize {
 }
 
 /// Resets the UI font size to the default value.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct ResetUiFontSize {
@@ -89,7 +88,7 @@ pub struct ResetUiFontSize {
 }
 
 /// Resets all zoom levels (UI and buffer font sizes) to their default values.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct ResetAllZoom {
@@ -144,7 +143,7 @@ pub mod workspace {
 /// Describes which ref to base a new git worktree on. The worktree is
 /// always created in a detached HEAD state; users can opt into creating
 /// a branch afterwards from the worktree itself.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum NewWorktreeBranchTarget {
     /// Create a detached worktree from the current HEAD.
@@ -158,7 +157,7 @@ pub enum NewWorktreeBranchTarget {
 
 /// Creates a new git worktree and switches the workspace to it.
 /// Dispatched by the unified worktree picker when the user selects a "Create new worktree" entry.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Action)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Action)]
 #[action(namespace = git)]
 #[serde(deny_unknown_fields)]
 pub struct CreateWorktree {
@@ -169,7 +168,7 @@ pub struct CreateWorktree {
 
 /// Switches the workspace to an existing linked worktree.
 /// Dispatched by the unified worktree picker when the user selects an existing worktree.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Action)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Action)]
 #[action(namespace = git)]
 #[serde(deny_unknown_fields)]
 pub struct SwitchWorktree {
@@ -179,7 +178,7 @@ pub struct SwitchWorktree {
 
 /// Opens an existing worktree in a new window.
 /// Dispatched by the worktree picker's "Open in New Window" button.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Action)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Action)]
 #[action(namespace = git)]
 #[serde(deny_unknown_fields)]
 pub struct OpenWorktreeInNewWindow {
@@ -272,11 +271,10 @@ pub mod theme {
 
 pub mod theme_selector {
     use gpui::Action;
-    use schemars::JsonSchema;
     use serde::Deserialize;
 
     /// Toggles the theme selector interface.
-    #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+    #[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
     #[action(namespace = theme_selector)]
     #[serde(deny_unknown_fields)]
     pub struct Toggle {
@@ -319,11 +317,10 @@ pub mod search {
 pub mod buffer_search {
     use gpui::Action;
     use gpui::actions;
-    use schemars::JsonSchema;
     use serde::Deserialize;
 
     /// Opens the buffer search interface with the specified configuration.
-    #[derive(PartialEq, Clone, Deserialize, JsonSchema, Action)]
+    #[derive(PartialEq, Clone, Deserialize, Action)]
     #[action(namespace = buffer_search)]
     #[serde(deny_unknown_fields)]
     pub struct Deploy {
@@ -360,7 +357,7 @@ pub mod buffer_search {
     );
 }
 /// Opens the recent projects interface.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Deserialize, Default, Action)]
 #[action(namespace = projects)]
 #[serde(deny_unknown_fields)]
 pub struct OpenRecent {
@@ -369,7 +366,7 @@ pub struct OpenRecent {
 }
 
 /// Creates a project from a selected template.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Deserialize, Default, Action)]
 #[action(namespace = projects)]
 #[serde(deny_unknown_fields)]
 pub struct OpenRemote {
@@ -380,7 +377,7 @@ pub struct OpenRemote {
 }
 
 /// Where to spawn the task in the UI.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RevealTarget {
     /// In the central pane group, "main" editor area.

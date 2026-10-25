@@ -3,7 +3,6 @@
 use gpui::HighlightStyle;
 use gpui::Hsla;
 use palette::FromColor;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 pub use settings::FontStyleContent;
@@ -25,7 +24,7 @@ const DARK_DIFF_HUNK_HOLLOW_BACKGROUND_OPACITY: f32 = 0.06;
 const DARK_DIFF_HUNK_HOLLOW_BORDER_OPACITY: f32 = 0.36;
 
 /// The content of a serialized theme family.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeFamilyContent {
     pub name: String,
     pub author: String,
@@ -33,7 +32,7 @@ pub struct ThemeFamilyContent {
 }
 
 /// The content of a serialized theme.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeContent {
     pub name: String,
     pub appearance: theme::AppearanceContent,

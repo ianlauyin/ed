@@ -49,7 +49,6 @@ pub use lsp_types::*;
 use notification::DidChangeWorkspaceFolders;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -175,7 +174,7 @@ impl LanguageServerId {
 }
 
 /// A name of a language server.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct LanguageServerName(pub SharedString);
 

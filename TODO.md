@@ -6,3 +6,4 @@
 - add workspace scoped UI settings, like title or border color, do i really need this? to distinguish project
 - add complete rust / clippy lint
 - review async crates, replace smol with tokio? (as smol dev seems to be stopped)
+- keymap, construct directly rather than parse json

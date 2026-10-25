@@ -44,8 +44,6 @@ pub use language_config::WrapCharactersConfig;
 pub use language_config::default_true;
 pub use language_config::deserialize_regex;
 pub use language_config::deserialize_regex_vec;
-pub use language_config::regex_json_schema;
-pub use language_config::regex_vec_json_schema;
 pub use language_config::serialize_regex;
 
 pub mod code_label;

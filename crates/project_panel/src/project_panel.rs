@@ -113,7 +113,6 @@ use project_panel_settings::ProjectPanelSettings;
 use rayon::slice::ParallelSliceMut;
 use rpc::ErrorCode;
 use rpc::ErrorExt;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::DockSide;
 use settings::ProjectPanelEntrySpacing;
@@ -419,7 +418,7 @@ struct StickyDetails {
 }
 
 /// Permanently deletes the selected file or directory.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = project_panel)]
 #[serde(deny_unknown_fields)]
 struct Delete {
@@ -428,7 +427,7 @@ struct Delete {
 }
 
 /// Moves the selected file or directory to the system trash.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = project_panel)]
 #[serde(deny_unknown_fields)]
 struct Trash {
@@ -437,7 +436,7 @@ struct Trash {
 }
 
 /// Selects the next entry with diagnostics.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = project_panel)]
 #[serde(deny_unknown_fields)]
 struct SelectNextDiagnostic {
@@ -446,7 +445,7 @@ struct SelectNextDiagnostic {
 }
 
 /// Selects the previous entry with diagnostics.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = project_panel)]
 #[serde(deny_unknown_fields)]
 struct SelectPrevDiagnostic {

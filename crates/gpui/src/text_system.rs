@@ -37,7 +37,6 @@ pub use line_wrapper::*;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use parking_lot::RwLockUpgradableReadGuard;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use smallvec::SmallVec;
@@ -1061,25 +1060,8 @@ impl FontWeight {
     ];
 }
 
-impl schemars::JsonSchema for FontWeight {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "FontWeight".into()
-    }
-
-    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        use schemars::json_schema;
-        json_schema!({
-            "type": "number",
-            "minimum": Self::THIN,
-            "maximum": Self::BLACK,
-            "default": Self::default(),
-            "description": "Font weight value between 100 (thin) and 900 (black)"
-        })
-    }
-}
-
 /// Allows italic or oblique faces to be selected.
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Default, Serialize, Deserialize)]
 pub enum FontStyle {
     /// A face that is neither italic not obliqued.
     #[default]

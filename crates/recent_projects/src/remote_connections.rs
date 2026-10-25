@@ -22,8 +22,6 @@ pub use remote_connection::RemoteConnectionModal;
 pub use remote_connection::RemoteConnectionPrompt;
 pub use remote_connection::SshConnectionHeader;
 pub use remote_connection::connect;
-use settings::ExtendingVec;
-use settings::RegisterSetting;
 use settings::Settings;
 pub use settings::SshConnection;
 use util::paths::PathWithPosition;
@@ -34,14 +32,15 @@ use workspace::SerializedWorkspaceLocation;
 use workspace::Workspace;
 use workspace::find_existing_workspace;
 
-#[derive(RegisterSetting)]
 pub struct RemoteSettings {
-    pub ssh_connections: ExtendingVec<SshConnection>,
+    pub ssh_connections: Vec<SshConnection>,
 }
+
+settings::register_setting!(RemoteSettings);
 
 impl RemoteSettings {
     pub fn ssh_connections(&self) -> impl Iterator<Item = SshConnection> + use<> {
-        self.ssh_connections.clone().0.into_iter()
+        self.ssh_connections.clone().into_iter()
     }
 
     pub fn fill_connection_options_from_settings(&self, options: &mut SshConnectionOptions) {
@@ -89,7 +88,7 @@ impl From<SshConnection> for Connection {
 impl Settings for RemoteSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let remote = &content.remote;
-        Self { ssh_connections: remote.ssh_connections.clone().unwrap_or_default().into() }
+        Self { ssh_connections: remote.ssh_connections.clone().unwrap_or_default() }
     }
 }
 

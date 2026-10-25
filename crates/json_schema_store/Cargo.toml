@@ -16,12 +16,8 @@ default = []
 
 [dependencies]
 anyhow.workspace = true
-collections.workspace = true
-parking_lot.workspace = true
 gpui.workspace = true
 language.workspace = true
 project.workspace = true
-schemars.workspace = true
 serde_json.workspace = true
 settings.workspace = true
-util.workspace = true

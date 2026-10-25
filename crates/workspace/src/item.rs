@@ -33,7 +33,6 @@ use project::ProjectEntryId;
 use project::ProjectPath;
 pub use settings::ActivateOnClose;
 pub use settings::ClosePosition;
-pub use settings::RegisterSetting;
 pub use settings::Settings;
 pub use settings::SettingsLocation;
 pub use settings::ShowCloseButton;
@@ -75,7 +74,6 @@ impl Default for SaveOptions {
     }
 }
 
-#[derive(RegisterSetting)]
 pub struct ItemSettings {
     pub git_status: bool,
     pub close_position: ClosePosition,
@@ -85,7 +83,8 @@ pub struct ItemSettings {
     pub show_close_button: ShowCloseButton,
 }
 
-#[derive(RegisterSetting)]
+settings::register_setting!(ItemSettings);
+
 pub struct PreviewTabsSettings {
     pub enabled: bool,
     pub enable_preview_from_project_panel: bool,
@@ -95,6 +94,8 @@ pub struct PreviewTabsSettings {
     pub enable_preview_file_from_code_navigation: bool,
     pub enable_keep_preview_on_code_navigation: bool,
 }
+
+settings::register_setting!(PreviewTabsSettings);
 
 impl Settings for ItemSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

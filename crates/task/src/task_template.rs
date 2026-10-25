@@ -4,7 +4,6 @@ use anyhow::Context as _;
 use anyhow::bail;
 use collections::HashMap;
 use collections::HashSet;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
@@ -87,8 +86,7 @@ pub struct TaskTemplate {
 }
 
 /// What to do with the terminal pane and tab, after the command was started.
-// `JsonSchema` because `editor::SpawnNearestTask` takes it as action input.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RevealStrategy {
     /// Always show the task's pane, and focus the corresponding tab in it.

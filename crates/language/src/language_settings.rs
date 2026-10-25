@@ -24,7 +24,6 @@ use settings::IntoGpui;
 pub use settings::LanguageSettingsContent;
 pub use settings::LineEndingSetting;
 pub use settings::LspInsertMode;
-use settings::RegisterSetting;
 pub use settings::RewrapBehavior;
 use settings::SemanticTokens;
 use settings::Settings;
@@ -33,7 +32,6 @@ pub use settings::ShowWhitespaceSetting;
 pub use settings::SoftWrap;
 pub use settings::SoftWrapIndent;
 pub use settings::WordsCompletionMode;
-use settings::merge_from::MergeFrom;
 use text::ToOffset;
 
 use crate::Buffer;
@@ -49,13 +47,15 @@ pub fn all_language_settings<'a>(file: Option<&'a Arc<dyn File>>, cx: &'a App) -
 }
 
 /// The settings for all languages.
-#[derive(Debug, Clone, RegisterSetting)]
+#[derive(Debug, Clone)]
 pub struct AllLanguageSettings {
     /// The default language settings.
     pub defaults: Arc<LanguageSettings>,
     languages: HashMap<LanguageName, Arc<LanguageSettings>>,
     pub file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)>,
 }
+
+settings::register_setting!(AllLanguageSettings);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhitespaceMap {
@@ -382,17 +382,24 @@ impl AllLanguageSettings {
 }
 
 fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSettings) {
-    let show_whitespaces =
-        modeline.show_trailing_whitespace.and_then(|v| if v { Some(ShowWhitespaceSetting::Trailing) } else { None });
-
-    settings.tab_size.merge_from_option(modeline.tab_size.as_ref());
-    settings.hard_tabs.merge_from_option(modeline.hard_tabs.as_ref());
-    settings.preferred_line_length.merge_from_option(modeline.preferred_line_length.map(u32::from).as_ref());
-    let auto_indent_mode =
-        modeline.auto_indent.map(|enabled| if enabled { AutoIndentMode::SyntaxAware } else { AutoIndentMode::None });
-    settings.auto_indent.merge_from_option(auto_indent_mode.as_ref());
-    settings.show_whitespaces.merge_from_option(show_whitespaces.as_ref());
-    settings.ensure_final_newline_on_save.merge_from_option(modeline.ensure_final_newline.as_ref());
+    if let Some(tab_size) = modeline.tab_size {
+        settings.tab_size = tab_size;
+    }
+    if let Some(hard_tabs) = modeline.hard_tabs {
+        settings.hard_tabs = hard_tabs;
+    }
+    if let Some(preferred_line_length) = modeline.preferred_line_length {
+        settings.preferred_line_length = preferred_line_length.into();
+    }
+    if let Some(auto_indent) = modeline.auto_indent {
+        settings.auto_indent = if auto_indent { AutoIndentMode::SyntaxAware } else { AutoIndentMode::None };
+    }
+    if modeline.show_trailing_whitespace == Some(true) {
+        settings.show_whitespaces = ShowWhitespaceSetting::Trailing;
+    }
+    if let Some(ensure_final_newline) = modeline.ensure_final_newline {
+        settings.ensure_final_newline_on_save = ensure_final_newline;
+    }
 }
 
 impl settings::Settings for AllLanguageSettings {
@@ -483,7 +490,7 @@ impl settings::Settings for AllLanguageSettings {
         let mut languages = HashMap::default();
         for (language_name, settings) in &all_languages.languages.0 {
             let mut language_settings = all_languages.defaults.clone();
-            settings::merge_from::MergeFrom::merge_from(&mut language_settings, settings);
+            language_settings.merge_from(settings);
             languages
                 .insert(LanguageName(language_name.clone().into()), Arc::new(load_from_content(language_settings)));
         }
@@ -493,7 +500,7 @@ impl settings::Settings for AllLanguageSettings {
         for (language, patterns) in all_languages.file_types.iter().flatten() {
             let mut builder = GlobSetBuilder::new();
 
-            for pattern in &patterns.0 {
+            for pattern in patterns {
                 match Glob::new(pattern) {
                     Ok(glob) => {
                         builder.add(glob);
@@ -512,7 +519,7 @@ impl settings::Settings for AllLanguageSettings {
                 );
                 GlobSet::empty()
             });
-            file_types.insert(language.clone(), (matcher, patterns.0.iter().cloned().collect()));
+            file_types.insert(language.clone(), (matcher, patterns.clone()));
         }
 
         Self { defaults: default_language_settings, languages, file_types }

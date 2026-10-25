@@ -42,7 +42,6 @@ rand.workspace = true
 regex.workspace = true
 rpc.workspace = true
 rope.workspace = true
-schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 spell_check.workspace = true

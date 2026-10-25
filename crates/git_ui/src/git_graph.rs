@@ -588,7 +588,7 @@ actions!(
 );
 
 /// Opens the Git Graph Tab at a specific commit.
-#[derive(Clone, PartialEq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[derive(Clone, PartialEq, serde::Deserialize, gpui::Action)]
 #[action(namespace = git_graph)]
 pub struct OpenAtCommit {
     pub sha: String,

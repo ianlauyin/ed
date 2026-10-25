@@ -54,7 +54,6 @@ pub mod private {
     pub use anyhow;
     pub use inventory;
     pub use rand;
-    pub use schemars;
     pub use serde;
     pub use serde_json;
 }

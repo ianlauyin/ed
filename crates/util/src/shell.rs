@@ -2,12 +2,11 @@ use std::borrow::Cow;
 use std::fmt;
 use std::path::Path;
 
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// Shell configuration to open the terminal with.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, Hash)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum Shell {
     /// Use the system's default terminal configuration in /etc/passwd

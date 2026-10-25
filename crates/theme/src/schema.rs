@@ -2,12 +2,11 @@
 
 use gpui::Hsla;
 use palette::FromColor;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// The appearance of a theme in serialized content.
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AppearanceContent {
     Light,

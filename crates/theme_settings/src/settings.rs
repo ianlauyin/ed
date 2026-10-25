@@ -16,12 +16,10 @@ use gpui::Subscription;
 use gpui::Window;
 use gpui::px;
 use refineable::Refineable;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 pub use settings::FontFamilyName;
 use settings::IntoGpui;
-use settings::RegisterSetting;
 use settings::Settings;
 use settings::SettingsContent;
 pub use settings::ThemeAppearanceMode;
@@ -57,7 +55,7 @@ pub const fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
 }
 
 /// Customizable settings for the UI and theme system.
-#[derive(Clone, PartialEq, RegisterSetting)]
+#[derive(Clone, PartialEq)]
 pub struct ThemeSettings {
     /// The UI font size. Determines the size of text in the UI,
     /// as well as the size of a [gpui::Rems] unit.
@@ -113,6 +111,8 @@ pub struct ThemeSettings {
     pub unnecessary_code_fade: f32,
 }
 
+settings::register_setting!(ThemeSettings);
+
 /// Returns the name of the default theme for the given [`Appearance`].
 pub const fn default_theme(appearance: Appearance) -> &'static str {
     match appearance {
@@ -143,7 +143,7 @@ pub struct MarkdownPreviewFontSize(Pixels);
 impl Global for MarkdownPreviewFontSize {}
 
 /// Represents the selection of a theme, which can be either static or dynamic.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ThemeSelection {
     /// A static theme selection, represented by a single theme name.

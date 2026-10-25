@@ -37,7 +37,6 @@ use raw_window_handle::HasDisplayHandle;
 use raw_window_handle::HasWindowHandle;
 use scheduler::Instant;
 pub use scheduler::RunnableMeta;
-use schemars::JsonSchema;
 use seahash::SeaHasher;
 use serde::Deserialize;
 use serde::Serialize;
@@ -2090,7 +2089,7 @@ impl From<&str> for PromptButton {
 }
 
 /// The style of the cursor (pointer)
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CursorStyle {
     /// The default cursor
     #[default]

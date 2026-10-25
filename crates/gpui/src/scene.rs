@@ -7,7 +7,6 @@ use std::ops::Range;
 use std::ops::Sub;
 use std::slice;
 
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -484,7 +483,7 @@ impl From<Shadow> for Primitive {
 }
 
 /// The style of a border.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(C)]
 pub enum BorderStyle {
     /// A solid border.

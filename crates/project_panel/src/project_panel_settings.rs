@@ -1,5 +1,4 @@
 use gpui::Pixels;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use settings::DockSide;
@@ -9,12 +8,11 @@ use settings::ProjectPanelEntrySpacing;
 use settings::ProjectPanelSortMode;
 use settings::ProjectPanelSortOrder;
 use settings::ProjectPanelTitleTooltipDelay;
-use settings::RegisterSetting;
 use settings::Settings;
 use settings::ShowDiagnostics;
 use settings::ShowIndentGuides;
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, RegisterSetting)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct ProjectPanelSettings {
     pub button: bool,
     pub hide_gitignore: bool,
@@ -42,12 +40,14 @@ pub struct ProjectPanelSettings {
     pub git_status_indicator: bool,
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+settings::register_setting!(ProjectPanelSettings);
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IndentGuidesSettings {
     pub show: ShowIndentGuides,
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AutoOpenSettings {
     pub on_create: bool,
     pub on_paste: bool,

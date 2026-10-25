@@ -32,7 +32,6 @@ use gpui::SharedString;
 use gpui::Task;
 use parking_lot::Mutex;
 use rope::Rope;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use smallvec::SmallVec;
 use smol::io::AsyncBufReadExt;
@@ -988,7 +987,7 @@ pub enum DiffStatType {
     IndexToWorktree,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum PushOptions {
     SetUpstream,
     Force,

@@ -22,7 +22,6 @@ syntax_theme.workspace = true
 palette.workspace = true
 parking_lot.workspace = true
 refineable.workspace = true
-schemars.workspace = true
 serde.workspace = true
 strum.workspace = true
 thiserror.workspace = true

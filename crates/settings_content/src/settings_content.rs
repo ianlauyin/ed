@@ -3,7 +3,6 @@ pub mod app_metadata;
 mod action;
 mod editor;
 mod language;
-pub mod merge_from;
 mod project;
 mod serde_helper;
 mod terminal;
@@ -11,22 +10,16 @@ mod theme;
 mod title_bar;
 mod workspace;
 
-pub use action::ActionName;
-pub use action::ActionWithArguments;
 pub use action::CommandAliasTarget;
 use anyhow::Context;
 use collections::HashMap;
-use collections::IndexSet;
 pub use editor::*;
 pub use language::*;
-pub use merge_from::MergeFrom as MergeFromTrait;
 pub use project::*;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 pub use serde_helper::serialize_f32_with_two_decimal_places;
 pub use serde_helper::serialize_optional_f32_with_two_decimal_places;
-use settings_macros::MergeFrom;
 pub use terminal::*;
 pub use theme::*;
 pub use title_bar::*;
@@ -42,8 +35,6 @@ pub use workspace::*;
     Default,
     Serialize,
     Deserialize,
-    JsonSchema,
-    MergeFrom,
     PartialEq,
     PartialOrd,
     derive_more::FromStr,
@@ -69,18 +60,7 @@ pub use util::serde::default_true;
 ///
 /// Default: on_typing_and_action
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum HideMouseMode {
@@ -98,18 +78,7 @@ pub enum HideMouseMode {
 ///
 /// Default: off
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ReduceMotionMode {
@@ -120,7 +89,7 @@ pub enum ReduceMotionMode {
     Off,
 }
 
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct SettingsContent {
     #[serde(flatten)]
     pub project: ProjectSettingsContent,
@@ -220,19 +189,7 @@ pub struct LanguageDefaultsContent {
     pub all_languages: AllLanguageSettingsContent,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum DockPosition {
     Left,
@@ -240,7 +197,7 @@ pub enum DockPosition {
     Right,
 }
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct GitPanelSettingsContent {
     /// Whether to show the panel button in the status bar.
     ///
@@ -313,18 +270,7 @@ pub struct GitPanelSettingsContent {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GitPanelCommitEditor {
@@ -336,18 +282,7 @@ pub enum GitPanelCommitEditor {
 }
 
 #[derive(
-    Default,
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Default, Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GitPanelClickBehavior {
@@ -361,18 +296,7 @@ pub enum GitPanelClickBehavior {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GitPanelSortBy {
@@ -382,18 +306,7 @@ pub enum GitPanelSortBy {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GitPanelGroupBy {
@@ -404,18 +317,7 @@ pub enum GitPanelGroupBy {
 }
 
 #[derive(
-    Default,
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
+    Default, Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum StatusStyle {
@@ -424,7 +326,7 @@ pub enum StatusStyle {
     LabelColor,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
 pub struct CommandPaletteSettingsContent {
     /// Whether to use command history ranking for sorting in the command palette.
     ///
@@ -432,7 +334,7 @@ pub struct CommandPaletteSettingsContent {
     pub use_command_history: Option<bool>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
 pub struct FileFinderSettingsContent {
     /// Whether to show file icons in the file finder.
     ///
@@ -459,18 +361,7 @@ pub struct FileFinderSettingsContent {
 }
 
 #[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum IncludeIgnoredContent {
@@ -484,18 +375,7 @@ pub enum IncludeIgnoredContent {
 }
 
 #[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum ModalWidthContent {
@@ -519,7 +399,7 @@ impl ModalWidthContent {
     }
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
 pub struct CallHierarchySettingsContent {
     /// Determines how much space the call hierarchy picker can take up in relation to the available window width.
     ///
@@ -527,7 +407,7 @@ pub struct CallHierarchySettingsContent {
     pub modal_max_width: Option<ModalWidthContent>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
 pub struct OutlinePanelSettingsContent {
     /// Whether to show the outline panel button in the status bar.
     ///
@@ -586,51 +466,27 @@ pub struct OutlinePanelSettingsContent {
     pub multi_buffer_hide_symbols: Option<bool>,
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum DockSide {
     Left,
     Right,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Deserialize,
-    Serialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum ShowIndentGuides {
     Always,
     Never,
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct IndentGuidesSettingsContent {
     /// When to show the scrollbar in the outline panel.
     pub show: Option<ShowIndentGuides>,
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Debug, JsonSchema, MergeFrom, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LineIndicatorFormat {
     Short,
@@ -639,7 +495,7 @@ pub enum LineIndicatorFormat {
 }
 
 /// The settings for the markdown preview.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, Default, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct MarkdownPreviewSettingsContent {
     /// The name of a font to use for rendering in the markdown preview.
     /// Falls back to the UI font if unset.
@@ -676,7 +532,7 @@ pub struct MarkdownPreviewSettingsContent {
 }
 
 /// The settings for the image viewer.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, Default, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct ImageViewerSettingsContent {
     /// The unit to use for displaying image file sizes.
     ///
@@ -684,19 +540,7 @@ pub struct ImageViewerSettingsContent {
     pub unit: Option<ImageFileSizeUnit>,
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Default,
-    PartialEq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageFileSizeUnit {
     /// Displays file size in binary units (e.g., KiB, MiB).
@@ -706,12 +550,12 @@ pub enum ImageFileSizeUnit {
     Decimal,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct RemoteSettingsContent {
     pub ssh_connections: Option<Vec<SshConnection>>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct SshConnection {
     pub host: String,
     pub username: Option<String>,
@@ -728,12 +572,12 @@ pub struct SshConnection {
     pub connection_timeout: Option<u16>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq, PartialOrd, Ord, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 pub struct RemoteProject {
     pub paths: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct SshPortForwardOption {
     pub local_host: Option<String>,
     pub local_port: u16,
@@ -742,7 +586,7 @@ pub struct SshPortForwardOption {
 }
 
 /// Settings for configuring the tab switcher behaviour.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TabSwitcherSettingsContent {
     /// When false, files are not shown while cycling through the tab switcher.
     /// Only the confirmed file (when the modifier key is released) is shown and
@@ -752,94 +596,7 @@ pub struct TabSwitcherSettingsContent {
     pub show_file_preview: Option<bool>,
 }
 
-// An ExtendingVec in the settings can only accumulate new values.
-//
-// This is useful for things like private files where you only want
-// to allow new values to be added.
-//
-// Consider using a HashMap<String, bool> instead of this type
-// (like language settings) so that user settings files can both add
-// and remove values from the set.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct ExtendingVec<T>(pub Vec<T>);
-
-impl<T> From<ExtendingVec<T>> for Vec<T> {
-    fn from(val: ExtendingVec<T>) -> Self {
-        val.0
-    }
-}
-impl<T> From<Vec<T>> for ExtendingVec<T> {
-    fn from(vec: Vec<T>) -> Self {
-        ExtendingVec(vec)
-    }
-}
-
-impl<T: Clone> merge_from::MergeFrom for ExtendingVec<T> {
-    fn merge_from(&mut self, other: &Self) {
-        self.0.extend_from_slice(other.0.as_slice());
-    }
-}
-
-// A SplicingVec in the settings replaces the value it merges over, except that
-// a `...` entry expands to that previous value.
-//
-// This lets a settings file add to a list without restating what it inherits,
-// while omitting `...` still replaces the list outright. Unlike ExtendingVec,
-// entries can be dropped by leaving `...` out and listing what to keep.
-//
-// Entries collapse to their first occurrence, so naming a value that `...`
-// already covers keeps it at the position it was written in rather than
-// repeating it.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct SplicingVec(pub Vec<String>);
-
-impl SplicingVec {
-    pub const REST: &str = "...";
-}
-
-impl From<Vec<String>> for SplicingVec {
-    fn from(vec: Vec<String>) -> Self {
-        SplicingVec(vec)
-    }
-}
-
-impl merge_from::MergeFrom for SplicingVec {
-    fn merge_from(&mut self, other: &Self) {
-        let inherited = std::mem::take(&mut self.0);
-        self.0 = other
-            .0
-            .iter()
-            .flat_map(|entry| if entry == Self::REST { inherited.clone() } else { vec![entry.clone()] })
-            .collect::<IndexSet<_>>()
-            .into_iter()
-            .collect();
-    }
-}
-
-// An ExtendingSet in the settings can only accumulate new values, and ignores
-// values that are already present, so merging the same source more than once
-// (e.g. re-importing VS Code settings) is idempotent.
-//
-// Insertion order is preserved, so it round-trips through the user's settings
-// file without reordering their entries.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct ExtendingSet<T: std::hash::Hash + Eq>(pub IndexSet<T>);
-
-impl<T: std::hash::Hash + Eq> From<Vec<T>> for ExtendingSet<T> {
-    fn from(vec: Vec<T>) -> Self {
-        ExtendingSet(vec.into_iter().collect())
-    }
-}
-
-impl<T: Clone + std::hash::Hash + Eq> merge_from::MergeFrom for ExtendingSet<T> {
-    fn merge_from(&mut self, other: &Self) {
-        self.0.extend(other.0.iter().cloned());
-    }
-}
-
-#[derive(
-    Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, MergeFrom, JsonSchema,
-)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct DelayMs(pub u64);
 

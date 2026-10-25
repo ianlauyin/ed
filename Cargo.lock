@@ -1044,12 +1044,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
-
-[[package]]
 name = "editor"
 version = "0.1.0"
 dependencies = [
@@ -1084,7 +1078,6 @@ dependencies = [
  "regex",
  "rope",
  "rpc",
- "schemars",
  "serde",
  "serde_json",
  "settings",
@@ -1631,7 +1624,6 @@ dependencies = [
  "parking_lot",
  "regex",
  "rope",
- "schemars",
  "serde",
  "smallvec",
  "smol",
@@ -1672,7 +1664,6 @@ dependencies = [
  "notifications",
  "picker",
  "project",
- "schemars",
  "serde",
  "serde_json",
  "settings",
@@ -1788,7 +1779,6 @@ dependencies = [
  "regex",
  "resvg",
  "scheduler",
- "schemars",
  "seahash",
  "serde",
  "serde_json",
@@ -1891,7 +1881,6 @@ dependencies = [
 name = "gpui_shared_string"
 version = "0.1.0"
 dependencies = [
- "schemars",
  "serde",
  "smol_str",
 ]
@@ -2371,15 +2360,11 @@ name = "json_schema_store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
  "gpui",
  "language",
- "parking_lot",
  "project",
- "schemars",
  "serde_json",
  "settings",
- "util",
 ]
 
 [[package]]
@@ -2472,7 +2457,6 @@ dependencies = [
  "parking_lot",
  "path",
  "regex",
- "schemars",
  "serde",
  "serde_json",
  "smallvec",
@@ -2734,7 +2718,6 @@ dependencies = [
  "log",
  "lsp_types",
  "parking_lot",
- "schemars",
  "serde",
  "serde_json",
  "settings_content",
@@ -3568,7 +3551,6 @@ dependencies = [
  "language",
  "menu",
  "project",
- "schemars",
  "serde",
  "serde_json",
  "settings",
@@ -3779,7 +3761,6 @@ dependencies = [
  "regex",
  "remote",
  "rpc",
- "schemars",
  "semver",
  "serde",
  "serde_json",
@@ -3825,7 +3806,6 @@ dependencies = [
  "project",
  "rayon",
  "rpc",
- "schemars",
  "serde",
  "settings",
  "smallvec",
@@ -4094,26 +4074,6 @@ dependencies = [
  "getrandom 0.2.16",
  "libredox",
  "thiserror",
-]
-
-[[package]]
-name = "ref-cast"
-version = "1.0.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f354300ae66f76f1c85c5f84693f0ce81d747e2c3f21a45fef496d89c960bf7d"
-dependencies = [
- "ref-cast-impl",
-]
-
-[[package]]
-name = "ref-cast-impl"
-version = "1.0.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7186006dcb21920990093f30e3dea63b7d6e977bf1256be20c3563a5db070da"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -4404,32 +4364,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "schemars"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82d20c4491bc164fa2f6c5d44565947a52ad80b9505d8e36f8d54c27c739fcd0"
-dependencies = [
- "dyn-clone",
- "indexmap",
- "ref-cast",
- "schemars_derive",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "schemars_derive"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33d020396d1d138dc19f1165df7545479dcd58d93810dc5d646a16e55abefa80"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde_derive_internals",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4514,17 +4448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_derive_internals"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "serde_fmt"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4589,11 +4512,9 @@ dependencies = [
  "fs",
  "gpui",
  "inventory",
- "schemars",
  "serde",
  "serde_json",
  "settings_content",
- "settings_macros",
  "util",
 ]
 
@@ -4606,22 +4527,12 @@ dependencies = [
  "derive_more",
  "gpui",
  "log",
- "schemars",
  "semver",
  "serde",
  "serde_json",
  "serde_json_lenient",
- "settings_macros",
  "strum",
  "util",
-]
-
-[[package]]
-name = "settings_macros"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -5071,7 +4982,6 @@ dependencies = [
  "menu",
  "picker",
  "project",
- "schemars",
  "serde",
  "settings",
  "ui",
@@ -5090,7 +5000,6 @@ dependencies = [
  "indexmap",
  "log",
  "picker",
- "schemars",
  "serde",
  "serde_json",
  "text",
@@ -5120,7 +5029,6 @@ dependencies = [
  "gpui",
  "hex",
  "proto",
- "schemars",
  "serde",
  "serde_json_lenient",
  "sha2",
@@ -5159,7 +5067,6 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "regex",
- "schemars",
  "serde",
  "settings",
  "settings_content",
@@ -5202,7 +5109,6 @@ dependencies = [
  "menu",
  "project",
  "regex",
- "schemars",
  "serde",
  "serde_json",
  "settings",
@@ -5244,7 +5150,6 @@ dependencies = [
  "palette",
  "parking_lot",
  "refineable",
- "schemars",
  "serde",
  "strum",
  "syntax_theme",
@@ -5280,7 +5185,6 @@ dependencies = [
  "log",
  "palette",
  "refineable",
- "schemars",
  "serde",
  "serde_json",
  "settings",
@@ -5421,7 +5325,6 @@ dependencies = [
  "project",
  "recent_projects",
  "remote",
- "schemars",
  "serde",
  "settings",
  "smallvec",
@@ -5649,7 +5552,6 @@ dependencies = [
  "itertools 0.15.0",
  "log",
  "menu",
- "schemars",
  "serde",
  "smallvec",
  "strum",
@@ -5813,7 +5715,6 @@ dependencies = [
  "percent-encoding",
  "regex",
  "rust-embed",
- "schemars",
  "serde",
  "serde_json",
  "serde_json_lenient",
@@ -6543,7 +6444,6 @@ dependencies = [
  "project",
  "remote",
  "rpc",
- "schemars",
  "serde",
  "serde_json",
  "session",
@@ -6711,7 +6611,6 @@ name = "zed_actions"
 version = "0.1.0"
 dependencies = [
  "gpui",
- "schemars",
  "serde",
  "util",
 ]

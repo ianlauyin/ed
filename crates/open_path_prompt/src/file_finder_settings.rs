@@ -1,9 +1,8 @@
 use serde::Deserialize;
 use settings::ModalWidthContent;
-use settings::RegisterSetting;
 use settings::Settings;
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, RegisterSetting)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct FileFinderSettings {
     pub file_icons: bool,
     pub modal_max_width: ModalWidthContent,
@@ -11,6 +10,8 @@ pub struct FileFinderSettings {
     pub include_ignored: Option<bool>,
     pub prefill_query_from_selection: bool,
 }
+
+settings::register_setting!(FileFinderSettings);
 
 impl Settings for FileFinderSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

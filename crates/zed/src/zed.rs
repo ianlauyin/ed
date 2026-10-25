@@ -902,8 +902,10 @@ fn open_log_file(workspace: &Workspace, window: &Window, cx: &Context<Workspace>
     .detach();
 }
 
-#[derive(Copy, Clone, Debug, settings::RegisterSetting)]
+#[derive(Copy, Clone, Debug)]
 struct CursorHideModeSetting(gpui::CursorHideMode);
+
+settings::register_setting!(CursorHideModeSetting);
 
 impl Settings for CursorHideModeSetting {
     fn from_settings(content: &settings::SettingsContent) -> Self {
@@ -939,8 +941,10 @@ fn init_app_appearance(cx: &mut App) {
     cx.observe_global::<SettingsStore>(apply).detach();
 }
 
-#[derive(Copy, Clone, Debug, settings::RegisterSetting)]
+#[derive(Copy, Clone, Debug)]
 struct ReduceMotionSetting(settings::ReduceMotionMode);
+
+settings::register_setting!(ReduceMotionSetting);
 
 impl Settings for ReduceMotionSetting {
     fn from_settings(content: &settings::SettingsContent) -> Self {

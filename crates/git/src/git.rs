@@ -13,7 +13,6 @@ use anyhow::Result;
 use gpui::Action;
 use gpui::actions;
 pub use repository::RemoteCommandOutput;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -146,7 +145,7 @@ actions!(
 );
 
 /// Renames a git branch.
-#[derive(Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, Action)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Action)]
 #[action(namespace = git)]
 #[serde(deny_unknown_fields)]
 pub struct RenameBranch {
@@ -158,7 +157,7 @@ pub struct RenameBranch {
 }
 
 /// Restores a file to its last committed state, discarding local changes.
-#[derive(Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, Action)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Action)]
 #[action(namespace = git, deprecated_aliases = ["editor::RevertFile"])]
 #[serde(deny_unknown_fields)]
 pub struct RestoreFile {

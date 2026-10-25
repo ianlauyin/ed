@@ -1,10 +1,9 @@
 use gpui::Pixels;
 use settings::IntoGpui;
-use settings::RegisterSetting;
 use settings::Settings;
 
 /// The settings for the markdown preview.
-#[derive(Clone, Copy, Debug, Default, RegisterSetting)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct MarkdownPreviewSettings {
     /// Whether to automatically open Markdown files in the preview.
     pub open_markdown_files_in_preview: bool,
@@ -12,6 +11,8 @@ pub struct MarkdownPreviewSettings {
     /// content edge to edge.
     pub max_width: Option<Pixels>,
 }
+
+settings::register_setting!(MarkdownPreviewSettings);
 
 impl Settings for MarkdownPreviewSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

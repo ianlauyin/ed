@@ -196,7 +196,7 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
             working_directory: Some(WorkingDirectory::CurrentProjectDirectory),
             env: Some(HashMap::default()),
             detect_venv: Some(true),
-            path_hyperlink_regexes: Some(PathHyperlinkRegexes(vec![
+            path_hyperlink_regexes: Some(vec![
                 PathHyperlinkRegex::SingleLine("File \"(?<path>[^\"]+)\", line (?<line>[0-9]+)".into()),
                 PathHyperlinkRegex::MultiLine(vec![
                     "(?x)".into(),
@@ -217,7 +217,7 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
                     "    (:+[0-9]+(:[0-9]+)?|:?\\([0-9]+([,:]?[0-9]+)?\\))?".into(),
                     ")".into(),
                 ]),
-            ])),
+            ]),
             path_hyperlink_timeout_ms: Some(1),
         },
         line_height: Some(TerminalLineHeight::Comfortable),
@@ -365,7 +365,7 @@ fn project_settings() -> ProjectSettingsContent {
     ProjectSettingsContent {
         all_languages: language_settings(),
         worktree: WorktreeSettingsContent {
-            file_scan_exclusions: Some(SplicingVec(vec![
+            file_scan_exclusions: Some(vec![
                 "**/.git".into(),
                 "**/.svn".into(),
                 "**/.hg".into(),
@@ -377,12 +377,12 @@ fn project_settings() -> ProjectSettingsContent {
                 "**/Thumbs.db".into(),
                 "**/.classpath".into(),
                 "**/.settings".into(),
-            ])),
-            file_scan_inclusions: Some(SplicingVec(vec![".env*".into()])),
+            ]),
+            file_scan_inclusions: Some(vec![".env*".into()]),
             scan_symlinks: Some(ScanSymlinksSetting::Expanded),
             file_scan_depth: Some(5),
-            hidden_files: Some(SplicingVec(vec!["**/.*".into()])),
-            read_only_files: Some(SplicingVec(vec![])),
+            hidden_files: Some(vec!["**/.*".into()]),
+            read_only_files: Some(vec![]),
         },
         lsp: LspSettingsMap(
             [(
@@ -479,16 +479,12 @@ fn language_settings() -> AllLanguageSettingsContent {
         languages: language_overrides(),
         file_types: Some(FileTypeMap(
             [
-                ("JSONC".into(), ExtendingSet(["tsconfig*.json".into()].into_iter().collect())),
+                ("JSONC".into(), vec!["tsconfig*.json".into()]),
                 (
                     "Markdown".into(),
-                    ExtendingSet(
-                        [".rules".into(), ".cursorrules".into(), ".windsurfrules".into(), ".clinerules".into()]
-                            .into_iter()
-                            .collect(),
-                    ),
+                    vec![".rules".into(), ".cursorrules".into(), ".windsurfrules".into(), ".clinerules".into()],
                 ),
-                ("Env".into(), ExtendingSet([".env.*".into()].into_iter().collect())),
+                ("Env".into(), vec![".env.*".into()]),
             ]
             .into_iter()
             .collect(),

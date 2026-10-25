@@ -24,6 +24,13 @@ migrator, or Vim/Helix mode.
   values and remain `None` when missing. Settings JSON error recovery and
   field-path diagnostics are removed. Bundled semantic-token rules use ordinary
   Serde errors; callers identify the source file when reporting failures.
+- There is one settings layer, so settings types have no merge trait or derive
+  macros (`settings_macros` is removed). The only merge is per language:
+  language defaults, then language metadata (tab size, hard tabs, soft wrap,
+  auto-indent on paste), then the built-in per-language overrides, each overlaid
+  field by field (nested groups such as `completions` too). Lists and maps are
+  plain values that replace; there is no `"..."` splicing or extend-only list
+  type. Typed settings register with `settings::register_setting!(Type)`.
 - User, global, server, and `.zed/settings.json` files are not loaded, watched,
   created, or rewritten. There are no settings profiles or project overrides.
   Changing persistent preferences requires editing the built-in settings and
@@ -68,9 +75,12 @@ migrator, or Vim/Helix mode.
   sorting/filters), so no server-side behaviour can diverge. Remote settings
   files are not loaded. Any new runtime toggle for a server-side setting
   (formatting, language servers, scanning, git) would need sync reintroduced.
-- Settings-file JSON schemas, completions,
-  validation, and language-server configuration schema probing are removed.
-  JSON language support remains for source files and action inputs.
+- JSON schemas are not generated: nothing derives `JsonSchema` and `schemars`
+  is not a dependency. Actions still derive `Deserialize`, because the built-in
+  keymap builds actions from a name plus JSON input. The JSON language server
+  only gets the bundled `tsconfig.json`/`package.json` schemas and a
+  trailing-comma schema for JSONC files; there are no settings, keymap, or
+  per-action schemas, and no language-server configuration schema probing.
 - The upstream documentation website preprocessor is removed; this fork does not
   build the upstream mdBook site.
 - The command palette has no "Add/Change Keybinding" flow; secondary confirm runs

@@ -99,10 +99,12 @@ pub struct CallDisplay {
 
 const BASE_MODAL_WIDTH: Rems = Rems(42.0);
 
-#[derive(Debug, Clone, Copy, PartialEq, settings::RegisterSetting)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CallHierarchySettings {
     pub modal_max_width: settings::ModalWidthContent,
 }
+
+settings::register_setting!(CallHierarchySettings);
 
 impl Settings for CallHierarchySettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

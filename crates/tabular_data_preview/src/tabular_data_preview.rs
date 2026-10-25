@@ -8,7 +8,6 @@ use gpui::FocusHandle;
 use gpui::Focusable;
 use gpui::Task;
 use gpui::actions;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use ui::SharedString;
 use ui::prelude::*;
@@ -29,7 +28,7 @@ pub mod types;
 
 actions!(tabular_data, [OpenPreview, OpenPreviewToTheSide]);
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum NavigationDirection {
     #[default]
@@ -39,7 +38,7 @@ pub enum NavigationDirection {
     Right,
 }
 
-#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[derive(Clone, Deserialize, PartialEq, Action)]
 #[action(namespace = tabular_data)]
 pub struct MoveFocusedCell {
     pub direction: NavigationDirection,

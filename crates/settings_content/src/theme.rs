@@ -1,23 +1,20 @@
-use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use collections::HashMap;
 use collections::IndexMap;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde_json::Value;
-use settings_macros::MergeFrom;
 
 use crate::serialize_f32_with_two_decimal_places;
 
 /// OpenType font features as a map of feature tag to value.
 /// This is a content type that mirrors `gpui::FontFeatures` but without the Arc wrapper.
 /// Values can be specified as booleans (true=1, false=0) or integers.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, MergeFrom)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct FontFeaturesContent(pub IndexMap<String, u32>);
 
@@ -93,45 +90,9 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
     }
 }
 
-impl JsonSchema for FontFeaturesContent {
-    fn schema_name() -> Cow<'static, str> {
-        "FontFeaturesContent".into()
-    }
-
-    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        use schemars::json_schema;
-        json_schema!({
-            "type": "object",
-            "patternProperties": {
-                "[0-9a-zA-Z]{4}$": {
-                    "type": ["boolean", "integer"],
-                    "minimum": 0,
-                    "multipleOf": 1
-                }
-            },
-            "additionalProperties": false
-        })
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, MergeFrom)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ThemeColor(String);
-
-impl JsonSchema for ThemeColor {
-    fn schema_name() -> Cow<'static, str> {
-        "Color".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        use schemars::json_schema;
-        json_schema!({
-            "type": "string",
-            "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
-            "format": "color"
-        })
-    }
-}
 
 impl From<String> for ThemeColor {
     fn from(value: String) -> Self {
@@ -176,36 +137,29 @@ impl TryFrom<&ThemeColor> for gpui::Rgba {
 
 /// Settings for rendering text in UI and text buffers.
 
-#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct ThemeSettingsContent {
     /// The default font size for text in the UI.
     pub ui_font_size: Option<FontSize>,
     /// The name of a font to use for rendering in the UI.
     pub ui_font_family: Option<FontFamilyName>,
     /// The font fallbacks to use for rendering in the UI.
-    #[schemars(default = "default_font_fallbacks")]
-    #[schemars(extend("uniqueItems" = true))]
     pub ui_font_fallbacks: Option<Vec<FontFamilyName>>,
     /// The OpenType features to enable for text in the UI.
-    #[schemars(default = "default_font_features")]
     pub ui_font_features: Option<FontFeaturesContent>,
     /// The weight of the UI font in CSS units from 100 to 900.
-    #[schemars(default = "default_buffer_font_weight")]
     pub ui_font_weight: Option<FontWeightContent>,
     /// The name of a font to use for rendering in text buffers.
     pub buffer_font_family: Option<FontFamilyName>,
     /// The font fallbacks to use for rendering in text buffers.
-    #[schemars(extend("uniqueItems" = true))]
     pub buffer_font_fallbacks: Option<Vec<FontFamilyName>>,
     /// The default font size for rendering in text buffers.
     pub buffer_font_size: Option<FontSize>,
     /// The weight of the editor font in CSS units from 100 to 900.
-    #[schemars(default = "default_buffer_font_weight")]
     pub buffer_font_weight: Option<FontWeightContent>,
     /// The buffer's line height.
     pub buffer_line_height: Option<BufferLineHeight>,
     /// The OpenType features to enable for rendering in text buffers.
-    #[schemars(default = "default_font_features")]
     pub buffer_font_features: Option<FontFeaturesContent>,
     pub git_commit_buffer_font_size: Option<FontSize>,
     /// The name of a font to use for rendering Mermaid diagrams in the
@@ -221,7 +175,6 @@ pub struct ThemeSettingsContent {
     pub ui_density: Option<UiDensity>,
 
     /// How much to fade out unused code.
-    #[schemars(range(min = 0.0, max = 0.9))]
     pub unnecessary_code_fade: Option<CodeFade>,
 
     /// EXPERIMENTAL: Overrides for the current theme.
@@ -238,9 +191,7 @@ pub struct ThemeSettingsContent {
 }
 
 /// A font size value in pixels, wrapping around `f32` for custom settings UI rendering.
-#[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, PartialOrd, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct FontSize(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
 
@@ -256,9 +207,7 @@ impl From<f32> for FontSize {
     }
 }
 
-#[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, PartialOrd, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct CodeFade(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
 
@@ -274,20 +223,8 @@ impl From<f32> for CodeFade {
     }
 }
 
-fn default_font_features() -> Option<FontFeaturesContent> {
-    Some(FontFeaturesContent::default())
-}
-
-const fn default_font_fallbacks() -> Option<Vec<FontFamilyName>> {
-    Some(Vec::new())
-}
-
-const fn default_buffer_font_weight() -> Option<FontWeightContent> {
-    Some(FontWeightContent::NORMAL)
-}
-
 /// Represents the selection of a theme, which can be either static or dynamic.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, strum::EnumDiscriminants)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(untagged)]
 pub enum ThemeSelection {
@@ -324,18 +261,7 @@ impl Default for ThemeSelection {
 ///
 /// `System` will select the theme based on the system's appearance.
 #[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeAppearanceMode {
@@ -352,9 +278,7 @@ pub enum ThemeAppearanceMode {
 
 /// Specifies the density of the UI.
 /// Note: This setting is still experimental. See [this tracking issue](https://github.com/zed-industries/zed/issues/18078)
-#[derive(
-    Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize, JsonSchema, MergeFrom,
-)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UiDensity {
     /// A denser UI with tighter spacing and smaller elements.
@@ -382,7 +306,7 @@ impl UiDensity {
 }
 
 /// Font family name.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct FontFamilyName(pub Arc<str>);
 
@@ -405,9 +329,7 @@ impl From<FontFamilyName> for String {
 }
 
 /// The buffer's line height.
-#[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default, strum::EnumDiscriminants,
-)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Default, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
 pub enum BufferLineHeight {
@@ -433,7 +355,7 @@ where
 }
 
 /// The content of a serialized theme.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ThemeStyleContent {
     #[serde(rename = "background.appearance")]
@@ -457,21 +379,21 @@ pub struct ThemeStyleContent {
     pub syntax: IndexMap<String, HighlightStyleContent>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AccentContent(pub Option<ThemeColor>);
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PlayerColorContent {
     pub cursor: Option<ThemeColor>,
     pub selection: Option<ThemeColor>,
 }
 
 /// Theme name.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ThemeName(pub Arc<str>);
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ThemeColorsContent {
     /// Border color. Used for most borders, is usually a high contrast color.
@@ -696,7 +618,6 @@ pub struct ThemeColorsContent {
     ///
     /// Don't use this field.
     #[serde(rename = "scrollbar_thumb.background", skip_serializing)]
-    #[schemars(skip)]
     pub deprecated_scrollbar_thumb_background: Option<ThemeColor>,
 
     /// The color of the scrollbar thumb.
@@ -1060,7 +981,7 @@ pub struct ThemeColorsContent {
     pub vim_helix_select_foreground: Option<ThemeColor>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct HighlightStyleContent {
     pub color: Option<ThemeColor>,
@@ -1093,7 +1014,7 @@ where
     Ok(T::deserialize(value).ok())
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct StatusColorsContent {
     /// Indicates some kind of conflict, like a file changed on disk while it was open, or
@@ -1239,7 +1160,7 @@ pub struct StatusColorsContent {
 }
 
 /// The background appearance of the window.
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowBackgroundContent {
     Opaque,
@@ -1249,7 +1170,7 @@ pub enum WindowBackgroundContent {
     MicaAltBackdrop,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum FontStyleContent {
     Normal,
@@ -1257,7 +1178,7 @@ pub enum FontStyleContent {
     Oblique,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, MergeFrom, derive_more::FromStr)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct FontWeightContent(pub f32);
 
@@ -1289,21 +1210,4 @@ impl FontWeightContent {
     pub const BOLD: FontWeightContent = FontWeightContent(700.0);
     pub const EXTRA_BOLD: FontWeightContent = FontWeightContent(800.0);
     pub const BLACK: FontWeightContent = FontWeightContent(900.0);
-}
-
-impl schemars::JsonSchema for FontWeightContent {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "FontWeightContent".into()
-    }
-
-    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        use schemars::json_schema;
-        json_schema!({
-            "type": "number",
-            "minimum": Self::THIN.0,
-            "maximum": Self::BLACK.0,
-            "default": Self::NORMAL.0,
-            "description": "Font weight value between 100 (thin) and 900 (black)"
-        })
-    }
 }

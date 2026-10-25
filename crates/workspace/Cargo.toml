@@ -33,7 +33,6 @@ markdown.workspace = true
 parking_lot.workspace = true
 project.workspace = true
 remote.workspace = true
-schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 session.workspace = true

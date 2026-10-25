@@ -17,7 +17,6 @@ use gpui::Window;
 use gpui::actions;
 use menu::SelectNext;
 use menu::SelectPrevious;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use settings::DefaultOpenBehavior;
@@ -42,7 +41,7 @@ use crate::item::Item;
 use crate::item::ItemEvent;
 use crate::persistence::WorkspaceDb;
 
-#[derive(PartialEq, Clone, Debug, Deserialize, Serialize, JsonSchema, Action)]
+#[derive(PartialEq, Clone, Debug, Deserialize, Serialize, Action)]
 #[action(namespace = welcome)]
 #[serde(transparent)]
 pub struct OpenRecentProject {

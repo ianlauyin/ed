@@ -6,9 +6,6 @@ use collections::HashMap;
 use collections::HashSet;
 use gpui_shared_string::SharedString;
 use regex::Regex;
-use schemars::JsonSchema;
-use schemars::SchemaGenerator;
-use schemars::json_schema;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -18,7 +15,7 @@ use serde::de;
 use crate::LanguageName;
 
 /// Controls the soft-wrapping behavior in the editor.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SoftWrap {
     /// Prefer a single line generally, unless an overly long line is encountered.
@@ -35,7 +32,7 @@ pub enum SoftWrap {
 
 /// Top-level configuration for a language, typically loaded from a `config.toml`
 /// shipped alongside the grammar.
-#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct LanguageConfig {
     /// Human-readable name of the language.
     pub name: LanguageName,
@@ -59,12 +56,10 @@ pub struct LanguageConfig {
     /// A regex that is used to determine whether the indentation level should be
     /// increased in the following line.
     #[serde(default, deserialize_with = "deserialize_regex")]
-    #[schemars(schema_with = "regex_json_schema")]
     pub increase_indent_pattern: Option<Regex>,
     /// A regex that is used to determine whether the indentation level should be
     /// decreased in the following line.
     #[serde(default, deserialize_with = "deserialize_regex")]
-    #[schemars(schema_with = "regex_json_schema")]
     pub decrease_indent_pattern: Option<Regex>,
     /// A list of rules for decreasing indentation. Each rule pairs a regex with a set of valid
     /// "block-starting" tokens. When a line matches a pattern, its indentation is aligned with
@@ -105,7 +100,6 @@ pub struct LanguageConfig {
     /// prefixed section doesn't merge with another (e.g., markdown list items).
     /// By default, Zed treats as paragraph and comment prefixes as boundaries.
     #[serde(default, deserialize_with = "deserialize_regex_vec")]
-    #[schemars(schema_with = "regex_vec_json_schema")]
     pub rewrap_prefixes: Vec<Regex>,
     #[serde(default)]
     pub overrides: HashMap<String, LanguageConfigOverride>,
@@ -120,7 +114,6 @@ pub struct LanguageConfig {
     pub hard_tabs: Option<bool>,
     /// How many columns a tab should occupy.
     #[serde(default)]
-    #[schemars(range(min = 1, max = 128))]
     pub tab_size: Option<NonZeroU32>,
     /// How to soft-wrap long lines of text.
     #[serde(default)]
@@ -193,17 +186,16 @@ impl Default for LanguageConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub struct DecreaseIndentConfig {
     #[serde(default, deserialize_with = "deserialize_regex")]
-    #[schemars(schema_with = "regex_json_schema")]
     pub pattern: Option<Regex>,
     #[serde(default)]
     pub valid_after: Vec<String>,
 }
 
 /// Configuration for continuing ordered lists with auto-incrementing numbers.
-#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct OrderedListConfig {
     /// A regex pattern with a capture group for the number portion (e.g., `(\\d+)\\. `).
     pub pattern: String,
@@ -212,7 +204,7 @@ pub struct OrderedListConfig {
 }
 
 /// Configuration for continuing task lists on newline.
-#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TaskListConfig {
     /// The list markers to match (e.g., `- [ ] `, `- [x] `).
     pub prefixes: Vec<Arc<str>>,
@@ -220,14 +212,13 @@ pub struct TaskListConfig {
     pub continuation: Arc<str>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct LanguageMatcher {
     /// Given a list of `LanguageConfig`'s, the language of a file can be determined based on the path extension matching any of the `path_suffixes`.
     #[serde(default)]
     pub path_suffixes: Vec<SharedString>,
     /// A regex pattern that determines whether the language should be assigned to a file or not.
     #[serde(default, serialize_with = "serialize_regex", deserialize_with = "deserialize_regex")]
-    #[schemars(schema_with = "regex_json_schema")]
     pub first_line_pattern: Option<Regex>,
     /// Alternative names for this language used in vim/emacs modelines.
     /// These are matched case-insensitively against the `mode` (emacs) or
@@ -268,7 +259,7 @@ impl PartialEq for LanguageMatcher {
 }
 
 /// The configuration for JSX tag auto-closing.
-#[derive(Clone, Deserialize, JsonSchema, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct JsxTagAutoCloseConfig {
     /// The name of the node for a opening tag
     pub open_tag_node_name: String,
@@ -301,7 +292,7 @@ pub struct JsxTagAutoCloseConfig {
 }
 
 /// The configuration for block comments for this language.
-#[derive(Clone, Debug, JsonSchema, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BlockCommentConfig {
     /// A start tag of block comment.
     pub start: Arc<str>,
@@ -310,7 +301,6 @@ pub struct BlockCommentConfig {
     /// A character to add as a prefix when a new line is added to a block comment.
     pub prefix: Arc<str>,
     /// A indent to add for prefix and end line upon new line.
-    #[schemars(range(min = 1, max = 128))]
     pub tab_size: u32,
 }
 
@@ -337,7 +327,7 @@ impl<'de> Deserialize<'de> for BlockCommentConfig {
     }
 }
 
-#[derive(Clone, Deserialize, Default, Debug, JsonSchema)]
+#[derive(Clone, Deserialize, Default, Debug)]
 pub struct LanguageConfigOverride {
     #[serde(default)]
     pub line_comments: Override<Vec<Arc<str>>>,
@@ -355,7 +345,7 @@ pub struct LanguageConfigOverride {
     pub prefer_label_for_snippet: Option<bool>,
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 #[serde(untagged)]
 pub enum Override<T> {
     Remove { remove: bool },
@@ -382,8 +372,7 @@ impl<T> Override<T> {
 ///
 /// This struct includes settings for defining which pairs of characters are considered brackets and
 /// also specifies any language-specific scopes where these pairs should be ignored for bracket matching purposes.
-#[derive(Clone, Debug, Default, JsonSchema)]
-#[schemars(with = "Vec::<BracketPairContent>")]
+#[derive(Clone, Debug, Default)]
 pub struct BracketPairConfig {
     /// A list of character pairs that should be treated as brackets in the context of a given language.
     pub pairs: Vec<BracketPair>,
@@ -398,7 +387,7 @@ impl BracketPairConfig {
     }
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize)]
 pub struct BracketPairContent {
     #[serde(flatten)]
     pub bracket_pair: BracketPair,
@@ -421,7 +410,7 @@ impl<'de> Deserialize<'de> for BracketPairConfig {
 
 /// Describes a single bracket pair and how an editor should react to e.g. inserting
 /// an opening bracket or to a newline character insertion in between `start` and `end` characters.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 pub struct BracketPair {
     /// Starting substring for a bracket.
     pub start: String,
@@ -437,7 +426,7 @@ pub struct BracketPair {
     pub newline: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct WrapCharactersConfig {
     /// Opening token split into a prefix and suffix. The first caret goes
     /// after the prefix (i.e., between prefix and suffix).
@@ -458,12 +447,6 @@ pub fn deserialize_regex<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Regex
     if let Some(source) = source { Ok(Some(regex::Regex::new(&source).map_err(de::Error::custom)?)) } else { Ok(None) }
 }
 
-pub fn regex_json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    json_schema!({
-        "type": "string"
-    })
-}
-
 pub fn serialize_regex<S>(regex: &Option<Regex>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -477,11 +460,4 @@ where
 pub fn deserialize_regex_vec<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Regex>, D::Error> {
     let sources = Vec::<String>::deserialize(d)?;
     sources.into_iter().map(|source| regex::Regex::new(&source)).collect::<Result<_, _>>().map_err(de::Error::custom)
-}
-
-pub fn regex_vec_json_schema(_: &mut SchemaGenerator) -> schemars::Schema {
-    json_schema!({
-        "type": "array",
-        "items": { "type": "string" }
-    })
 }

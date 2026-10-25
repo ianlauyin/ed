@@ -3,7 +3,6 @@ use gpui::Entity;
 use gpui::OwnedMenu;
 use gpui::OwnedMenuItem;
 use gpui::actions;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use smallvec::SmallVec;
 use ui::ContextMenu;
@@ -29,7 +28,7 @@ actions!(
 /// Opens the named menu in the client-side application menu.
 ///
 /// Does not apply to platform menu bars (e.g. on macOS).
-#[derive(Clone, Deserialize, JsonSchema, PartialEq, Default, Action)]
+#[derive(Clone, Deserialize, PartialEq, Default, Action)]
 #[action(namespace = app_menu)]
 pub struct OpenApplicationMenu(String);
 

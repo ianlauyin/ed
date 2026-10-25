@@ -1,67 +1,19 @@
-use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 
-use collections::HashMap;
-use schemars::JsonSchema;
-use schemars::Schema;
-use schemars::SchemaGenerator;
-use schemars::json_schema;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
-use settings_macros::MergeFrom;
 
 /// The value of an entry in `command_aliases`, either a registered action name
 /// or an arbitrary string, for example, a vim command like `"w"` or `"wq"`.
-///
-/// This is a separate type from `ActionName` on purpose, as `ActionName` is
-/// also used by keymap bindings, which only accept registered action names, and
-/// we don't want to weaken those guarantees and accept any arbitrary string.
-#[derive(Serialize, Deserialize, Default, MergeFrom, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 #[serde(transparent)]
 pub struct CommandAliasTarget(String);
 
 impl CommandAliasTarget {
     pub fn new(name: impl Into<String>) -> Self {
         Self(name.into())
-    }
-
-    /// Build the runtime schema, an `anyOf` whose entries are the same as the
-    /// ones produced by [`ActionName::build_schema`] plus a final fallback for
-    /// arbitrary strings that aren't registered actions.
-    pub fn build_schema(
-        action_names: &[&str],
-        action_documentation: &HashMap<&str, &str>,
-        deprecations: &HashMap<&str, &str>,
-        deprecation_messages: &HashMap<&str, &str>,
-    ) -> Schema {
-        let action_schema = ActionName::build_schema(
-            action_names.iter().copied(),
-            action_documentation,
-            deprecations,
-            deprecation_messages,
-        );
-
-        let mut alternatives =
-            action_schema.to_value().get("anyOf").and_then(Value::as_array).cloned().unwrap_or_default();
-
-        let mut exclude = action_names.iter().map(|name| serde_json::json!({ "const": *name })).collect::<Vec<Value>>();
-
-        // Since we accept any arbitrary string, besides the list of registered
-        // action names, we'll add any string that uses a `::` pattern to the
-        // list of exclusions, ensuring we display a warning in that case,
-        // otherwise the user might be led into thinking they've typed a valid
-        // action name when that's not the case.
-        exclude.push(serde_json::json!({ "pattern": "::" }));
-
-        alternatives.push(serde_json::json!({
-            "type": "string",
-            "not": { "anyOf": exclude }
-        }));
-
-        json_schema!({ "anyOf": alternatives })
     }
 }
 
@@ -74,147 +26,5 @@ impl Display for CommandAliasTarget {
 impl AsRef<str> for CommandAliasTarget {
     fn as_ref(&self) -> &str {
         &self.0
-    }
-}
-
-impl JsonSchema for CommandAliasTarget {
-    fn schema_name() -> Cow<'static, str> {
-        "CommandAliasTarget".into()
-    }
-
-    /// Returns `true` as a placeholder.
-    ///
-    /// The real schema, an `anyOf` of every registered action name with action
-    /// documentation and deprecation metadata, as well as any arbitrary string,
-    /// cannot be produced here because `JsonSchema::json_schema` receives no
-    /// runtime context. It is instead built by call sites that do have access
-    /// to the GPUI action registry using [`CommandAliasTarget::build_schema`].
-    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
-        json_schema!(true)
-    }
-}
-
-/// The name of a registered GPUI action, serialized as a plain JSON string, for
-/// example, "editor::Cancel"` or `"workspace::CloseActiveItem"`.
-///
-/// This newtype exists so that settings fields like `command_aliases`, or the
-/// keymap file bindings, can request JSON-schema auto completion over the set
-/// of actions known at runtime.
-#[derive(Serialize, Deserialize, Default, MergeFrom, Clone, Debug, PartialEq)]
-#[serde(transparent)]
-pub struct ActionName(String);
-
-/// Small helper function to populate the schema's `deprecationMessage` field with the
-/// provided deprecation message.
-fn add_deprecation(schema: &mut Schema, message: String) {
-    schema.insert("deprecationMessage".into(), Value::String(message));
-}
-
-/// Small helper function to populate the schema's `description` field with the
-/// provided description.
-fn add_description(schema: &mut Schema, description: &str) {
-    schema.insert("description".into(), Value::String(description.to_string()));
-}
-
-impl ActionName {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self(name.into())
-    }
-
-    /// Build the JSON schema to be used for `$defs/ActionName`, basically an
-    /// `anyOf` of all of the available actions with per-action documentation
-    /// and deprecation metadata attached.
-    pub fn build_schema<'a>(
-        action_names: impl IntoIterator<Item = &'a str>,
-        action_documentation: &HashMap<&str, &str>,
-        deprecations: &HashMap<&str, &str>,
-        deprecation_messages: &HashMap<&str, &str>,
-    ) -> Schema {
-        let mut alternatives = Vec::new();
-
-        for action_name in action_names {
-            let mut entry = json_schema!({
-                "type": "string",
-                "const": action_name
-            });
-
-            if let Some(message) = deprecation_messages.get(action_name) {
-                add_deprecation(&mut entry, message.to_string());
-            } else if let Some(new_name) = deprecations.get(action_name) {
-                add_deprecation(&mut entry, format!("Deprecated, use {new_name}"));
-            }
-
-            if let Some(description) = action_documentation.get(action_name) {
-                add_description(&mut entry, description);
-            }
-
-            alternatives.push(entry);
-        }
-
-        json_schema!({ "anyOf": alternatives })
-    }
-}
-
-impl Display for ActionName {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        write!(formatter, "{}", self.0)
-    }
-}
-
-impl AsRef<str> for ActionName {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl JsonSchema for ActionName {
-    /// The name under which this type should be stored in a generator's `$defs`
-    /// map when schemars encounters it during schema generation.
-    /// Keeping it stable as `"ActionName"` lets consumers reference it by
-    /// `#/$defs/ActionName` and lets [`util::schemars::replace_subschema`] look
-    /// it up at runtime to swap in the real schema.
-    fn schema_name() -> Cow<'static, str> {
-        "ActionName".into()
-    }
-
-    /// Returns `true` as a placeholder.
-    ///
-    /// The real schema, an `anyOf` of every registered action name with action
-    /// documentation and deprecation metadata, cannot be produced here because
-    /// `JsonSchema::json_schema` receives no runtime context. It is instead
-    /// built by call sites that do have access to the GPUI action registry
-    /// using [`ActionName::build_schema`].
-    fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        json_schema!(true)
-    }
-}
-
-/// A GPUI action together with its input data, serialized as a two-element JSON
-/// array of the form `["namespace::Name", { ... }]`, for example,
-/// `["pane::ActivateItem", { "index": 0 }]`.
-#[derive(Deserialize, Default)]
-#[serde(transparent)]
-pub struct ActionWithArguments(pub Value);
-
-impl JsonSchema for ActionWithArguments {
-    /// The name under which this type should be stored in a generator's `$defs`
-    /// map when schemars encounters it during schema generation.
-    /// Keeping it stable as `"ActionWithArguments"` lets consumers reference it
-    /// by `#/$defs/ActionWithArguments` and lets
-    /// [`util::schemars::replace_subschema`] look it up at runtime to swap in
-    /// the real schema.
-    fn schema_name() -> Cow<'static, str> {
-        "ActionWithArguments".into()
-    }
-
-    /// Returns `true` as a placeholder.
-    ///
-    /// The real schema, an `anyOf` of every registered action name that
-    /// supports arguments, with action documentation and deprecation metadata,
-    /// cannot be produced here because `JsonSchema::json_schema` receives no
-    /// runtime context. Consumers that expose editable action inputs supply
-    /// their schema from the action registry.
-    fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        json_schema!(true)
     }
 }

@@ -5,12 +5,11 @@ use settings::GitPanelCommitEditor;
 use settings::GitPanelGroupBy;
 use settings::GitPanelSortBy;
 use settings::IntoGpui;
-use settings::RegisterSetting;
 use settings::Settings;
 use settings::StatusStyle;
 use workspace::dock::DockPosition;
 
-#[derive(Debug, Clone, PartialEq, RegisterSetting)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GitPanelSettings {
     pub button: bool,
     pub dock: DockPosition,
@@ -27,6 +26,8 @@ pub struct GitPanelSettings {
     pub entry_primary_click_action: GitPanelClickBehavior,
     pub commit_editor: GitPanelCommitEditor,
 }
+
+settings::register_setting!(GitPanelSettings);
 
 impl Settings for GitPanelSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {

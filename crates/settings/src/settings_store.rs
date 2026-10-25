@@ -20,7 +20,6 @@ use crate::SemanticTokenRules;
 use crate::WorktreeId;
 use crate::settings_content::LanguageDefaultsContent;
 use crate::settings_content::SettingsContent;
-use crate::settings_content::merge_from::MergeFrom;
 
 /// A typed view of the built-in settings.
 pub trait Settings: 'static + Send + Sync + Sized {
@@ -82,9 +81,12 @@ pub trait Settings: 'static + Send + Sync + Sized {
 }
 
 pub struct RegisteredSetting {
-    pub settings_value: fn() -> Box<dyn AnySettingValue>,
-    pub from_settings: fn(&SettingsContent) -> Box<dyn Any>,
     pub id: fn() -> TypeId,
+    pub setting_value: fn() -> Box<dyn AnySettingValue>,
+}
+
+pub fn setting_value<T: Settings>() -> Box<dyn AnySettingValue> {
+    Box::new(SettingValue::<T> { global_value: None })
 }
 
 inventory::collect!(RegisteredSetting);
@@ -112,10 +114,9 @@ pub struct DefaultSemanticTokenRules(pub SemanticTokenRules);
 
 impl gpui::Global for DefaultSemanticTokenRules {}
 
-#[doc(hidden)]
 #[derive(Debug)]
-pub struct SettingValue<T> {
-    pub global_value: Option<T>,
+struct SettingValue<T> {
+    global_value: Option<T>,
 }
 
 #[doc(hidden)]
@@ -153,9 +154,8 @@ impl SettingsStore {
     /// Add a new type of setting to the store.
     pub fn register_setting<T: Settings>(&mut self) {
         self.register_setting_internal(&RegisteredSetting {
-            settings_value: || Box::new(SettingValue::<T> { global_value: None }),
-            from_settings: |content| Box::new(T::from_settings(content)),
             id: || TypeId::of::<T>(),
+            setting_value: setting_value::<T>,
         });
     }
 
@@ -172,8 +172,8 @@ impl SettingsStore {
             return;
         }
 
-        let setting_value = entry.or_insert((registered_setting.settings_value)());
-        let value = (registered_setting.from_settings)(&self.merged_settings);
+        let setting_value = entry.or_insert((registered_setting.setting_value)());
+        let value = setting_value.value_from_settings(&self.merged_settings);
         setting_value.set_global_value(value);
     }
 

@@ -63,7 +63,7 @@ macro_rules! actions {
 ///
 /// ```
 /// use gpui::Action;
-/// #[derive(Clone, PartialEq, serde::Deserialize, schemars::JsonSchema, Action)]
+/// #[derive(Clone, PartialEq, serde::Deserialize, Action)]
 /// #[action(namespace = editor)]
 /// pub struct SelectNext {
 ///     pub replace_newest: bool,
@@ -71,7 +71,7 @@ macro_rules! actions {
 /// ```
 ///
 /// The derive macro for `Action` requires that the type implement `Clone` and `PartialEq`. It also
-/// requires `serde::Deserialize` and `schemars::JsonSchema` unless `#[action(no_json)]` is
+/// requires `serde::Deserialize` unless `#[action(no_json)]` is
 /// specified. In Zed these trait impls are used to load keymaps from JSON.
 ///
 /// Multiple arguments separated by commas may be specified in `#[action(...)]`:
@@ -80,19 +80,17 @@ macro_rules! actions {
 ///
 /// - `name = "ActionName"` overrides the action's name. This must not contain `::`.
 ///
-/// - `no_json` causes the `build` method to always error and `action_json_schema` to return `None`,
-///   and allows actions not implement `serde::Serialize` and `schemars::JsonSchema`.
+/// - `no_json` causes the `build` method to always error, and allows actions not implement
+///   `serde::Deserialize`.
 ///
 /// - `no_register` skips registering the action. This is useful for implementing the `Action` trait
 ///   while not supporting invocation by name or JSON deserialization.
 ///
 /// - `deprecated_aliases = ["editor::SomeAction"]` specifies deprecated old names for the action.
 ///   These action names should *not* correspond to any actions that are registered. These old names
-///   can then still be used to refer to invoke this action. In Zed, the keymap JSON schema will
-///   accept these old names and provide warnings.
+///   can then still be used to refer to invoke this action.
 ///
 /// - `deprecated = "Message about why this action is deprecation"` specifies a deprecation message.
-///   In Zed, the keymap JSON schema will cause this to be displayed as a warning.
 ///
 /// # Manual Implementation
 ///
@@ -102,7 +100,7 @@ macro_rules! actions {
 ///
 /// ```
 /// use gpui::{SharedString, register_action};
-/// #[derive(Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+/// #[derive(Clone, PartialEq, Eq, serde::Deserialize)]
 /// pub struct Paste {
 ///     pub content: SharedString,
 /// }
@@ -140,17 +138,8 @@ pub trait Action: Any + Send {
     where
         Self: Sized;
 
-    /// Optional JSON schema for the action's input data.
-    fn action_json_schema(_: &mut schemars::SchemaGenerator) -> Option<schemars::Schema>
-    where
-        Self: Sized,
-    {
-        None
-    }
-
     /// A list of alternate, deprecated names for this action. These names can still be used to
-    /// invoke the action. In Zed, the keymap JSON schema will accept these old names and provide
-    /// warnings.
+    /// invoke the action.
     fn deprecated_aliases() -> &'static [&'static str]
     where
         Self: Sized,
@@ -158,8 +147,7 @@ pub trait Action: Any + Send {
         &[]
     }
 
-    /// Returns the deprecation message for this action, if any. In Zed, the keymap JSON schema will
-    /// cause this to be displayed as a warning.
+    /// Returns the deprecation message for this action, if any.
     fn deprecation_message() -> Option<&'static str>
     where
         Self: Sized,
@@ -261,7 +249,6 @@ impl Default for ActionRegistry {
 
 struct ActionData {
     pub build: ActionBuilder,
-    pub json_schema: fn(&mut schemars::SchemaGenerator) -> Option<schemars::Schema>,
 }
 
 /// This type must be public so that our macros can build it in other crates.
@@ -276,7 +263,6 @@ pub struct MacroActionData {
     pub name: &'static str,
     pub type_id: TypeId,
     pub build: ActionBuilder,
-    pub json_schema: fn(&mut schemars::SchemaGenerator) -> Option<schemars::Schema>,
     pub deprecated_aliases: &'static [&'static str],
     pub deprecation_message: Option<&'static str>,
     pub documentation: Option<&'static str>,
@@ -301,7 +287,7 @@ impl ActionRegistry {
                 (might be registered in `#[action(deprecated_aliases = [...])]`."
             );
         }
-        self.by_name.insert(name, ActionData { build: action.build, json_schema: action.json_schema });
+        self.by_name.insert(name, ActionData { build: action.build });
         for &alias in action.deprecated_aliases {
             if self.by_name.contains_key(alias) {
                 panic!(
@@ -309,7 +295,7 @@ impl ActionRegistry {
                     `{alias}` is specified in `#[action(deprecated_aliases = [...])]` for action `{name}`."
                 );
             }
-            self.by_name.insert(alias, ActionData { build: action.build, json_schema: action.json_schema });
+            self.by_name.insert(alias, ActionData { build: action.build });
             self.deprecated_aliases.insert(alias, name);
             self.all_names.push(alias);
         }
@@ -347,28 +333,6 @@ impl ActionRegistry {
         self.all_names.as_slice()
     }
 
-    pub fn action_schemas(
-        &self,
-        generator: &mut schemars::SchemaGenerator,
-    ) -> Vec<(&'static str, Option<schemars::Schema>)> {
-        // Use the order from all_names so that the resulting schema has sensible order.
-        self.all_names
-            .iter()
-            .map(|name| {
-                let action_data = self.by_name.get(name).expect("All actions in all_names should be registered");
-                (*name, (action_data.json_schema)(generator))
-            })
-            .collect::<Vec<_>>()
-    }
-
-    pub fn action_schema_by_name(
-        &self,
-        name: &str,
-        generator: &mut schemars::SchemaGenerator,
-    ) -> Option<Option<schemars::Schema>> {
-        self.by_name.get(name).map(|action_data| (action_data.json_schema)(generator))
-    }
-
     pub const fn deprecated_aliases(&self) -> &HashMap<&'static str, &'static str> {
         &self.deprecated_aliases
     }
@@ -391,7 +355,6 @@ pub fn generate_list_of_all_registered_actions() -> impl Iterator<Item = MacroAc
 }
 
 mod no_action {
-    use schemars::JsonSchema;
     use serde::Deserialize;
 
     use crate as gpui;
@@ -411,7 +374,7 @@ mod no_action {
     /// In keymap JSON this is written as:
     ///
     /// `["ed::Unbind", "editor::NewLine"]`
-    #[derive(Clone, Debug, PartialEq, Deserialize, JsonSchema, gpui::Action)]
+    #[derive(Clone, Debug, PartialEq, Deserialize, gpui::Action)]
     #[action(namespace = ed)]
     pub struct Unbind(pub gpui::SharedString);
 

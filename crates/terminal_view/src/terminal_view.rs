@@ -48,7 +48,6 @@ use persistence::TerminalDb;
 use project::Project;
 use project::ProjectEntryId;
 use project::search::SearchQuery;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::SeedQuerySetting;
 use settings::Settings;
@@ -133,12 +132,12 @@ const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
 pub struct ScrollTerminal(pub i32);
 
 /// Sends the specified text directly to the terminal.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Action)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Action)]
 #[action(namespace = terminal)]
 pub struct SendText(String);
 
 /// Sends a keystroke sequence to the terminal.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Action)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Action)]
 #[action(namespace = terminal)]
 pub struct SendKeystroke(String);
 
@@ -151,7 +150,7 @@ actions!(
 );
 
 /// Renames the terminal tab.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Action)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Action)]
 #[action(namespace = terminal)]
 pub struct RenameTerminal;
 

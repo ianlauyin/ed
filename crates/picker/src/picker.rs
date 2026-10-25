@@ -33,7 +33,6 @@ use gpui::list;
 use gpui::prelude::*;
 use gpui::uniform_list;
 use head::Head;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use ui::Checkbox;
 use ui::ContextMenu;
@@ -119,7 +118,7 @@ actions!(
 
 /// ConfirmInput is an alternative editor action which - instead of selecting active picker entry - treats pickers editor input literally,
 /// performing some kind of action on it.
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Deserialize, Default, Action)]
 #[action(namespace = picker)]
 #[serde(deny_unknown_fields)]
 pub struct ConfirmInput {

@@ -4,16 +4,14 @@ use collections::HashMap;
 use git::repository::DEFAULT_WORKTREE_DIRECTORY;
 use lsp::DEFAULT_LSP_REQUEST_TIMEOUT_SECS;
 use lsp::LanguageServerName;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 pub use settings::BinarySettings;
 pub use settings::LspSettings;
-use settings::RegisterSetting;
 use settings::SemanticTokenRules;
 use settings::Settings;
 
-#[derive(Debug, Clone, RegisterSetting)]
+#[derive(Debug, Clone)]
 pub struct ProjectSettings {
     /// Configuration for language servers.
     ///
@@ -41,6 +39,8 @@ pub struct ProjectSettings {
     pub session: SessionSettings,
 }
 
+settings::register_setting!(ProjectSettings);
+
 #[derive(Copy, Clone, Debug)]
 pub struct SessionSettings {
     /// Whether or not to restore unsaved buffers on restart.
@@ -59,7 +59,7 @@ pub struct SessionSettings {
 }
 
 /// Common language server settings.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GlobalLspSettings {
     /// Whether to show the LSP servers button in the status bar.
@@ -104,7 +104,7 @@ impl GlobalLspSettings {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub struct LspNotificationSettings {
     /// Timeout in milliseconds for dismissing language server notifications.
@@ -154,7 +154,7 @@ impl From<settings::DiagnosticSeverityContent> for DiagnosticSeverity {
 }
 
 /// Determines the severity of the diagnostic that should be moved to.
-#[derive(PartialEq, PartialOrd, Clone, Copy, Debug, Eq, Deserialize, JsonSchema)]
+#[derive(PartialEq, PartialOrd, Clone, Copy, Debug, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoToDiagnosticSeverity {
     /// Errors
@@ -190,7 +190,7 @@ impl GoToDiagnosticSeverity {
 }
 
 /// Allows filtering diagnostics that should be moved to.
-#[derive(PartialEq, Clone, Copy, Debug, Deserialize, JsonSchema)]
+#[derive(PartialEq, Clone, Copy, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum GoToDiagnosticSeverityFilter {
     /// Move to diagnostics of a specific severity.
@@ -290,7 +290,7 @@ impl From<settings::GitPathStyle> for GitPathStyle {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct BranchPickerSettings {
     /// Whether to show author name as part of the commit information.
@@ -347,7 +347,7 @@ pub struct InlineDiagnosticsSettings {
     pub max_severity: Option<DiagnosticSeverity>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LspPullDiagnosticsSettings {
     /// Whether to pull for diagnostics or not.
     ///

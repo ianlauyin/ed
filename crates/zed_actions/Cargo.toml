@@ -12,7 +12,6 @@ doctest = false
 
 [dependencies]
 gpui.workspace = true
-schemars.workspace = true
 serde.workspace = true
 util.workspace = true
 

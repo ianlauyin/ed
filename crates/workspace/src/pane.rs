@@ -61,7 +61,6 @@ use project::Project;
 use project::ProjectEntryId;
 use project::ProjectPath;
 use project::WorktreeId;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::Settings;
 use settings::SettingsStore;
@@ -157,7 +156,7 @@ impl DraggedSelection {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveIntent {
     /// write all files (even if unchanged)
@@ -181,12 +180,12 @@ pub enum SaveIntent {
 }
 
 /// Activates a specific item in the pane by its index.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 pub struct ActivateItem(pub usize);
 
 /// Closes the currently active item in the pane.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct CloseActiveItem {
@@ -197,7 +196,7 @@ pub struct CloseActiveItem {
 }
 
 /// Closes all inactive items in the pane.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 #[action(deprecated_aliases = ["pane::CloseInactiveItems"])]
@@ -209,7 +208,7 @@ pub struct CloseOtherItems {
 }
 
 /// Closes all multibuffers in the pane.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct CloseMultibufferItems {
@@ -220,7 +219,7 @@ pub struct CloseMultibufferItems {
 }
 
 /// Closes all items in the pane.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct CloseAllItems {
@@ -231,7 +230,7 @@ pub struct CloseAllItems {
 }
 
 /// Closes all items that have no unsaved changes.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct CloseCleanItems {
@@ -240,7 +239,7 @@ pub struct CloseCleanItems {
 }
 
 /// Closes all items to the right of the current item.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct CloseItemsToTheRight {
@@ -249,7 +248,7 @@ pub struct CloseItemsToTheRight {
 }
 
 /// Closes all items to the left of the current item.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct CloseItemsToTheLeft {
@@ -258,7 +257,7 @@ pub struct CloseItemsToTheLeft {
 }
 
 /// Reveals the current item in the project panel.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct RevealInProjectPanel {
@@ -267,7 +266,7 @@ pub struct RevealInProjectPanel {
 }
 
 /// Opens the search interface with the specified configuration.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields)]
 pub struct DeploySearch {
@@ -289,7 +288,7 @@ pub struct DeploySearch {
     pub include_ignored: Option<bool>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Deserialize, JsonSchema, Default)]
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub enum SplitMode {
     /// Clone the current pane.
@@ -305,7 +304,7 @@ macro_rules! split_structs {
     ($($name:ident => $doc:literal),* $(,)?) => {
         $(
             #[doc = $doc]
-            #[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
+            #[derive(Clone, PartialEq, Debug, Deserialize, Default, Action)]
             #[action(namespace = pane)]
             #[serde(deny_unknown_fields, default)]
             pub struct $name {
@@ -325,7 +324,7 @@ split_structs!(
 );
 
 /// Activates the previous item in the pane.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields, default)]
 pub struct ActivatePreviousItem {
@@ -341,7 +340,7 @@ impl Default for ActivatePreviousItem {
 }
 
 /// Activates the next item in the pane.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Action)]
 #[action(namespace = pane)]
 #[serde(deny_unknown_fields, default)]
 pub struct ActivateNextItem {

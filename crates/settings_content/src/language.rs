@@ -2,19 +2,15 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use collections::HashMap;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use settings_macros::MergeFrom;
 
 use crate::DocumentFoldingRanges;
 use crate::DocumentSymbols;
-use crate::ExtendingSet;
 use crate::SemanticTokens;
-use crate::merge_from;
 
 /// The state of the modifier keys at some point in time
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModifiersContent {
     /// The control key
     #[serde(default)]
@@ -36,7 +32,7 @@ pub struct ModifiersContent {
     pub function: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AllLanguageSettingsContent {
     /// The default language settings.
     #[serde(flatten)]
@@ -49,45 +45,99 @@ pub struct AllLanguageSettingsContent {
     pub file_types: Option<FileTypeMap>,
 }
 
-impl merge_from::MergeFrom for AllLanguageSettingsContent {
-    fn merge_from(&mut self, other: &Self) {
-        self.file_types.merge_from(&other.file_types);
+impl LanguageSettingsContent {
+    /// Overlays every value set in `other` onto `self`. Nested setting groups
+    /// are overlaid field by field, so `other` may set only part of a group.
+    pub fn merge_from(&mut self, other: &LanguageSettingsContent) {
+        overlay(&mut self.tab_size, &other.tab_size);
+        overlay(&mut self.hard_tabs, &other.hard_tabs);
+        overlay(&mut self.soft_wrap, &other.soft_wrap);
+        overlay(&mut self.soft_wrap_indent, &other.soft_wrap_indent);
+        overlay(&mut self.preferred_line_length, &other.preferred_line_length);
+        overlay(&mut self.show_wrap_guides, &other.show_wrap_guides);
+        overlay(&mut self.wrap_guides, &other.wrap_guides);
+        overlay_group(&mut self.indent_guides, &other.indent_guides, |this, other| {
+            overlay(&mut this.enabled, &other.enabled);
+            overlay(&mut this.line_width, &other.line_width);
+            overlay(&mut this.active_line_width, &other.active_line_width);
+            overlay(&mut this.coloring, &other.coloring);
+            overlay(&mut this.background_coloring, &other.background_coloring);
+        });
+        overlay(&mut self.format_on_save, &other.format_on_save);
+        overlay(&mut self.remove_trailing_whitespace_on_save, &other.remove_trailing_whitespace_on_save);
+        overlay(&mut self.ensure_final_newline_on_save, &other.ensure_final_newline_on_save);
+        overlay(&mut self.line_ending, &other.line_ending);
+        overlay(&mut self.formatter, &other.formatter);
+        overlay(&mut self.jsx_tag_auto_close, &other.jsx_tag_auto_close);
+        overlay(&mut self.enable_language_server, &other.enable_language_server);
+        overlay(&mut self.semantic_tokens, &other.semantic_tokens);
+        overlay(&mut self.document_folding_ranges, &other.document_folding_ranges);
+        overlay(&mut self.document_symbols, &other.document_symbols);
+        overlay(&mut self.allow_rewrap, &other.allow_rewrap);
+        overlay(&mut self.show_whitespaces, &other.show_whitespaces);
+        overlay_group(&mut self.whitespace_map, &other.whitespace_map, |this, other| {
+            overlay(&mut this.space, &other.space);
+            overlay(&mut this.tab, &other.tab);
+        });
+        overlay(&mut self.extend_comment_on_newline, &other.extend_comment_on_newline);
+        overlay(&mut self.extend_list_on_newline, &other.extend_list_on_newline);
+        overlay(&mut self.indent_list_on_tab, &other.indent_list_on_tab);
+        overlay_group(&mut self.inlay_hints, &other.inlay_hints, |this, other| {
+            overlay(&mut this.enabled, &other.enabled);
+            overlay(&mut this.show_type_hints, &other.show_type_hints);
+            overlay(&mut this.show_parameter_hints, &other.show_parameter_hints);
+            overlay(&mut this.show_other_hints, &other.show_other_hints);
+            overlay(&mut this.show_background, &other.show_background);
+            overlay(&mut this.edit_debounce_ms, &other.edit_debounce_ms);
+            overlay(&mut this.scroll_debounce_ms, &other.scroll_debounce_ms);
+            overlay(&mut this.toggle_on_modifiers_press, &other.toggle_on_modifiers_press);
+        });
+        overlay(&mut self.use_autoclose, &other.use_autoclose);
+        overlay(&mut self.use_auto_surround, &other.use_auto_surround);
+        overlay(&mut self.always_treat_brackets_as_autoclosed, &other.always_treat_brackets_as_autoclosed);
+        overlay(&mut self.use_on_type_format, &other.use_on_type_format);
+        overlay(&mut self.code_actions_on_format, &other.code_actions_on_format);
+        overlay(&mut self.linked_edits, &other.linked_edits);
+        overlay(&mut self.auto_indent, &other.auto_indent);
+        overlay(&mut self.auto_indent_on_paste, &other.auto_indent_on_paste);
+        overlay_group(&mut self.tasks, &other.tasks, |this, other| {
+            overlay(&mut this.variables, &other.variables);
+            overlay(&mut this.enabled, &other.enabled);
+            overlay(&mut this.prefer_lsp, &other.prefer_lsp);
+        });
+        overlay(&mut self.show_completions_on_input, &other.show_completions_on_input);
+        overlay(&mut self.show_completion_documentation, &other.show_completion_documentation);
+        overlay_group(&mut self.completions, &other.completions, |this, other| {
+            overlay(&mut this.words, &other.words);
+            overlay(&mut this.words_min_length, &other.words_min_length);
+            overlay(&mut this.lsp, &other.lsp);
+            overlay(&mut this.lsp_fetch_timeout_ms, &other.lsp_fetch_timeout_ms);
+            overlay(&mut this.lsp_insert_mode, &other.lsp_insert_mode);
+        });
+        overlay(&mut self.word_diff_enabled, &other.word_diff_enabled);
+        overlay(&mut self.colorize_brackets, &other.colorize_brackets);
+    }
+}
 
-        // A user's global settings override the default global settings and
-        // all default language-specific settings.
-        self.defaults.merge_from(&other.defaults);
-        for language_settings in self.languages.0.values_mut() {
-            language_settings.merge_from(&other.defaults);
-        }
+fn overlay<T: Clone>(target: &mut Option<T>, value: &Option<T>) {
+    if value.is_some() {
+        target.clone_from(value);
+    }
+}
 
-        // A user's language-specific settings override default language-specific settings.
-        for (language_name, user_language_settings) in &other.languages.0 {
-            if let Some(existing) = self.languages.0.get_mut(language_name) {
-                existing.merge_from(user_language_settings);
-            } else {
-                let mut new_settings = self.defaults.clone();
-                new_settings.merge_from(user_language_settings);
-
-                self.languages.0.insert(language_name.clone(), new_settings);
-            }
-        }
+fn overlay_group<T: Clone>(target: &mut Option<T>, value: &Option<T>, merge: impl FnOnce(&mut T, &T)) {
+    let Some(value) = value else {
+        return;
+    };
+    if let Some(target) = target.as_mut() {
+        merge(target, value);
+    } else {
+        *target = Some(value.clone());
     }
 }
 
 /// Controls the soft-wrapping behavior in the editor.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum AutoIndentMode {
     /// Adjusts indentation based on syntax context when typing.
@@ -101,19 +151,7 @@ pub enum AutoIndentMode {
 }
 
 /// Controls the soft-wrapping behavior in the editor.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum SoftWrap {
     /// Prefer a single line generally, unless an overly long line is encountered.
@@ -137,8 +175,6 @@ pub enum SoftWrap {
     Deserialize,
     PartialEq,
     Eq,
-    JsonSchema,
-    MergeFrom,
     strum::EnumString,
     strum::VariantArray,
     strum::VariantNames,
@@ -157,12 +193,11 @@ pub enum SoftWrapIndent {
 }
 
 /// The settings for a particular language.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LanguageSettingsContent {
     /// How many columns a tab should occupy.
     ///
     /// Default: 4
-    #[schemars(range(min = 1, max = 128))]
     pub tab_size: Option<NonZeroU32>,
     /// Whether to indent lines using tab characters, as opposed to multiple
     /// spaces.
@@ -357,19 +392,7 @@ pub struct LanguageSettingsContent {
 }
 
 /// Controls how whitespace should be displayedin the editor.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum ShowWhitespaceSetting {
     /// Draw whitespace only for the selected text.
@@ -389,26 +412,14 @@ pub enum ShowWhitespaceSetting {
     Trailing,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct WhitespaceMapContent {
     pub space: Option<char>,
     pub tab: Option<char>,
 }
 
 /// The behavior of `editor::Rewrap`.
-#[derive(
-    Debug,
-    PartialEq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Debug, PartialEq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum RewrapBehavior {
     /// Only rewrap within comments.
@@ -420,14 +431,14 @@ pub enum RewrapBehavior {
     Anywhere,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsxTagAutoCloseSettingsContent {
     /// Enables or disables auto-closing of JSX tags.
     pub enabled: Option<bool>,
 }
 
 /// The settings for inlay hints.
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InlayHintSettingsContent {
     /// Global switch to toggle hints on and off.
     ///
@@ -504,7 +515,7 @@ impl InlayHintKind {
 }
 
 /// Controls how completions are processed for this language.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CompletionSettingsContent {
     /// Controls how words are completed.
@@ -532,19 +543,7 @@ pub struct CompletionSettingsContent {
     pub lsp_insert_mode: Option<LspInsertMode>,
 }
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum LspInsertMode {
     /// Replaces text before the cursor, using the `insert` range described in the LSP specification.
@@ -560,19 +559,7 @@ pub enum LspInsertMode {
 }
 
 /// Controls how document's words are completed.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum WordsCompletionMode {
     /// Always fetch document's words for completions along with LSP completions.
@@ -587,19 +574,7 @@ pub enum WordsCompletionMode {
 
 /// TODO: this should just be a bool
 /// Controls the behavior of formatting files when they are saved.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum FormatOnSave {
     /// Files should be formatted on save.
@@ -619,19 +594,7 @@ pub enum FormatOnSave {
 }
 
 /// Controls how line endings are normalized when a buffer is saved.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
 #[serde(rename_all = "snake_case")]
 pub enum LineEndingSetting {
     /// Preserve the existing line endings of the file. New files use the
@@ -655,7 +618,7 @@ pub enum LineEndingSetting {
 }
 
 /// Controls which formatters should be used when formatting code.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum FormatterList {
     Single(Formatter),
@@ -678,7 +641,7 @@ impl AsRef<[Formatter]> for FormatterList {
 }
 
 /// Controls which formatter should be used when formatting code. If there are multiple formatters, they are executed in the order of declaration.
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Formatter {
     /// Format files using Biome for languages it supports,
@@ -701,7 +664,7 @@ pub enum Formatter {
     LanguageServer(LanguageServerFormatterSpecifier),
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(
     rename_all = "snake_case",
     // allow specifying language servers as "language_server" or {"language_server": {"name": ...}}
@@ -738,7 +701,7 @@ impl From<LanguageServerFormatterSpecifier> for LanguageServerVariantContent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", untagged)]
 enum LanguageServerVariantContent {
     /// Format code using a specific language server.
@@ -747,14 +710,14 @@ enum LanguageServerVariantContent {
     Current(CurrentLanguageServerContent),
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum CurrentLanguageServerContent {
     #[default]
     LanguageServer,
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 struct LanguageServerSpecifierContent {
     /// The name of the language server to format with
@@ -762,7 +725,7 @@ struct LanguageServerSpecifierContent {
 }
 
 /// The settings for indent guides.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndentGuideSettingsContent {
     /// Whether to display indent guides in the editor.
     ///
@@ -787,7 +750,7 @@ pub struct IndentGuideSettingsContent {
 }
 
 /// The task settings for a particular language.
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Serialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Serialize)]
 pub struct LanguageTaskSettingsContent {
     /// Extra task variables to set for a particular language.
     pub variables: Option<HashMap<String, String>>,
@@ -799,16 +762,16 @@ pub struct LanguageTaskSettingsContent {
 }
 
 /// Map from language name to settings.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LanguageToSettingsMap(pub HashMap<String, LanguageSettingsContent>);
 
 /// Map from language name to file patterns.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct FileTypeMap(pub HashMap<Arc<str>, ExtendingSet<String>>);
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FileTypeMap(pub HashMap<Arc<str>, Vec<String>>);
 
 impl<'a> IntoIterator for &'a FileTypeMap {
-    type Item = (&'a Arc<str>, &'a ExtendingSet<String>);
-    type IntoIter = std::collections::hash_map::Iter<'a, Arc<str>, ExtendingSet<String>>;
+    type Item = (&'a Arc<str>, &'a Vec<String>);
+    type IntoIter = std::collections::hash_map::Iter<'a, Arc<str>, Vec<String>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
@@ -817,18 +780,7 @@ impl<'a> IntoIterator for &'a FileTypeMap {
 
 /// Determines how indent guides are colored.
 #[derive(
-    Default,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum IndentGuideColoring {
@@ -843,18 +795,7 @@ pub enum IndentGuideColoring {
 
 /// Determines how indent guide backgrounds are colored.
 #[derive(
-    Default,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
+    Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum IndentGuideBackgroundColoring {

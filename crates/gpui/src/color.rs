@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::{self};
@@ -7,8 +6,6 @@ use std::hash::Hasher;
 
 use anyhow::Context as _;
 use anyhow::bail;
-use schemars::JsonSchema;
-use schemars::json_schema;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -150,19 +147,6 @@ impl Visitor<'_> for RgbaVisitor {
 
     fn visit_str<E: de::Error>(self, value: &str) -> Result<Rgba, E> {
         Rgba::try_from(value).map_err(E::custom)
-    }
-}
-
-impl JsonSchema for Rgba {
-    fn schema_name() -> Cow<'static, str> {
-        "Rgba".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        json_schema!({
-            "type": "string",
-            "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
-        })
     }
 }
 
@@ -585,16 +569,6 @@ impl From<Rgba> for Hsla {
     }
 }
 
-impl JsonSchema for Hsla {
-    fn schema_name() -> Cow<'static, str> {
-        Rgba::schema_name()
-    }
-
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        Rgba::json_schema(generator)
-    }
-}
-
 impl Serialize for Hsla {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -613,7 +587,7 @@ impl<'de> Deserialize<'de> for Hsla {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub(crate) enum BackgroundTag {
     Solid = 0,
@@ -627,7 +601,7 @@ pub(crate) enum BackgroundTag {
 /// References:
 /// - <https://developer.mozilla.org/en-US/docs/Web/CSS/color-interpolation-method>
 /// - <https://www.w3.org/TR/css-color-4/#typedef-color-space>
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[repr(C)]
 pub enum ColorSpace {
     #[default]
@@ -647,7 +621,7 @@ impl Display for ColorSpace {
 }
 
 /// A background color, which can be either a solid color or a linear gradient.
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Background {
     pub(crate) tag: BackgroundTag,
@@ -740,7 +714,7 @@ pub fn linear_gradient(angle: f32, from: impl Into<LinearColorStop>, to: impl In
 /// A color stop in a linear gradient.
 ///
 /// <https://developer.mozilla.org/en-US/docs/Web/CSS/gradient/linear-gradient#linear-color-stop>
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct LinearColorStop {
     /// The color of the color stop.

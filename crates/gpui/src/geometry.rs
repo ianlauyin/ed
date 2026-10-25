@@ -3,7 +3,6 @@
 //! between them.
 
 use core::fmt::Debug;
-use std::borrow::Cow;
 use std::cmp::PartialOrd;
 use std::cmp::{self};
 use std::fmt::Display;
@@ -29,8 +28,6 @@ use derive_more::Neg;
 use derive_more::Sub;
 use derive_more::SubAssign;
 use refineable::Refineable;
-use schemars::JsonSchema;
-use schemars::json_schema;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -99,11 +96,10 @@ pub trait Along {
     Eq,
     Serialize,
     Deserialize,
-    JsonSchema,
     Hash,
     Neg,
 )]
-#[refineable(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[refineable(Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Point<T: Clone + Debug + Default + PartialEq> {
     /// The x coordinate of the point.
@@ -366,7 +362,7 @@ impl<T: Clone + Debug + Default + PartialEq + Display> Display for Point<T> {
 /// This struct is generic over the type `T`, which can be any type that implements `Clone`, `Default`, and `Debug`.
 /// It is commonly used to specify dimensions for elements in a UI, such as a window or element.
 #[derive(Add, Clone, Copy, Default, Deserialize, Div, Hash, Neg, PartialEq, Refineable, Serialize, Sub)]
-#[refineable(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[refineable(Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Size<T: Clone + Debug + Default + PartialEq> {
     /// The width component of the size.
@@ -1559,7 +1555,7 @@ impl Bounds<DevicePixels> {
 /// assert_eq!(edges.left, 40.0);
 /// ```
 #[derive(Refineable, Clone, Default, Debug, Eq, PartialEq)]
-#[refineable(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[refineable(Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Edges<T: Clone + Debug + Default + PartialEq> {
     /// The size of the top edge.
@@ -2032,7 +2028,7 @@ impl Anchor {
 ///
 /// Each field represents the size of the corner on one side of the box: `top_left`, `top_right`, `bottom_right`, and `bottom_left`.
 #[derive(Refineable, Clone, Default, Debug, Eq, PartialEq)]
-#[refineable(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[refineable(Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Corners<T: Clone + Debug + Default + PartialEq> {
     /// The value associated with the top left corner.
@@ -2390,20 +2386,7 @@ impl From<Percentage> for Radians {
 /// assert_eq!(scaled_length, ScaledPixels::from(20.0));
 /// ```
 #[derive(
-    Clone,
-    Copy,
-    Default,
-    Add,
-    AddAssign,
-    Sub,
-    SubAssign,
-    Neg,
-    Div,
-    DivAssign,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
+    Clone, Copy, Default, Add, AddAssign, Sub, SubAssign, Neg, Div, DivAssign, PartialEq, Serialize, Deserialize,
 )]
 #[repr(transparent)]
 pub struct Pixels(pub(crate) f32);
@@ -3131,19 +3114,6 @@ impl TryFrom<&'_ str> for AbsoluteLength {
     }
 }
 
-impl JsonSchema for AbsoluteLength {
-    fn schema_name() -> Cow<'static, str> {
-        "AbsoluteLength".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        json_schema!({
-            "type": "string",
-            "pattern": r"^-?\d+(\.\d+)?(px|rem)$"
-        })
-    }
-}
-
 impl<'de> Deserialize<'de> for AbsoluteLength {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct StringVisitor;
@@ -3260,19 +3230,6 @@ impl TryFrom<&'_ str> for DefiniteLength {
     }
 }
 
-impl JsonSchema for DefiniteLength {
-    fn schema_name() -> Cow<'static, str> {
-        "DefiniteLength".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        json_schema!({
-            "type": "string",
-            "pattern": r"^-?\d+(\.\d+)?(px|rem|%)$"
-        })
-    }
-}
-
 impl<'de> Deserialize<'de> for DefiniteLength {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct StringVisitor;
@@ -3363,19 +3320,6 @@ impl TryFrom<&'_ str> for Length {
         } else {
             Err(anyhow!("invalid Length '{value}', expected {EXPECTED_LENGTH}"))
         }
-    }
-}
-
-impl JsonSchema for Length {
-    fn schema_name() -> Cow<'static, str> {
-        "Length".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        json_schema!({
-            "type": "string",
-            "pattern": r"^(auto|-?\d+(\.\d+)?(px|rem|%))$"
-        })
     }
 }
 
@@ -3507,7 +3451,7 @@ impl From<()> for Length {
 }
 
 /// A location in a grid layout.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Default)]
 pub struct GridLocation {
     /// The rows this item uses within the grid.
     pub row: Range<GridPlacement>,
@@ -3516,7 +3460,7 @@ pub struct GridLocation {
 }
 
 /// The placement of an item within a grid layout's column or row.
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize, Default)]
 pub enum GridPlacement {
     /// The grid line index to place this item.
     Line(i16),

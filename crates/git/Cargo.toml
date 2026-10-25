@@ -21,7 +21,6 @@ log.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 rope.workspace = true
-schemars.workspace = true
 serde.workspace = true
 smallvec.workspace = true
 async-channel.workspace = true

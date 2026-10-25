@@ -3,7 +3,6 @@ use std::borrow::Cow;
 use std::iter;
 use std::sync::Arc;
 
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use smol_str::SmolStr;
@@ -36,20 +35,6 @@ impl SharedString {
     /// Get a &str from the underlying string.
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-}
-
-impl JsonSchema for SharedString {
-    fn inline_schema() -> bool {
-        String::inline_schema()
-    }
-
-    fn schema_name() -> Cow<'static, str> {
-        String::schema_name()
-    }
-
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        String::json_schema(generator)
     }
 }
 

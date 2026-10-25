@@ -2,7 +2,6 @@ use std::error::Error;
 use std::fmt::Display;
 use std::fmt::Write;
 
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -352,7 +351,7 @@ impl std::fmt::Display for KeybindingKeystroke {
 }
 
 /// The state of the modifier keys at some point in time
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize, Hash, JsonSchema)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize, Hash)]
 pub struct Modifiers {
     /// The control key
     #[serde(default)]
@@ -530,7 +529,7 @@ impl std::ops::BitAndAssign for Modifiers {
 }
 
 /// The state of the capslock key at some point in time
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize, Hash, JsonSchema)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize, Hash)]
 pub struct Capslock {
     /// The capslock key is on
     #[serde(default)]

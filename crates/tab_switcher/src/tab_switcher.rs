@@ -33,9 +33,7 @@ use gpui::rems;
 use picker::Picker;
 use picker::PickerDelegate;
 use project::Project;
-use schemars::JsonSchema;
 use serde::Deserialize;
-use settings::RegisterSetting;
 use settings::Settings;
 use settings::SettingsContent;
 use settings::TabSwitcherSettingsContent;
@@ -59,10 +57,12 @@ use workspace::item::TabContentParams;
 use workspace::pane::render_item_indicator;
 use workspace::pane::tab_details;
 
-#[derive(Clone, Copy, Debug, RegisterSetting)]
+#[derive(Clone, Copy, Debug)]
 pub struct TabSwitcherSettings {
     pub show_file_preview: bool,
 }
+
+settings::register_setting!(TabSwitcherSettings);
 
 impl Settings for TabSwitcherSettings {
     fn from_settings(content: &SettingsContent) -> Self {
@@ -74,7 +74,7 @@ impl Settings for TabSwitcherSettings {
 const PANEL_WIDTH_REMS: f32 = 28.;
 
 /// Toggles the tab switcher interface.
-#[derive(PartialEq, Clone, Deserialize, JsonSchema, Default, Action)]
+#[derive(PartialEq, Clone, Deserialize, Default, Action)]
 #[action(namespace = tab_switcher)]
 #[serde(deny_unknown_fields)]
 pub struct Toggle {

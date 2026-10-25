@@ -1,14 +1,15 @@
-use settings::RegisterSetting;
 use settings::Settings;
 use settings::SettingsContent;
 
-#[derive(Copy, Clone, Debug, RegisterSetting)]
+#[derive(Copy, Clone, Debug)]
 pub struct TitleBarSettings {
     pub show_branch_status_icon: bool,
     pub show_branch_name: bool,
     pub show_worktree_name: bool,
     pub show_project_items: bool,
 }
+
+settings::register_setting!(TitleBarSettings);
 
 impl Settings for TitleBarSettings {
     fn from_settings(s: &SettingsContent) -> Self {

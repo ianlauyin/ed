@@ -1,9 +1,7 @@
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use settings_macros::MergeFrom;
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct TitleBarSettingsContent {
     /// Whether to show git status indicators on the branch icon in the title bar.
     /// When enabled, the branch icon changes to reflect the current repository

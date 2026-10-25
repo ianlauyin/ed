@@ -42,7 +42,6 @@ regex.workspace = true
 settings_content.workspace = true
 remote.workspace = true
 rpc.workspace = true
-schemars.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true

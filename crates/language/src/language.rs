@@ -100,8 +100,6 @@ pub use language_core::highlight_map::CaptureId;
 use language_core::highlight_map::HighlightCaptureRef;
 pub use language_core::highlight_map::HighlightId;
 pub use language_core::highlight_map::HighlightMap;
-pub use language_core::regex_json_schema;
-pub use language_core::regex_vec_json_schema;
 pub use language_core::serialize_regex;
 pub use language_registry::BinaryStatus;
 pub use language_registry::LanguageLoader;

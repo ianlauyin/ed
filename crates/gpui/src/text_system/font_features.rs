@@ -1,8 +1,4 @@
-use std::borrow::Cow;
 use std::sync::Arc;
-
-use schemars::JsonSchema;
-use schemars::json_schema;
 
 /// The OpenType features that can be configured for a given font.
 #[derive(Default, Clone, Eq, PartialEq, Hash)]
@@ -120,26 +116,6 @@ impl serde::Serialize for FontFeatures {
         }
 
         map.end()
-    }
-}
-
-impl JsonSchema for FontFeatures {
-    fn schema_name() -> Cow<'static, str> {
-        "FontFeatures".into()
-    }
-
-    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        json_schema!({
-            "type": "object",
-            "patternProperties": {
-                "[0-9a-zA-Z]{4}$": {
-                    "type": ["boolean", "integer"],
-                    "minimum": 0,
-                    "multipleOf": 1
-                }
-            },
-            "additionalProperties": false
-        })
     }
 }
 
