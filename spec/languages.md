@@ -5,6 +5,11 @@
   Python, Rust, TSX, TypeScript, YAML. They drive highlighting plus
   structure-aware features (auto-indent, brackets, outline, text objects,
   runnables, string/comment scopes).
+- Markdown uses the upstream `tree-sitter-md` crate from crates.io (no fork).
+  Outlines and breadcrumbs use LSP document symbols by default
+  (`document_symbols: "on"`), but Markdown overrides this to tree-sitter
+  (`"off"`) because there is no Markdown language server; headings make up the
+  outline.
 - C, C++, Diff, Git Commit, Go Mod and Go Work are still registered languages
   (file matching, comments, brackets, gopls for Go Mod/Work, Diff's
   keep-trailing-whitespace settings, the Git Commit editor) but have no

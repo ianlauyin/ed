@@ -534,6 +534,8 @@ fn language_overrides() -> LanguageToSettingsMap {
                     remove_trailing_whitespace_on_save: Some(false),
                     allow_rewrap: Some(RewrapBehavior::Anywhere),
                     use_on_type_format: Some(false),
+                    // No markdown language server; outline and breadcrumbs come from tree-sitter.
+                    document_symbols: Some(DocumentSymbols::Off),
                     completions: Some(CompletionSettingsContent {
                         words: Some(WordsCompletionMode::Disabled),
                         ..Default::default()
