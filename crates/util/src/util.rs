@@ -200,7 +200,7 @@ Error: Running Zed as root or via sudo is unsupported.
 pub fn increase_open_file_limit() -> Result<()> {
     fn get() -> std::io::Result<libc::rlimit> {
         let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
-        match unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } {
+        match unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut limit) } {
             0 => Ok(limit),
             _ => Err(std::io::Error::last_os_error()),
         }
@@ -208,7 +208,7 @@ pub fn increase_open_file_limit() -> Result<()> {
 
     fn set(soft: libc::rlim_t, hard: libc::rlim_t) -> std::io::Result<()> {
         let limit = libc::rlimit { rlim_cur: soft, rlim_max: hard };
-        match unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) } {
+        match unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const limit) } {
             0 => Ok(()),
             _ => Err(std::io::Error::last_os_error()),
         }
