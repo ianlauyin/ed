@@ -48,7 +48,6 @@ use session::AppSession;
 use session::Session;
 use settings::Settings;
 use settings::SettingsStore;
-use settings_content::app_metadata::AppVersion;
 use theme::ActiveTheme;
 use theme::GlobalTheme;
 use util::ResultExt;
@@ -176,8 +175,6 @@ fn main() {
 
     util::increase_open_file_limit().log_err();
 
-    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"));
-
     rayon::ThreadPoolBuilder::new()
         .num_threads(std::thread::available_parallelism().map_or(1, |n| n.get().div_ceil(2)))
         .stack_size(10 * 1024 * 1024)
@@ -185,7 +182,7 @@ fn main() {
         .build_global()
         .unwrap();
 
-    log::info!("========== starting zed version {app_version} ==========");
+    log::info!("========== starting zed version {} ==========", env!("CARGO_PKG_VERSION"));
 
     let app = build_application().with_assets(Assets).with_restart_arguments(restart_arguments);
 
@@ -247,7 +244,6 @@ fn main() {
         menu::init();
         zed_actions::init();
 
-        settings_content::app_metadata::init(app_version, cx);
         settings::init(cx);
         zlog_settings::init(cx);
         initialize_keymap(cx);

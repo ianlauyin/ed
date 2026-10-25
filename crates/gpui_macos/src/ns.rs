@@ -12,7 +12,6 @@ use objc2::class;
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
 pub(crate) use objc2_foundation::NSInteger;
-pub(crate) use objc2_foundation::NSOperatingSystemVersion;
 pub(crate) use objc2_foundation::NSPoint;
 pub(crate) use objc2_foundation::NSRect;
 pub(crate) use objc2_foundation::NSSize;
@@ -22,11 +21,6 @@ pub(crate) type id = *mut AnyObject;
 pub(crate) const nil: id = ptr::null_mut();
 
 pub(crate) const NSNotFound: NSInteger = NSInteger::MAX;
-
-/// Builds an `NSOperatingSystemVersion`.
-pub(crate) const fn os_version(major: NSInteger, minor: NSInteger, patch: NSInteger) -> NSOperatingSystemVersion {
-    NSOperatingSystemVersion { majorVersion: major, minorVersion: minor, patchVersion: patch }
-}
 
 /// Creates a new `NSAutoreleasePool`; release it with `drain`.
 pub(crate) unsafe fn autorelease_pool() -> id {

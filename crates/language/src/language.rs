@@ -132,7 +132,6 @@ pub use runnable::ResolvedRunnable;
 pub use runnable::RunnableMatchCapture;
 pub use runnable::RunnableRange;
 pub use runnable::RunnableResolver;
-use semver::Version;
 use serde_json::Value;
 use settings::WorktreeId;
 use streaming_iterator::StreamingIterator as _;
@@ -461,7 +460,6 @@ pub trait LspAdapterDelegate: Send + Sync {
     fn update_status(&self, language: LanguageServerName, status: BinaryStatus);
     fn registered_lsp_adapters(&self) -> Vec<Arc<dyn LspAdapter>>;
 
-    async fn npm_package_installed_version(&self, package_name: &str) -> Result<Option<(PathBuf, Version)>>;
     async fn which(&self, command: &OsStr) -> Option<PathBuf>;
     async fn shell_env(&self) -> HashMap<String, String>;
     async fn read_text_file(&self, path: &RelPath) -> Result<String>;

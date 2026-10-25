@@ -828,12 +828,7 @@ impl LanguageServer {
         Ok(())
     }
 
-    pub fn default_initialize_params(
-        &self,
-        pull_diagnostics: bool,
-        augments_syntax_tokens: bool,
-        cx: &App,
-    ) -> InitializeParams {
+    pub fn default_initialize_params(&self, pull_diagnostics: bool, augments_syntax_tokens: bool) -> InitializeParams {
         let workspace_folders = self.workspace_folders.as_ref().map_or_else(
             || vec![workspace_folder_for_uri(self.root_uri.clone())],
             |folders| folders.lock().iter().cloned().map(workspace_folder_for_uri).collect(),
@@ -1062,10 +1057,7 @@ impl LanguageServer {
             },
             trace: None,
             workspace_folders: Some(workspace_folders),
-            client_info: Some(ClientInfo {
-                name: "Zed".to_string(),
-                version: Some(settings_content::app_metadata::AppVersion::global(cx).to_string()),
-            }),
+            client_info: Some(ClientInfo { name: "Zed".to_string(), version: None }),
             locale: None,
             ..InitializeParams::default()
         }

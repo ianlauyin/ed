@@ -645,12 +645,11 @@ const DEBUG_LINE_HEIGHT: Pixels = px(5.);
 
 /// Inserts Zed-specific environment variables for terminal sessions.
 /// Used by both local terminals and remote terminals (via SSH).
-pub fn insert_zed_terminal_env(env: &mut HashMap<String, String>, version: &impl std::fmt::Display) {
+pub fn insert_zed_terminal_env(env: &mut HashMap<String, String>) {
     env.insert("ZED_TERM".to_string(), "true".to_string());
     env.insert("TERM_PROGRAM".to_string(), "zed".to_string());
     env.insert("TERM".to_string(), "xterm-256color".to_string());
     env.insert("COLORTERM".to_string(), "truecolor".to_string());
-    env.insert("TERM_PROGRAM_VERSION".to_string(), version.to_string());
 }
 
 ///Upward flowing events, for changing the title and such
@@ -1027,7 +1026,6 @@ impl TerminalBuilder {
         cx: &App,
         path_style: PathStyle,
     ) -> Task<Result<TerminalBuilder>> {
-        let version = settings_content::app_metadata::AppVersion::global(cx);
         let background_executor = cx.background_executor().clone();
         // Headless hosts (e.g. the eval CLI) have no controlling TTY, so PTY
         // allocation / acquiring a controlling terminal fails with `ENOTTY`.
@@ -1058,7 +1056,7 @@ impl TerminalBuilder {
                 env.entry("LANG".to_string()).or_insert_with(|| "en_US.UTF-8".to_string());
             }
 
-            insert_zed_terminal_env(&mut env, &version);
+            insert_zed_terminal_env(&mut env);
 
             #[derive(Default)]
             struct ShellParams {

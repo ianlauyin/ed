@@ -32,7 +32,6 @@ lsp.workspace = true
 net.workspace = true
 paths.workspace = true
 project.workspace = true
-settings_content.workspace = true
 remote.workspace = true
 rpc.workspace = true
 serde_json.workspace = true

@@ -14,7 +14,6 @@ path = "src/settings_content.rs"
 default = []
 
 [dependencies]
-semver.workspace = true
 anyhow.workspace = true
 collections.workspace = true
 derive_more = { workspace = true, features = ["from"] }

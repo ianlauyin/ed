@@ -35,7 +35,6 @@ objc2-foundation = { workspace = true, features = ["NSKeyedArchiver"] }
 objc2-quartz-core.workspace = true
 parking_lot.workspace = true
 raw-window-handle.workspace = true
-semver.workspace = true
 smallvec.workspace = true
 strum.workspace = true
 uuid.workspace = true

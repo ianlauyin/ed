@@ -193,7 +193,6 @@ pub use semantic_tokens::BufferSemanticToken;
 pub use semantic_tokens::BufferSemanticTokens;
 pub use semantic_tokens::SemanticTokenStylizer;
 pub use semantic_tokens::TokenType;
-use semver::Version;
 use serde::Serialize;
 use serde_json::Value;
 use settings::Settings;
@@ -674,7 +673,7 @@ impl LocalLspStore {
 
                     let initialization_params = cx.update(|cx| {
                         let mut params =
-                            language_server.default_initialize_params(pull_diagnostics, augments_syntax_tokens, cx);
+                            language_server.default_initialize_params(pull_diagnostics, augments_syntax_tokens);
                         params.initialization_options = initialization_options;
                         adapter.adapter.prepare_initialize_params(params, cx)
                     })?;
@@ -13449,33 +13448,6 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
         task.await.unwrap_or_default()
     }
 
-    async fn npm_package_installed_version(&self, package_name: &str) -> Result<Option<(PathBuf, Version)>> {
-        let local_package_directory = self.worktree_root_path();
-        let node_modules_directory = local_package_directory.join("node_modules");
-
-        if let Some(version) = read_package_installed_version(node_modules_directory.clone(), package_name).await? {
-            return Ok(Some((node_modules_directory, version)));
-        }
-        let Some(npm) = self.which("npm".as_ref()).await else {
-            log::warn!("Failed to find npm executable for {:?}", local_package_directory);
-            return Ok(None);
-        };
-
-        let env = self.shell_env().await;
-        let output = util::command::new_command(&npm)
-            .args(["root", "-g"])
-            .envs(env)
-            .current_dir(local_package_directory)
-            .output()
-            .await?;
-        let global_node_modules = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim().to_string());
-
-        if let Some(version) = read_package_installed_version(global_node_modules.clone(), package_name).await? {
-            return Ok(Some((global_node_modules, version)));
-        }
-        return Ok(None);
-    }
-
     async fn which(&self, command: &OsStr) -> Option<PathBuf> {
         let mut worktree_abs_path = self.worktree_root_path().to_path_buf();
         if self.fs.is_file(&worktree_abs_path).await {
@@ -13604,24 +13576,6 @@ pub(crate) fn collapse_newlines(text: &str, separator: &str) -> String {
 /// Converts the related information of a published diagnostic, putting the locations
 /// of the document it was published for into that document's coordinates so that they
 /// are converted and followed like the diagnostic's own range.
-/// Reads the version of an npm package installed in `node_module_directory`,
-/// returning `None` when the package is not installed there.
-pub async fn read_package_installed_version(node_module_directory: PathBuf, name: &str) -> Result<Option<Version>> {
-    #[derive(serde::Deserialize)]
-    struct PackageJson {
-        version: Version,
-    }
-
-    let package_json_path = node_module_directory.join(name).join("package.json");
-    let contents = match smol::fs::read_to_string(package_json_path).await {
-        Ok(contents) => contents,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(err) => return Err(err.into()),
-    };
-    let package_json: PackageJson = serde_json::from_str(&contents)?;
-    Ok(Some(package_json.version))
-}
-
 fn related_information_from_lsp(
     diagnostic: &lsp::Diagnostic,
     document_uri: &lsp::Uri,

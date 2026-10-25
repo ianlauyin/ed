@@ -123,7 +123,7 @@ mod apple_build {
         let target_os = env::var("CARGO_CFG_TARGET_OS").expect("Cargo sets CARGO_CFG_TARGET_OS for build scripts");
         let target_env = env::var("CARGO_CFG_TARGET_ENV").expect("Cargo sets CARGO_CFG_TARGET_ENV for build scripts");
         let (sdk, minimum_version_argument) = match (target_os.as_str(), target_env.as_str()) {
-            ("macos", _) => ("macosx", "-mmacosx-version-min=10.15.7"),
+            ("macos", _) => ("macosx", "-mmacosx-version-min=15.3"),
             ("ios", "sim") => ("iphonesimulator", "-mios-simulator-version-min=15.0"),
             ("ios", "") => ("iphoneos", "-mios-version-min=15.0"),
             _ => {

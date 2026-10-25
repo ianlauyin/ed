@@ -2,7 +2,6 @@ use std::cell::Cell;
 use std::ffi::CStr;
 use std::ffi::c_void;
 use std::os::raw::c_char;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
@@ -83,7 +82,6 @@ use objc2_app_kit::NSWorkspaceDidWakeNotification;
 use objc2_app_kit::NSWorkspaceWillSleepNotification;
 use objc2_foundation::NSActivityOptions;
 use parking_lot::Mutex;
-use semver::Version;
 
 use crate::AppleActivity;
 use crate::AppleDispatcher;
@@ -93,7 +91,6 @@ use crate::MacKeyboardMapper;
 use crate::MacWindow;
 use crate::events::key_to_native;
 use crate::ns::NSInteger;
-use crate::ns::NSOperatingSystemVersion;
 use crate::ns::NSUInteger;
 use crate::ns::array_iter;
 use crate::ns::autorelease_pool;
@@ -481,9 +478,7 @@ impl MacPlatform {
                             }
 
                             item = new_menu_item(name, selector, key_to_native(keystroke.key()).as_ref());
-                            if Self::os_version() >= Version::new(12, 0, 0) {
-                                let _: () = msg_send![item, setAllowsAutomaticKeyEquivalentLocalization: false];
-                            }
+                            let _: () = msg_send![item, setAllowsAutomaticKeyEquivalentLocalization: false];
                             let _: () = msg_send![item, setKeyEquivalentModifierMask: mask.0];
                         } else {
                             item = new_menu_item(name, selector, "");
@@ -534,15 +529,6 @@ impl MacPlatform {
                 }
             }
         }
-    }
-
-    fn os_version() -> Version {
-        let version = unsafe {
-            let process_info: id = msg_send![class!(NSProcessInfo), processInfo];
-            let version: NSOperatingSystemVersion = msg_send![process_info, operatingSystemVersion];
-            version
-        };
-        Version::new(version.majorVersion as u64, version.minorVersion as u64, version.patchVersion as u64)
     }
 
     // Before the app finishes launching there is no delegate yet;
@@ -927,34 +913,9 @@ impl Platform for MacPlatform {
                             return;
                         };
 
-                        let result = if response == NSModalResponseOK {
-                            panel.URL().filter(|url| url.isFileURL()).and_then(|url| url.to_file_path()).map(
-                                |mut path| {
-                                    let Some(filename) = path.file_name() else {
-                                        return path;
-                                    };
-                                    let chunks = filename.as_bytes().split(|&b| b == b'.').collect::<Vec<_>>();
-
-                                    // https://github.com/zed-industries/zed/issues/16969
-                                    // Workaround a bug in macOS Sequoia that adds an extra file-extension
-                                    // sometimes. e.g. `a.sql` becomes `a.sql.s` or `a.txtx` becomes `a.txtx.txt`
-                                    //
-                                    // This is conditional on OS version because I'd like to get rid of it, so that
-                                    // you can manually create a file called `a.sql.s`. That said it seems better
-                                    // to break that use-case than breaking `a.sql`.
-                                    if let &[_, second, third] = chunks.as_slice()
-                                        && second.starts_with(third)
-                                        && Self::os_version() >= Version::new(15, 0, 0)
-                                    {
-                                        path.set_extension("");
-                                    }
-
-                                    path
-                                },
-                            )
-                        } else {
-                            None
-                        };
+                        let result = (response == NSModalResponseOK)
+                            .then(|| panel.URL().filter(|url| url.isFileURL()).and_then(|url| url.to_file_path()))
+                            .flatten();
 
                         _ = done_tx.send(Ok(result));
                     }

@@ -14,4 +14,4 @@ rustflags = ["-C", "force-unwind-tables=no"]
 xtask = "run --package xtask --"
 
 [env]
-MACOSX_DEPLOYMENT_TARGET = "10.15.7"
+MACOSX_DEPLOYMENT_TARGET = "15.3"

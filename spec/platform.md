@@ -3,7 +3,8 @@
 ## Decision
 
 macOS is the only supported editor host. Both Apple Silicon and Intel
-Macs remain supported, with a minimum macOS version of 10.15.7. The headless
+Macs remain supported. Only the latest macOS is targeted; the minimum is 15.3
+and code does not gate on OS version at runtime. The headless
 remote server supports macOS and Linux.
 
 SSH remotes support only macOS and Linux, using Unix paths and shells. Windows

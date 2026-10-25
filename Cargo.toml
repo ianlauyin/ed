@@ -351,7 +351,6 @@ resvg = { version = "0.48.1", default-features = false, features = [
 rust-embed = { version = "8.11", features = ["include-exclude", "compression"] }
 rustc-hash = "2.1.0"
 rustix = { version = "1.1", features = ["fs"] }
-semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0", features = ["rc"] }
 serde_json = { version = "1.0.144", features = ["preserve_order", "raw_value"] }
 serde_json_lenient = { version = "0.2", features = [

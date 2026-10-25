@@ -11,7 +11,6 @@ use std::ptr::NonNull;
 use std::ptr::{self};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::Once;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -133,7 +132,6 @@ use crate::kTISPropertyInputSourceType;
 use crate::kTISTypeKeyboardInputMode;
 use crate::ns::NSInteger;
 use crate::ns::NSNotFound;
-use crate::ns::NSOperatingSystemVersion;
 use crate::ns::NSPoint;
 use crate::ns::NSRect;
 use crate::ns::NSSize;
@@ -144,7 +142,6 @@ use crate::ns::autorelease_pool;
 use crate::ns::drain;
 use crate::ns::id;
 use crate::ns::nil;
-use crate::ns::os_version;
 use crate::ns_string;
 use crate::pasteboard::NSFilenamesPboardType;
 use crate::renderer;
@@ -174,8 +171,6 @@ unsafe fn srgb_color(red: f64, green: f64, blue: f64, alpha: f64) -> id {
 unsafe fn shared_application() -> id {
     unsafe { msg_send![class!(NSApplication), sharedApplication] }
 }
-
-static RESTORES_WORKSPACE_AT_LAUNCH_DEFAULT: Once = Once::new();
 
 #[allow(non_upper_case_globals)]
 const NSWindowStyleMaskNonactivatingPanel: NSWindowStyleMask = NSWindowStyleMask::NonactivatingPanel;
@@ -655,12 +650,9 @@ fn window_state_archiver_will_encode_object(_this: &AnyObject, _archiver: id, ob
 
 // Override of the private `_windowRestorationOptions` on our NSKeyedUnarchiver subclass.
 // Returning a default-initialized `NSWindowRestorationOptions` tells AppKit to restore the
-// window to its original Space. This is the macOS 15+ path (FB15644170: the
-// `NSWindowRestoresWorkspaceAtLaunch` user default no longer works there).
+// window to its original Space (FB15644170: the `NSWindowRestoresWorkspaceAtLaunch`
+// user default no longer works).
 fn window_state_unarchiver_restoration_options(_this: &AnyObject) -> id {
-    if !is_macos_version_at_least(os_version(15, 0, 0)) {
-        return nil;
-    }
     // SAFETY: we look the class up by name and only send it `alloc`/`init`/`autorelease`, all of
     // which have the standard `-> id` signature. Returning `nil` when the class is absent is valid.
     unsafe {
@@ -1547,24 +1539,6 @@ impl PlatformWindow for MacWindow {
                 return;
             }
 
-            // On macOS < 15 the `NSWindowRestoresWorkspaceAtLaunch` user default controls whether
-            // the window is restored to its original Space. On macOS 15+ that default is broken
-            // (FB15644170), and the `_windowRestorationOptions` override on our unarchiver subclass
-            // handles it instead.
-            if !is_macos_version_at_least(os_version(15, 0, 0)) {
-                RESTORES_WORKSPACE_AT_LAUNCH_DEFAULT.call_once(|| {
-                    let defaults: id = msg_send![class!(NSUserDefaults), standardUserDefaults];
-                    let key = ns_string("NSWindowRestoresWorkspaceAtLaunch");
-                    let yes_value: id = msg_send![class!(NSNumber), numberWithBool: true];
-                    let dict: id = msg_send![
-                        class!(NSDictionary),
-                        dictionaryWithObject: yes_value,
-                        forKey: key
-                    ];
-                    let _: () = msg_send![defaults, registerDefaults: dict];
-                });
-            }
-
             let unarchiver: id = msg_send![GPUIWindowStateKeyedUnarchiver::class(), alloc];
             let mut error: id = nil;
             let unarchiver: id = msg_send![unarchiver, initForReadingFromData: data, error: &mut error];
@@ -2162,7 +2136,7 @@ impl PlatformWindow for MacWindow {
                 // `iconForFile:`, which can synchronously hit LaunchServices, network
                 // mounts, or iCloud for every selected path and beachball drag startup.
                 // `iconForFileType:` is deprecated in favor of `iconForContentType:`,
-                // but the replacement requires macOS 11 and we target 10.15.
+                // but the replacement needs a `UTType`, which we don't bind.
                 let file_type = if *is_directory {
                     "public.folder".to_string()
                 } else {
@@ -2176,8 +2150,7 @@ impl PlatformWindow for MacWindow {
                         NSDraggingImageComponent::draggingImageComponentWithKey(NSDraggingImageComponentIconKey);
                     let workspace = NSWorkspace::sharedWorkspace();
                     let file_type = NSString::from_str(&file_type);
-                    // TODO: Replace with `iconForContentType` once Zed no longer supports MacOS 10.15
-                    #[expect(deprecated, reason = "Support for MacOS 10.15")]
+                    #[expect(deprecated, reason = "`iconForContentType:` needs a `UTType` binding")]
                     let icon = workspace.iconForFileType(&file_type);
                     component.setContents(Some(&icon));
                     // Component frames are relative to the item's dragging frame.
@@ -2746,12 +2719,8 @@ fn window_will_enter_fullscreen(this: &AnyObject, _: id) {
     lock.pre_fullscreen_traffic_light_frames = lock.traffic_light_frames;
     lock.restore_traffic_light();
 
-    let min_version = os_version(15, 3, 0);
-
-    if is_macos_version_at_least(min_version) {
-        unsafe {
-            let _: () = msg_send![lock.native_window, setTitlebarAppearsTransparent: false];
-        }
+    unsafe {
+        let _: () = msg_send![lock.native_window, setTitlebarAppearsTransparent: false];
     }
 }
 
@@ -2760,9 +2729,7 @@ fn window_will_exit_fullscreen(this: &AnyObject, _: id) {
     let mut lock = window_state.as_ref().lock();
     lock.is_exiting_fullscreen = true;
 
-    let min_version = os_version(15, 3, 0);
-
-    if is_macos_version_at_least(min_version) && lock.transparent_titlebar {
+    if lock.transparent_titlebar {
         unsafe {
             let _: () = msg_send![lock.native_window, setTitlebarAppearsTransparent: true];
         }
@@ -2788,14 +2755,6 @@ fn window_did_exit_fullscreen(this: &AnyObject, _: id) {
     // Keep using the native windowed frames when restoring them on the next entry.
     lock.traffic_light_frames = lock.pre_fullscreen_traffic_light_frames.take();
     lock.move_traffic_light();
-}
-
-pub(crate) fn is_macos_version_at_least(version: NSOperatingSystemVersion) -> bool {
-    unsafe {
-        let process_info: id = msg_send![class!(NSProcessInfo), processInfo];
-        let at_least: bool = msg_send![process_info, isOperatingSystemAtLeastVersion: version];
-        at_least
-    }
 }
 
 /// Forwards `native_event` to the view's input context, returning whether it was handled.

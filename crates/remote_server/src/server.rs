@@ -43,7 +43,6 @@ use remote::protocol::write_message;
 use remote::proxy::ProxyLaunchError;
 use rpc::AnyProtoClient;
 use rpc::proto::Envelope;
-use settings_content::app_metadata::AppVersion;
 use smol::channel::Receiver;
 use smol::io::AsyncReadExt;
 use smol::stream::StreamExt as _;
@@ -433,8 +432,6 @@ pub fn execute_run(
 
     let run = move |cx: &mut App| {
         settings::init(cx);
-        let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"));
-        settings_content::app_metadata::init(app_version, cx);
 
         HeadlessProject::init(cx);
 
