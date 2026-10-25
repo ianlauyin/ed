@@ -9,7 +9,7 @@ GPUI is still in active development as we work on the Zed code editor, and is st
 
 ```toml
 gpui = { version = "*" }
-gpui_platform = { version = "*", features = ["font-kit"] }
+gpui_platform = { version = "*" }
 ```
 
 Everything in a standalone GPUI app starts with an `Application`. You can create one with `gpui_platform::application()`, which creates the macOS windowing and text backends, and kick off your application by passing a callback to `Application::run()`. Inside this callback, you can create a new window with `App::open_window()` and register your first root view.
@@ -26,8 +26,8 @@ fn main() {
 
 ### `gpui_platform`
 
-This fork supports macOS only. Rendering uses Metal. Enable `font-kit` for glyph
-rasterization; without it the placeholder text system lays out text but renders no glyphs.
+This fork supports macOS only. Rendering uses Metal, and text uses Core Text directly
+for font lookup, shaping, and glyph rasterization.
 
 ### Dependencies
 

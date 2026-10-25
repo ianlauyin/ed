@@ -7,8 +7,6 @@ use std::sync::OnceLock;
 use anyhow::anyhow;
 use collections::HashMap;
 use collections::HashSet;
-use core_foundation::array::CFArray;
-use core_foundation::array::CFArrayRef;
 use core_foundation::attributed_string::CFMutableAttributedString;
 use core_foundation::base::CFRange;
 use core_foundation::base::CFType;
@@ -21,24 +19,16 @@ use core_graphics::base::kCGImageAlphaPremultipliedLast;
 use core_graphics::color_space::CGColorSpace;
 use core_graphics::context::CGContext;
 use core_graphics::context::CGTextDrawingMode;
+use core_graphics::data_provider::CGDataProvider;
+use core_graphics::font::CGFont;
 use core_graphics::geometry::CGPoint;
 use core_text::font::CTFont;
-use core_text::font_collection::CTFontCollectionRef;
-use core_text::font_descriptor::CTFontDescriptor;
 use core_text::font_descriptor::kCTFontSlantTrait;
 use core_text::font_descriptor::kCTFontSymbolicTrait;
 use core_text::font_descriptor::kCTFontWeightTrait;
 use core_text::font_descriptor::kCTFontWidthTrait;
 use core_text::line::CTLine;
 use core_text::string_attributes::kCTFontAttributeName;
-use font_kit::font::Font as FontKitFont;
-use font_kit::handle::Handle;
-use font_kit::hinting::HintingOptions;
-use font_kit::metrics::Metrics;
-use font_kit::properties::Style as FontkitStyle;
-use font_kit::properties::Weight as FontkitWeight;
-use font_kit::source::SystemSource;
-use font_kit::sources::mem::MemSource;
 use gpui::Bounds;
 use gpui::DevicePixels;
 use gpui::Font;
@@ -47,8 +37,6 @@ use gpui::FontFeatures;
 use gpui::FontId;
 use gpui::FontMetrics;
 use gpui::FontRun;
-use gpui::FontStyle;
-use gpui::FontWeight;
 use gpui::GlyphId;
 use gpui::Hsla;
 use gpui::LineLayout;
@@ -65,16 +53,12 @@ use gpui::Size;
 use gpui::TextRenderingMode;
 use gpui::point;
 use gpui::px;
-use gpui::size;
 use gpui::swap_rgba_pa_to_bgra;
 use parking_lot::RwLock;
 use parking_lot::RwLockUpgradableReadGuard;
-use pathfinder_geometry::rect::RectF;
-use pathfinder_geometry::rect::RectI;
-use pathfinder_geometry::transform2d::Transform2F;
-use pathfinder_geometry::vector::Vector2F;
 use smallvec::SmallVec;
 
+use crate::font;
 use crate::open_type::apply_features_and_fallbacks;
 
 #[allow(non_upper_case_globals)]
@@ -91,9 +75,8 @@ struct FontKey {
 }
 
 struct AppleTextSystemState {
-    memory_source: MemSource,
-    system_source: SystemSource,
-    fonts: Vec<FontKitFont>,
+    memory_fonts: Vec<CTFont>,
+    fonts: Vec<CTFont>,
     font_selections: HashMap<Font, FontId>,
     font_ids_by_postscript_name: HashMap<String, FontId>,
     font_ids_by_font_key: HashMap<FontKey, SmallVec<[FontId; 4]>>,
@@ -104,8 +87,7 @@ impl AppleTextSystem {
     /// Create a new AppleTextSystem.
     pub fn new() -> Self {
         Self(RwLock::new(AppleTextSystemState {
-            memory_source: MemSource::empty(),
-            system_source: SystemSource::new(),
+            memory_fonts: Vec::new(),
             fonts: Vec::new(),
             font_selections: HashMap::default(),
             font_ids_by_postscript_name: HashMap::default(),
@@ -129,27 +111,14 @@ impl PlatformTextSystem for AppleTextSystem {
     fn all_font_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         let collection = core_text::font_collection::create_for_all_families();
-        // NOTE: We intentionally avoid using `collection.get_descriptors()` here because
-        // it has a memory leak bug in core-text v21.0.0. The upstream code uses
-        // `wrap_under_get_rule` but `CTFontCollectionCreateMatchingFontDescriptors`
-        // follows the Create Rule (caller owns the result), so it should use
-        // `wrap_under_create_rule`. We call the function directly with correct memory management.
-        unsafe extern "C" {
-            fn CTFontCollectionCreateMatchingFontDescriptors(collection: CTFontCollectionRef) -> CFArrayRef;
-        }
-        let descriptors: Option<CFArray<CTFontDescriptor>> = unsafe {
-            let array_ref = CTFontCollectionCreateMatchingFontDescriptors(collection.as_concrete_TypeRef());
-            if array_ref.is_null() { None } else { Some(CFArray::wrap_under_create_rule(array_ref)) }
-        };
+        let descriptors = font::matching_descriptors(&collection);
         let Some(descriptors) = descriptors else {
             return names;
         };
         for descriptor in &descriptors {
             names.extend(lenient_font_attributes::family_name(&descriptor));
         }
-        if let Ok(fonts_in_memory) = self.0.read().memory_source.all_families() {
-            names.extend(fonts_in_memory);
-        }
+        names.extend(self.0.read().memory_fonts.iter().map(CTFont::family_name));
         names
     }
 
@@ -173,16 +142,10 @@ impl PlatformTextSystem for AppleTextSystem {
             };
 
             let candidate_properties =
-                candidates.iter().map(|font_id| lock.fonts[font_id.0].properties()).collect::<SmallVec<[_; 4]>>();
+                candidates.iter().map(|font_id| font::properties(&lock.fonts[font_id.0])).collect::<SmallVec<[_; 4]>>();
 
-            let ix = font_kit::matching::find_best_match(
-                &candidate_properties,
-                &font_kit::properties::Properties {
-                    style: fontkit_style(font.style),
-                    weight: fontkit_weight(font.weight),
-                    stretch: font_kit::properties::Stretch::default(),
-                },
-            )?;
+            let ix = font::find_best_match(&candidate_properties, font.style, font.weight)
+                .ok_or_else(|| anyhow!("no font in family {:?}", font.family))?;
 
             let font_id = candidates[ix];
             lock.font_selections.insert(font.clone(), font_id);
@@ -191,11 +154,11 @@ impl PlatformTextSystem for AppleTextSystem {
     }
 
     fn font_metrics(&self, font_id: FontId) -> FontMetrics {
-        font_kit_metrics_to_metrics(self.0.read().fonts[font_id.0].metrics())
+        font::metrics(&self.0.read().fonts[font_id.0])
     }
 
     fn typographic_bounds(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Bounds<f32>> {
-        Ok(bounds_from_rect(self.0.read().fonts[font_id.0].typographic_bounds(glyph_id.0)?))
+        Ok(font::typographic_bounds(&self.0.read().fonts[font_id.0], glyph_id.0))
     }
 
     fn advance(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Size<f32>> {
@@ -263,21 +226,14 @@ fn font_smoothing_allowed_by_user() -> bool {
 
 impl AppleTextSystemState {
     fn add_fonts(&mut self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()> {
-        let fonts = fonts
-            .into_iter()
-            .map(|bytes| match bytes {
-                Cow::Borrowed(embedded_font) => {
-                    let data_provider =
-                        unsafe { core_graphics::data_provider::CGDataProvider::from_slice(embedded_font) };
-                    let font = core_graphics::font::CGFont::from_data_provider(data_provider)
-                        .map_err(|()| anyhow!("Could not load an embedded font."))?;
-                    let font = font_kit::loaders::core_text::Font::from_core_graphics_font(font);
-                    Ok(Handle::from_native(&font))
-                }
-                Cow::Owned(bytes) => Ok(Handle::from_memory(Arc::new(bytes), 0)),
-            })
-            .collect::<Result<Vec<_>>>()?;
-        self.memory_source.add_fonts(fonts.into_iter())?;
+        for bytes in fonts {
+            let data_provider = match bytes {
+                Cow::Borrowed(embedded_font) => unsafe { CGDataProvider::from_slice(embedded_font) },
+                Cow::Owned(bytes) => CGDataProvider::from_buffer(Arc::new(bytes)),
+            };
+            let font = CGFont::from_data_provider(data_provider).map_err(|()| anyhow!("Could not load a font."))?;
+            self.memory_fonts.push(font::from_core_graphics_font(&font));
+        }
         Ok(())
     }
 
@@ -291,42 +247,21 @@ impl AppleTextSystemState {
 
         let mut font_ids = SmallVec::new();
         let mut postscript_names_seen = HashSet::default();
-        let family = self
-            .memory_source
-            .select_family_by_name(name)
-            .or_else(|_| self.system_source.select_family_by_name(name))?;
-        for font in family.fonts() {
-            let mut font = font.load()?;
-
+        let memory_fonts: Vec<CTFont> =
+            self.memory_fonts.iter().filter(|font| font.family_name() == name).cloned().collect();
+        let family = if memory_fonts.is_empty() { font::family_fonts(name)? } else { memory_fonts };
+        for mut font in family {
             apply_features_and_fallbacks(&mut font, features, fallbacks)?;
-            // This block contains a precautionary fix to guard against loading fonts
-            // that might cause panics due to `.unwrap()`s up the chain.
-            {
-                // We use the 'm' character for text measurements in various spots
-                // (e.g., the editor). However, at time of writing some of those usages
-                // will panic if the font has no 'm' glyph.
-                //
-                // Therefore, we check up front that the font has the necessary glyph.
-                let has_m_glyph = font.glyph_for_char('m').is_some();
-
-                // HACK: The 'Segoe Fluent Icons' font does not have an 'm' glyph,
-                // but we need to be able to load it for rendering Windows icons in
-                // the Storybook (on macOS).
-                let is_segoe_fluent_icons = font.full_name() == "Segoe Fluent Icons";
-
-                if !has_m_glyph && !is_segoe_fluent_icons {
-                    // I spent far too long trying to track down why a font missing the 'm'
-                    // character wasn't loading. This log statement will hopefully save
-                    // someone else from suffering the same fate.
-                    log::warn!("font '{}' has no 'm' character and was not loaded", font.full_name());
-                    continue;
-                }
+            // Text measurement in the editor relies on the 'm' glyph.
+            if font::glyph_for_char(&font, 'm').is_none() {
+                log::warn!("font '{}' has no 'm' character and was not loaded", font.display_name());
+                continue;
             }
 
             // We've seen a number of panics in production caused by calling font.properties()
             // which unwraps a downcast to CFNumber. This is an attempt to avoid the panic,
             // and to try and identify the incalcitrant font.
-            let traits = font.native_font().all_traits();
+            let traits = font.all_traits();
             if unsafe {
                 !(traits.get(kCTFontSymbolicTrait).downcast::<CFNumber>().is_some()
                     && traits.get(kCTFontWidthTrait).downcast::<CFNumber>().is_some()
@@ -335,16 +270,13 @@ impl AppleTextSystemState {
             } {
                 log::error!(
                     "Failed to read traits for font {:?} (PostScript name {:?})",
-                    font.full_name(),
+                    font.display_name(),
                     font.postscript_name(),
                 );
                 continue;
             }
 
-            let Some(postscript_name) = font.postscript_name() else {
-                log::warn!("font {:?} in family {:?} has no PostScript name; skipping", font.full_name(), name,);
-                continue;
-            };
+            let postscript_name = font.postscript_name();
             // Dedup is scoped to this single `load_family` call (issue #55472).
             // The same family can be reloaded later under a different `FontKey`
             // (different features/fallbacks); a global check against
@@ -354,7 +286,7 @@ impl AppleTextSystemState {
                 log::warn!(
                     "skipping duplicate font {:?} with PostScript name {:?} \
                      in family {:?}",
-                    font.full_name(),
+                    font.display_name(),
                     postscript_name,
                     name,
                 );
@@ -370,11 +302,11 @@ impl AppleTextSystemState {
     }
 
     fn advance(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Size<f32>> {
-        Ok(size_from_vector2f(self.fonts[font_id.0].advance(glyph_id.0)?))
+        Ok(font::advance(&self.fonts[font_id.0], glyph_id.0))
     }
 
     fn glyph_for_char(&self, font_id: FontId, ch: char) -> Option<GlyphId> {
-        self.fonts[font_id.0].glyph_for_char(ch).map(GlyphId)
+        font::glyph_for_char(&self.fonts[font_id.0], ch).map(GlyphId)
     }
 
     fn id_for_native_font(&mut self, requested_font: CTFont) -> FontId {
@@ -385,7 +317,7 @@ impl AppleTextSystemState {
             let font_id = FontId(self.fonts.len());
             self.font_ids_by_postscript_name.insert(postscript_name.clone(), font_id);
             self.postscript_names_by_font_id.insert(font_id, postscript_name);
-            self.fonts.push(font_kit::font::Font::from_core_graphics_font(requested_font.copy_to_CGFont()));
+            self.fonts.push(font::from_core_graphics_font(&requested_font.copy_to_CGFont()));
             font_id
         }
     }
@@ -397,15 +329,12 @@ impl AppleTextSystemState {
     }
 
     fn raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        let font = &self.fonts[params.font_id.0];
-        let scale = Transform2F::from_scale(params.scale_factor);
-        let bounds: Bounds<DevicePixels> = bounds_from_rect_i(font.raster_bounds(
+        let bounds = font::raster_bounds(
+            &self.fonts[params.font_id.0],
             params.glyph_id.0,
             params.font_size.into(),
-            scale,
-            HintingOptions::None,
-            font_kit::canvas::RasterizationOptions::GrayscaleAa,
-        )?);
+            params.scale_factor,
+        );
 
         // Expand the bounds by 1 pixel on each side to give CG room for anti-aliasing.
         Ok(bounds.dilate(DevicePixels(1)))
@@ -456,7 +385,7 @@ impl AppleTextSystemState {
             };
 
             // Move the origin to bottom left and account for scaling, this
-            // makes drawing text consistent with the font-kit's raster_bounds.
+            // makes drawing text consistent with `font::raster_bounds`.
             cx.translate(
                 -glyph_bounds.origin.x.0 as CGFloat,
                 (glyph_bounds.origin.y.0 + glyph_bounds.size.height.0) as CGFloat,
@@ -479,17 +408,14 @@ impl AppleTextSystemState {
             } else {
                 cx.set_gray_fill_color(0.0, 1.0);
             }
-            self.fonts[params.font_id.0]
-                .native_font()
-                .clone_with_font_size(f32::from(params.font_size) as CGFloat)
-                .draw_glyphs(
-                    &[params.glyph_id.0 as CGGlyph],
-                    &[CGPoint::new(
-                        (subpixel_shift.x / params.scale_factor) as CGFloat,
-                        (subpixel_shift.y / params.scale_factor) as CGFloat,
-                    )],
-                    cx,
-                );
+            self.fonts[params.font_id.0].clone_with_font_size(f32::from(params.font_size) as CGFloat).draw_glyphs(
+                &[params.glyph_id.0 as CGGlyph],
+                &[CGPoint::new(
+                    (subpixel_shift.x / params.scale_factor) as CGFloat,
+                    (subpixel_shift.y / params.scale_factor) as CGFloat,
+                )],
+                cx,
+            );
 
             if params.is_emoji {
                 // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
@@ -524,18 +450,14 @@ impl AppleTextSystemState {
                 let cf_range = CFRange::init(utf16_start, length);
                 let font = &self.fonts[run.font_id.0];
 
-                let font_metrics = font.metrics();
+                let font_metrics = font::metrics(font);
                 let font_scale = f32::from(font_size) / font_metrics.units_per_em as f32;
                 max_ascent = max_ascent.max(font_metrics.ascent * font_scale);
                 max_descent = max_descent.max(-font_metrics.descent * font_scale);
 
                 let font_size = if break_ligature { px(f32::from(font_size).next_up()) } else { font_size };
                 unsafe {
-                    string.set_attribute(
-                        cf_range,
-                        kCTFontAttributeName,
-                        &font.native_font().clone_with_font_size(font_size.into()),
-                    );
+                    string.set_attribute(cf_range, kCTFontAttributeName, &font.clone_with_font_size(font_size.into()));
                 }
                 break_ligature = !break_ligature;
             }
@@ -612,68 +534,6 @@ impl<'a> StringIndexConverter<'a> {
             self.utf16_ix += c.len_utf16();
         }
         self.utf8_ix = self.text.len();
-    }
-}
-
-fn font_kit_metrics_to_metrics(metrics: Metrics) -> FontMetrics {
-    FontMetrics {
-        units_per_em: metrics.units_per_em,
-        ascent: metrics.ascent,
-        descent: metrics.descent,
-        line_gap: metrics.line_gap,
-        underline_position: metrics.underline_position,
-        underline_thickness: metrics.underline_thickness,
-        cap_height: metrics.cap_height,
-        x_height: metrics.x_height,
-        bounding_box: bounds_from_rect(metrics.bounding_box),
-    }
-}
-
-fn bounds_from_rect(rect: RectF) -> Bounds<f32> {
-    Bounds { origin: point(rect.origin_x(), rect.origin_y()), size: size(rect.width(), rect.height()) }
-}
-
-fn bounds_from_rect_i(rect: RectI) -> Bounds<DevicePixels> {
-    Bounds {
-        origin: point(DevicePixels(rect.origin_x()), DevicePixels(rect.origin_y())),
-        size: size(DevicePixels(rect.width()), DevicePixels(rect.height())),
-    }
-}
-
-// impl From<Vector2I> for Size<DevicePixels> {
-//     fn from(value: Vector2I) -> Self {
-//         size(value.x().into(), value.y().into())
-//     }
-// }
-
-// impl From<RectI> for Bounds<i32> {
-//     fn from(rect: RectI) -> Self {
-//         Bounds {
-//             origin: point(rect.origin_x(), rect.origin_y()),
-//             size: size(rect.width(), rect.height()),
-//         }
-//     }
-// }
-
-// impl From<Point<u32>> for Vector2I {
-//     fn from(size: Point<u32>) -> Self {
-//         Vector2I::new(size.x as i32, size.y as i32)
-//     }
-// }
-
-fn size_from_vector2f(vec: Vector2F) -> Size<f32> {
-    size(vec.x(), vec.y())
-}
-
-const fn fontkit_weight(value: FontWeight) -> FontkitWeight {
-    FontkitWeight(value.0)
-}
-
-const fn fontkit_style(style: FontStyle) -> FontkitStyle {
-    match style {
-        FontStyle::Normal => FontkitStyle::Normal,
-        FontStyle::Italic => FontkitStyle::Italic,
-        FontStyle::Oblique => FontkitStyle::Oblique,
     }
 }
 

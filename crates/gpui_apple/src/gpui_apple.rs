@@ -11,12 +11,10 @@ mod metal_atlas;
 pub mod metal_renderer;
 pub mod thermal;
 
-#[cfg(feature = "font-kit")]
+mod font;
 mod open_type;
-#[cfg(feature = "font-kit")]
 mod text_system;
 
 pub use dispatcher::AppleActivity;
 pub use dispatcher::AppleDispatcher;
-#[cfg(feature = "font-kit")]
 pub use text_system::AppleTextSystem;

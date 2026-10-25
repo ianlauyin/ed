@@ -179,3 +179,9 @@ backtraces still work through sync CFI.
   messages to nil, so raw sends must use exact types (e.g. `bool` for `BOOL`,
   `NSUInteger` not `u32`, `*const c_void` for `void *`, a value type instead of
   `()` for non-void methods) and guard receivers that may be nil.
+- Text uses Core Text directly (`gpui_apple`); `font-kit` is not a dependency
+  and text rendering is not behind a cargo feature. Fonts come from the system
+  font collection, plus any registered with `add_fonts`. Face selection within a
+  family follows CSS font matching (stretch, then style, then weight), with
+  Core Text's normalized weights mapped to CSS weights as font-kit did, so the
+  same face is chosen for a given weight and style.

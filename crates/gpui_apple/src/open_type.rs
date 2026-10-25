@@ -24,14 +24,13 @@ use core_text::font_descriptor::kCTFontItalicTrait;
 use core_text::font_descriptor::kCTFontSlantTrait;
 use core_text::font_descriptor::kCTFontTraitsAttribute;
 use core_text::font_descriptor::kCTFontWeightTrait;
-use font_kit::font::Font as FontKitFont;
 use gpui::FontFallbacks;
 use gpui::FontFeatures;
 use objc2_core_text::kCTFontOpenTypeFeatureTag;
 use objc2_core_text::kCTFontOpenTypeFeatureValue;
 
 pub fn apply_features_and_fallbacks(
-    font: &mut FontKitFont,
+    font: &mut CTFont,
     features: &FontFeatures,
     fallbacks: Option<&FontFallbacks>,
 ) -> anyhow::Result<()> {
@@ -60,15 +59,12 @@ pub fn apply_features_and_fallbacks(
         let new_descriptor = CTFontDescriptorCreateWithAttributes(attrs);
         CFRelease(attrs as _);
         let new_descriptor = CTFontDescriptor::wrap_under_create_rule(new_descriptor);
-        // font-kit uses the older core-text wrappers. Borrow the same CF objects
-        // for the generated API, then transfer its create-rule ownership back.
-        let native_font = font.native_font();
-        let generated_font = &*native_font.as_concrete_TypeRef().cast::<objc2_core_text::CTFont>();
+        // Borrow the same CF objects for the generated API, then transfer its
+        // create-rule ownership back.
+        let generated_font = &*font.as_concrete_TypeRef().cast::<objc2_core_text::CTFont>();
         let descriptor = &*new_descriptor.as_concrete_TypeRef().cast::<objc2_core_text::CTFontDescriptor>();
         let new_font = generated_font.copy_with_attributes(0.0, std::ptr::null(), Some(descriptor));
-        let new_font =
-            CTFont::wrap_under_create_rule(objc2_core_foundation::CFRetained::into_raw(new_font).as_ptr().cast());
-        *font = font_kit::font::Font::from_native_font(&new_font);
+        *font = CTFont::wrap_under_create_rule(objc2_core_foundation::CFRetained::into_raw(new_font).as_ptr().cast());
 
         Ok(())
     }
@@ -97,10 +93,10 @@ fn generate_feature_array(features: &FontFeatures) -> CFMutableArrayRef {
     }
 }
 
-fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut FontKitFont) -> CFMutableArrayRef {
+fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut CTFont) -> CFMutableArrayRef {
     unsafe {
-        let symbolic_traits = font.native_font().symbolic_traits();
-        let all_traits = font.native_font().all_traits();
+        let symbolic_traits = font.symbolic_traits();
+        let all_traits = font.all_traits();
 
         let fallback_array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &raw const kCFTypeArrayCallBacks);
         for user_fallback in fallbacks.fallback_list() {
@@ -140,7 +136,7 @@ fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut FontKitFont) ->
             CFRelease(fallback_desc as _);
         }
 
-        append_system_fallbacks(fallback_array, &font.native_font());
+        append_system_fallbacks(fallback_array, font);
         fallback_array
     }
 }

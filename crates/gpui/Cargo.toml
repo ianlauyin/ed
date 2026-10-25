@@ -12,10 +12,6 @@ categories = ["gui"]
 [lints]
 workspace = true
 
-[features]
-default = ["font-kit"]
-font-kit = []
-
 [lib]
 path = "src/gpui.rs"
 test = false
@@ -78,5 +74,5 @@ async-channel = { workspace = true, features = ["std"] }
 log.workspace = true
 
 [dev-dependencies]
-gpui_platform = { workspace = true, features = ["font-kit"] }
+gpui_platform.workspace = true
 lyon = { version = "1.0", features = ["extra"] }

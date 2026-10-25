@@ -12,9 +12,7 @@ path = "src/gpui_macos.rs"
 doctest = false
 
 [features]
-default = ["gpui/default"]
 runtime_shaders = ["gpui_apple/runtime_shaders"]
-font-kit = ["gpui_apple/font-kit"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gpui.workspace = true
