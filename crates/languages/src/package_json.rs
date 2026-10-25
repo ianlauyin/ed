@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use collections::BTreeSet;
 use collections::HashMap;
-use serde_json_lenient::Value;
+use serde_json::Value;
 
 #[derive(Clone, Debug)]
 pub struct PackageJson {

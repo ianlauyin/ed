@@ -41,7 +41,7 @@ pub(crate) fn semantic_token_rules() -> SemanticTokenRules {
     let content =
         grammars::get_file("python/semantic_token_rules.json").expect("missing python/semantic_token_rules.json");
     let json = std::str::from_utf8(&content.data).expect("invalid utf-8 in semantic_token_rules");
-    serde_json_lenient::from_str::<SemanticTokenRules>(json).expect("failed to parse python semantic_token_rules.json")
+    serde_json::from_str::<SemanticTokenRules>(json).expect("failed to parse python semantic_token_rules.json")
 }
 
 /// The project virtual environment, always `.venv` at the worktree root.

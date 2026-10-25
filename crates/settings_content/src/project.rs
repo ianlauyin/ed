@@ -1,7 +1,5 @@
-use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::Context;
 use collections::BTreeMap;
 use collections::HashMap;
 use gpui::Rgba;
@@ -266,22 +264,6 @@ pub struct LspNotificationSettingsContent {
 #[serde(transparent)]
 pub struct SemanticTokenRules {
     pub rules: Vec<SemanticTokenRule>,
-}
-
-impl SemanticTokenRules {
-    pub const FILE_NAME: &'static str = "semantic_token_rules.json";
-
-    pub fn load(file_path: &Path) -> anyhow::Result<Self> {
-        let rules_content = std::fs::read_to_string(file_path)
-            .with_context(|| anyhow::anyhow!("Could not read semantic token rules from {}", file_path.display()))?;
-
-        Self::parse(&rules_content)
-            .with_context(|| anyhow::anyhow!("Failed to parse semantic token rules from {}", file_path.display()))
-    }
-
-    pub fn parse(file_content: &str) -> anyhow::Result<Self> {
-        serde_json_lenient::from_str::<SemanticTokenRules>(file_content).context("failed to parse semantic token rules")
-    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]

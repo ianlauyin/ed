@@ -1,5 +1,3 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 mod zed;
 
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
@@ -182,7 +180,7 @@ fn main() {
         .build_global()
         .unwrap();
 
-    log::info!("========== starting zed version {} ==========", env!("CARGO_PKG_VERSION"));
+    log::info!("========== starting ed version {} ==========", env!("CARGO_PKG_VERSION"));
 
     let app = build_application().with_assets(Assets).with_restart_arguments(restart_arguments);
 

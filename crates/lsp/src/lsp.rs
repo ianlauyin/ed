@@ -1057,7 +1057,7 @@ impl LanguageServer {
             },
             trace: None,
             workspace_folders: Some(workspace_folders),
-            client_info: Some(ClientInfo { name: "Zed".to_string(), version: None }),
+            client_info: Some(ClientInfo { name: "ed".to_string(), version: None }),
             locale: None,
             ..InitializeParams::default()
         }

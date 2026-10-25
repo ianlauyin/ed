@@ -344,28 +344,6 @@ pub fn set_pre_exec_to_start_new_session(command: &mut std::process::Command) ->
     command
 }
 
-pub fn merge_json_lenient_value_into(source: serde_json_lenient::Value, target: &mut serde_json_lenient::Value) {
-    match (source, target) {
-        (serde_json_lenient::Value::Object(source), serde_json_lenient::Value::Object(target)) => {
-            for (key, value) in source {
-                if let Some(target) = target.get_mut(&key) {
-                    merge_json_lenient_value_into(value, target);
-                } else {
-                    target.insert(key, value);
-                }
-            }
-        }
-
-        (serde_json_lenient::Value::Array(source), serde_json_lenient::Value::Array(target)) => {
-            for value in source {
-                target.push(value);
-            }
-        }
-
-        (source, target) => *target = source,
-    }
-}
-
 /// Merges `source` into `target`: objects are merged recursively, key by key;
 /// any other colliding value in `target` — including arrays — is replaced by
 /// `source`'s value wholesale.

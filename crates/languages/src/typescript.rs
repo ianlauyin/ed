@@ -316,8 +316,8 @@ impl TypeScriptContextProvider {
                         .load(&package_json_path)
                         .await
                         .with_context(|| format!("loading package.json from {package_json_path:?}"))?;
-                    let package_json: HashMap<String, serde_json_lenient::Value> =
-                        serde_json_lenient::from_str(&package_json_string)
+                    let package_json: HashMap<String, serde_json::Value> =
+                        serde_json::from_str(&package_json_string)
                             .with_context(|| format!("parsing package.json from {package_json_path:?}"))?;
                     let new_data = PackageJsonData::new(package_json_path.as_path().into(), package_json);
                     {
