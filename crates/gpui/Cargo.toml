@@ -15,7 +15,6 @@ workspace = true
 [features]
 default = ["font-kit"]
 font-kit = []
-stacker = ["dep:stacksafe"]
 
 [lib]
 path = "src/gpui.rs"
@@ -55,7 +54,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 slotmap.workspace = true
 smallvec.workspace = true
-stacksafe = { workspace = true, optional = true }
 strum.workspace = true
 sum_tree.workspace = true
 taffy = { workspace = true, features = [

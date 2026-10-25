@@ -372,7 +372,6 @@ slotmap = "1.0.6"
 smallvec = { version = "1.6", features = ["union", "const_new"] }
 smol = "2.0"
 spellbook = "0.4"
-stacksafe = "1.0"
 streaming-iterator = "0.1"
 strsim = "0.11"
 strum = { version = "0.28", features = ["derive"] }
@@ -488,6 +487,8 @@ unused_crate_dependencies = "warn"
 # nursery
 missing_const_for_fn = "warn"
 needless_pass_by_ref_mut = "warn"
+redundant_clone = "warn"
+
 # pedantic
 assigning_clones = "warn"
 borrow_as_ptr = "warn"
@@ -508,16 +509,13 @@ expl_impl_clone_on_copy = "warn"
 explicit_deref_methods = "warn"
 explicit_into_iter_loop = "warn"
 explicit_iter_loop = "warn"
+filter_map_next = "warn"
+flat_map_option = "warn"
+float_cmp = "warn"
+format_collect = "warn"
+format_push_string = "warn"
 
 # old lint rules
-dbg_macro = "deny"
-todo = "deny"
-
-declare_interior_mutable_const = "deny"
-
-redundant_clone = "deny"
-disallowed_methods = "deny"
-
 
 # Motivation: We use `vec![a..b]` a lot when dealing with ranges in text, so
 # warning on this rule produces a lot of noise.

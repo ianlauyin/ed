@@ -46,7 +46,7 @@ deps: removing them only saves their own code.
 
 | crate | excl crates | excl lines | main culprits |
 |---|---|---|---|
-| gpui | 48 | 422k | `read-fonts`/`skrifa`/`harfrust` (via `usvg`), `object` (via `stacksafe`→`stacker`→`psm`), `lyon_tessellation`, `image` with all default formats (`moxcms`, `pxfm`, exr, tiff, ...) |
+| gpui | 48 | 422k | `read-fonts`/`skrifa`/`harfrust` (via `usvg`), `lyon_tessellation`, `image` with all default formats (`moxcms`, `pxfm`, exr, tiff, ...) |
 | gpui_macos / gpui_apple | 24 | 302k | `objc2-*` bindings (feature-gated, compiles less than it reads), `cbindgen` at build time |
 | proto | 21 | 123k | build-time: `prost-build`, `protox`, `prost-reflect`, `petgraph`, `miette` |
 | cli | 13 | 121k | `ipc-channel` (50k), `quick-xml`, `plist` |
@@ -81,7 +81,8 @@ deps: removing them only saves their own code.
 - [x] `env_logger`: removed; `remote_server` uses a fixed-level JSON logger (drops `jiff`).
 - [ ] `syntect`/`onig`: check whether still needed alongside tree-sitter.
 - [ ] `proto`: check in generated code to drop the prost/protox build stack.
-- [ ] `stacksafe`: pulls `object` (48k) through `psm`'s build script; check need.
+- [x] `stacksafe`: removed (drops `stacker`, `psm`, `object`); markdown caps
+  container nesting instead.
 - [x] `cli`: removed with `ipc-channel`, `quick-xml`, `plist`.
 - [x] Remove dead `streaming_diff`.
 - [x] Duplicate versions: bumped `rand` 0.10, `itertools` 0.15, `lru` 0.19,

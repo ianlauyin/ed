@@ -35,4 +35,8 @@
   Copy and select-all cover the whole document, with Copy's text derived
   from the parse instead of the layout. Other callers (popovers, docs) lay
   out the whole document in one element as before.
+- Container nesting (blockquotes, lists, HTML blocks, ...) is capped at 64
+  levels; deeper containers fold into the innermost one. GPUI layout, prepaint,
+  paint and taffy recurse once per element on the main thread stack (no
+  `stacksafe`), so the cap keeps pathological input from overflowing it.
 - Smoke-test documents for the preview live in `test/`.

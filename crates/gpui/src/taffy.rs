@@ -31,13 +31,8 @@ use crate::util::round_half_toward_zero;
 use crate::util::round_stroke_to_device_pixel;
 use crate::util::round_to_device_pixel;
 
-#[cfg(feature = "stacker")]
-type StackSafe<T> = stacksafe::StackSafe<T>;
-#[cfg(not(feature = "stacker"))]
-type StackSafe<T> = T;
-
 type MeasureFn = dyn FnMut(Size<Option<Pixels>>, Size<AvailableSpace>, &mut Window, &mut App) -> Size<Pixels>;
-type NodeMeasureFn = StackSafe<Box<MeasureFn>>;
+type NodeMeasureFn = Box<MeasureFn>;
 
 struct NodeContext {
     measure: NodeMeasureFn,
@@ -102,8 +97,6 @@ impl TaffyLayoutEngine {
     ) -> LayoutId {
         let taffy_style = style.to_taffy(rem_size, scale_factor);
         let measure = Box::new(measure) as Box<MeasureFn>;
-        #[cfg(feature = "stacker")]
-        let measure = StackSafe::new(measure);
 
         self.taffy.new_leaf_with_context(taffy_style, NodeContext { measure }).expect(EXPECT_MESSAGE).into()
     }
@@ -175,7 +168,6 @@ impl TaffyLayoutEngine {
         Ok(edges)
     }
 
-    #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     pub fn compute_layout(
         &mut self,
         id: LayoutId,

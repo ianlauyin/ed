@@ -96,11 +96,6 @@ use crate::point;
 use crate::px;
 use crate::size;
 
-#[cfg(feature = "stacker")]
-type StackSafe<T> = stacksafe::StackSafe<T>;
-#[cfg(not(feature = "stacker"))]
-type StackSafe<T> = T;
-
 const DRAG_THRESHOLD: f64 = 2.;
 const DEFAULT_TOOLTIP_SHOW_DELAY: Duration = Duration::from_millis(500);
 const HOVERABLE_TOOLTIP_HIDE_DELAY: Duration = Duration::from_millis(500);
@@ -1445,7 +1440,7 @@ pub fn div() -> Div {
 /// A [`Div`] element, the all-in-one element for building complex UIs in GPUI
 pub struct Div {
     interactivity: Interactivity,
-    children: SmallVec<[StackSafe<AnyElement>; 2]>,
+    children: SmallVec<[AnyElement; 2]>,
     prepaint_listener: Option<Box<dyn Fn(Vec<Bounds<Pixels>>, &mut Window, &mut App) + 'static>>,
     image_cache: Option<Box<dyn ImageCacheProvider>>,
     prepaint_order_fn: Option<Box<dyn Fn(&mut Window, &mut App) -> SmallVec<[usize; 8]>>>,
@@ -1509,9 +1504,6 @@ impl InteractiveElement for Div {
 
 impl ParentElement for Div {
     fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        #[cfg(feature = "stacker")]
-        self.children.extend(elements.into_iter().map(StackSafe::new));
-        #[cfg(not(feature = "stacker"))]
         self.children.extend(elements);
     }
 }
@@ -1528,7 +1520,6 @@ impl Element for Div {
         self.interactivity.source_location()
     }
 
-    #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn request_layout(
         &mut self,
         global_id: Option<&GlobalElementId>,
@@ -1551,7 +1542,6 @@ impl Element for Div {
         (layout_id, DivFrameState { child_layout_ids })
     }
 
-    #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn prepaint(
         &mut self,
         global_id: Option<&GlobalElementId>,
@@ -1638,7 +1628,6 @@ impl Element for Div {
         )
     }
 
-    #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn paint(
         &mut self,
         global_id: Option<&GlobalElementId>,

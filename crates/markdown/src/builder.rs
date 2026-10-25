@@ -5,8 +5,15 @@ pub(crate) struct MetadataCellStyle {
     pub(crate) is_key: bool,
 }
 
+/// Maximum number of nested containers. Deeper containers are folded into the
+/// innermost one, so pathological input (e.g. thousands of `>`) cannot overflow
+/// the stack during layout, prepaint and paint, which recurse per element.
+const MAX_DIV_DEPTH: usize = 64;
+
 pub(crate) struct MarkdownElementBuilder {
     div_stack: Vec<DivStackEntry>,
+    /// Containers pushed past [`MAX_DIV_DEPTH`] that were folded away.
+    folded_divs: usize,
     rendered_lines: Vec<Rc<RenderedLine>>,
     pending_line: PendingLine,
     pub(crate) rendered_links: Vec<RenderedLink>,
@@ -117,6 +124,7 @@ impl MarkdownElementBuilder {
                 base_div.style().refine(container_style);
                 DivStackEntry::new(base_div)
             }],
+            folded_divs: 0,
             rendered_lines: Vec::new(),
             pending_line: PendingLine::default(),
             rendered_links: Vec::new(),
@@ -169,8 +177,12 @@ impl MarkdownElementBuilder {
     }
 
     pub(crate) fn push_div(&mut self, div: impl Into<AnyDiv>, range: &Range<usize>, markdown_end: usize) {
-        let mut div = div.into();
         self.flush_text();
+        if self.div_stack.len() >= MAX_DIV_DEPTH {
+            self.folded_divs += 1;
+            return;
+        }
+        let mut div = div.into();
 
         if range.start == 0 {
             // Remove the top margin on the first element.
@@ -294,6 +306,10 @@ impl MarkdownElementBuilder {
 
     pub(crate) fn pop_div(&mut self) {
         self.flush_text();
+        if self.folded_divs > 0 {
+            self.folded_divs -= 1;
+            return;
+        }
         let div = self.div_stack.pop().unwrap().div.into_any_element();
         self.append_child(div);
     }
