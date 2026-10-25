@@ -616,14 +616,6 @@ pub trait LspAdapter: 'static + Send + Sync {
         None
     }
 
-    /// Method only implemented by the default JSON language server adapter.
-    /// Used to provide dynamic reloading of the JSON schemas used to
-    /// provide autocompletion and diagnostics in Zed setting and keybind
-    /// files
-    fn is_primary_zed_json_schema_adapter(&self) -> bool {
-        false
-    }
-
     /// Called when a user responds to a ShowMessageRequest from this language server.
     /// This allows adapters to intercept preference selections (like "Always" or "Never")
     /// for settings that should be persisted to Zed's settings file.

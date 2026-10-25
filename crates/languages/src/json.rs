@@ -207,10 +207,6 @@ impl LspAdapter for JsonLspAdapter {
             .collect()
     }
 
-    fn is_primary_zed_json_schema_adapter(&self) -> bool {
-        true
-    }
-
     async fn process_completions(&self, items: &mut [lsp::CompletionItem]) {
         unquote_filter_texts(items);
     }

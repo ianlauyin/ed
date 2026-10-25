@@ -38,52 +38,6 @@ pub fn register_schema_handler(handler: SchemaRequestHandler, cx: &mut App) {
     cx.set_global(SchemaHandlingImpl(handler));
 }
 
-struct SchemaContentsChanged {}
-
-impl lsp::notification::Notification for SchemaContentsChanged {
-    const METHOD: &'static str = "json/schemaContent";
-    type Params = String;
-}
-
-pub fn notify_schemas_changed(lsp_store: Entity<LspStore>, uris: &[String], cx: &App) {
-    zlog::trace!(LOGGER => "Notifying schema changes for URIs: {:?}", uris);
-    let servers = lsp_store.read_with(cx, |lsp_store, _| {
-        let mut servers = Vec::new();
-        let Some(local) = lsp_store.as_local() else {
-            return servers;
-        };
-
-        for states in local.language_servers.values() {
-            let json_server = match states {
-                super::LanguageServerState::Running { adapter, server, .. }
-                    if adapter.adapter.is_primary_zed_json_schema_adapter() =>
-                {
-                    server.clone()
-                }
-                _ => continue,
-            };
-
-            servers.push(json_server);
-        }
-        servers
-    });
-    for server in servers {
-        for uri in uris {
-            zlog::trace!(LOGGER => "Notifying server {NAME} (id {ID:?}) of schema change for URI: {uri:?}",
-                NAME = server.name(),
-                ID = server.server_id()
-            );
-            if let Err(error) = server.notify::<SchemaContentsChanged>(uri.clone()) {
-                zlog::error!(
-                    LOGGER => "Failed to notify server {NAME} (id {ID:?}) of schema change for URI {uri:?}: {error:#}",
-                        NAME = server.name(),
-                        ID = server.server_id(),
-                );
-            }
-        }
-    }
-}
-
 pub fn register_requests(lsp_store: WeakEntity<LspStore>, language_server: &LanguageServer) {
     language_server
         .on_request::<SchemaContentRequest, _, _>(move |params, cx| {

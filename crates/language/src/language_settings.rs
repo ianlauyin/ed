@@ -1,29 +1,50 @@
 //! Provides `language`-related settings.
 
-use crate::{Buffer, BufferSnapshot, File, LanguageName, ModelineSettings};
-use collections::{FxHashMap, HashMap, HashSet};
-use globset::{Glob, GlobSet, GlobSetBuilder};
-use gpui::{App, Modifiers, SharedString};
-use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
+use std::num::NonZeroU32;
+use std::sync::Arc;
 
-pub use settings::{
-    AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter, FormatterList,
-    InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode, RewrapBehavior,
-    ShowWhitespaceSetting, SoftWrap, SoftWrapIndent, WordsCompletionMode,
-};
-use settings::{RegisterSetting, Settings, SettingsLocation, merge_from::MergeFrom};
-use std::{num::NonZeroU32, sync::Arc};
+use collections::FxHashMap;
+use collections::HashMap;
+use collections::HashSet;
+use globset::Glob;
+use globset::GlobSet;
+use globset::GlobSetBuilder;
+use gpui::App;
+use gpui::Modifiers;
+use gpui::SharedString;
+pub use settings::AutoIndentMode;
+pub use settings::CompletionSettingsContent;
+use settings::DocumentFoldingRanges;
+use settings::DocumentSymbols;
+pub use settings::FormatOnSave;
+pub use settings::Formatter;
+pub use settings::FormatterList;
+pub use settings::InlayHintKind;
+use settings::IntoGpui;
+pub use settings::LanguageSettingsContent;
+pub use settings::LineEndingSetting;
+pub use settings::LspInsertMode;
+use settings::RegisterSetting;
+pub use settings::RewrapBehavior;
+use settings::SemanticTokens;
+use settings::Settings;
+use settings::SettingsLocation;
+pub use settings::ShowWhitespaceSetting;
+pub use settings::SoftWrap;
+pub use settings::SoftWrapIndent;
+pub use settings::WordsCompletionMode;
+use settings::merge_from::MergeFrom;
 use text::ToOffset;
 
+use crate::Buffer;
+use crate::BufferSnapshot;
+use crate::File;
+use crate::LanguageName;
+use crate::ModelineSettings;
+
 /// Returns the settings for all languages from the provided file.
-pub fn all_language_settings<'a>(
-    file: Option<&'a Arc<dyn File>>,
-    cx: &'a App,
-) -> &'a AllLanguageSettings {
-    let location = file.map(|f| SettingsLocation {
-        worktree_id: f.worktree_id(cx),
-        path: f.path().as_ref(),
-    });
+pub fn all_language_settings<'a>(file: Option<&'a Arc<dyn File>>, cx: &'a App) -> &'a AllLanguageSettings {
+    let location = file.map(|f| SettingsLocation { worktree_id: f.worktree_id(cx), path: f.path().as_ref() });
     AllLanguageSettings::get(location, cx)
 }
 
@@ -200,11 +221,7 @@ impl IndentGuideSettings {
         if self.coloring == settings::IndentGuideColoring::Disabled {
             return None;
         }
-        let width = if active {
-            self.active_line_width
-        } else {
-            self.line_width
-        };
+        let width = if active { self.active_line_width } else { self.line_width };
         Some(width.clamp(1, 10))
     }
 }
@@ -229,25 +246,13 @@ impl LanguageSettings {
         Self::resolve(Some(buffer), None, cx)
     }
 
-    pub fn for_buffer_at<D: ToOffset>(
-        buffer: &Buffer,
-        position: D,
-        cx: &App,
-    ) -> Arc<LanguageSettings> {
+    pub fn for_buffer_at<D: ToOffset>(buffer: &Buffer, position: D, cx: &App) -> Arc<LanguageSettings> {
         let language = buffer.language_at(position);
         Self::resolve(Some(buffer), language.map(|l| l.name()).as_ref(), cx)
     }
 
-    pub fn for_buffer_snapshot(
-        buffer: &BufferSnapshot,
-        offset: Option<usize>,
-        cx: &App,
-    ) -> Arc<LanguageSettings> {
-        let language = if let Some(offset) = offset {
-            buffer.language_at(offset)
-        } else {
-            buffer.language()
-        };
+    pub fn for_buffer_snapshot(buffer: &BufferSnapshot, offset: Option<usize>, cx: &App) -> Arc<LanguageSettings> {
+        let language = if let Some(offset) = offset { buffer.language_at(offset) } else { buffer.language() };
 
         if let Some(resolved) = buffer.resolved_settings()
             && language == buffer.language()
@@ -255,13 +260,10 @@ impl LanguageSettings {
             return Arc::clone(resolved);
         }
 
-        let location = buffer.file().map(|f| SettingsLocation {
-            worktree_id: f.worktree_id(cx),
-            path: f.path().as_ref(),
-        });
+        let location =
+            buffer.file().map(|f| SettingsLocation { worktree_id: f.worktree_id(cx), path: f.path().as_ref() });
 
-        let mut settings =
-            AllLanguageSettings::get(location, cx).language(language.map(|l| l.name()).as_ref());
+        let mut settings = AllLanguageSettings::get(location, cx).language(language.map(|l| l.name()).as_ref());
 
         if let Some(modeline) = buffer.modeline() {
             merge_with_modeline(Arc::make_mut(&mut settings), modeline);
@@ -280,9 +282,7 @@ impl LanguageSettings {
         };
 
         if let Some(resolved) = buffer.resolved_settings()
-            && override_language.is_none_or(|language| {
-                Some(language) == buffer.language().map(|l| l.name()).as_ref()
-            })
+            && override_language.is_none_or(|language| Some(language) == buffer.language().map(|l| l.name()).as_ref())
         {
             return resolved.clone();
         }
@@ -295,10 +295,8 @@ impl LanguageSettings {
         override_language: Option<&LanguageName>,
         cx: &App,
     ) -> Arc<LanguageSettings> {
-        let location = buffer.file().map(|f| SettingsLocation {
-            worktree_id: f.worktree_id(cx),
-            path: f.path().as_ref(),
-        });
+        let location =
+            buffer.file().map(|f| SettingsLocation { worktree_id: f.worktree_id(cx), path: f.path().as_ref() });
         let buffer_language = buffer.language().map(|l| l.name());
         let language_name = override_language.or(buffer_language.as_ref());
         let mut settings = AllLanguageSettings::get(location, cx).language(language_name);
@@ -377,48 +375,24 @@ impl InlayHintSettings {
 impl AllLanguageSettings {
     /// Returns the [`LanguageSettings`] for the language with the specified name.
     pub fn language(&self, language_name: Option<&LanguageName>) -> Arc<LanguageSettings> {
-        let settings = language_name
-            .and_then(|name| self.languages.get(name))
-            .unwrap_or(&self.defaults);
+        let settings = language_name.and_then(|name| self.languages.get(name)).unwrap_or(&self.defaults);
 
         Arc::clone(settings)
     }
 }
 
 fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSettings) {
-    let show_whitespaces = modeline.show_trailing_whitespace.and_then(|v| {
-        if v {
-            Some(ShowWhitespaceSetting::Trailing)
-        } else {
-            None
-        }
-    });
+    let show_whitespaces =
+        modeline.show_trailing_whitespace.and_then(|v| if v { Some(ShowWhitespaceSetting::Trailing) } else { None });
 
-    settings
-        .tab_size
-        .merge_from_option(modeline.tab_size.as_ref());
-    settings
-        .hard_tabs
-        .merge_from_option(modeline.hard_tabs.as_ref());
-    settings
-        .preferred_line_length
-        .merge_from_option(modeline.preferred_line_length.map(u32::from).as_ref());
-    let auto_indent_mode = modeline.auto_indent.map(|enabled| {
-        if enabled {
-            AutoIndentMode::SyntaxAware
-        } else {
-            AutoIndentMode::None
-        }
-    });
-    settings
-        .auto_indent
-        .merge_from_option(auto_indent_mode.as_ref());
-    settings
-        .show_whitespaces
-        .merge_from_option(show_whitespaces.as_ref());
-    settings
-        .ensure_final_newline_on_save
-        .merge_from_option(modeline.ensure_final_newline.as_ref());
+    settings.tab_size.merge_from_option(modeline.tab_size.as_ref());
+    settings.hard_tabs.merge_from_option(modeline.hard_tabs.as_ref());
+    settings.preferred_line_length.merge_from_option(modeline.preferred_line_length.map(u32::from).as_ref());
+    let auto_indent_mode =
+        modeline.auto_indent.map(|enabled| if enabled { AutoIndentMode::SyntaxAware } else { AutoIndentMode::None });
+    settings.auto_indent.merge_from_option(auto_indent_mode.as_ref());
+    settings.show_whitespaces.merge_from_option(show_whitespaces.as_ref());
+    settings.ensure_final_newline_on_save.merge_from_option(modeline.ensure_final_newline.as_ref());
 }
 
 impl settings::Settings for AllLanguageSettings {
@@ -448,9 +422,7 @@ impl settings::Settings for AllLanguageSettings {
                     background_coloring: indent_guides.background_coloring.unwrap(),
                 },
                 format_on_save: settings.format_on_save.unwrap(),
-                remove_trailing_whitespace_on_save: settings
-                    .remove_trailing_whitespace_on_save
-                    .unwrap(),
+                remove_trailing_whitespace_on_save: settings.remove_trailing_whitespace_on_save.unwrap(),
                 ensure_final_newline_on_save: settings.ensure_final_newline_on_save.unwrap(),
                 line_ending: settings.line_ending.unwrap(),
                 formatter: settings.formatter.unwrap(),
@@ -477,18 +449,14 @@ impl settings::Settings for AllLanguageSettings {
                     show_background: inlay_hints.show_background.unwrap(),
                     edit_debounce_ms: inlay_hints.edit_debounce_ms.unwrap(),
                     scroll_debounce_ms: inlay_hints.scroll_debounce_ms.unwrap(),
-                    toggle_on_modifiers_press: inlay_hints
-                        .toggle_on_modifiers_press
-                        .map(|m| m.into_gpui()),
+                    toggle_on_modifiers_press: inlay_hints.toggle_on_modifiers_press.map(|m| m.into_gpui()),
                 },
                 use_autoclose: settings.use_autoclose.unwrap(),
                 use_auto_surround: settings.use_auto_surround.unwrap(),
                 use_on_type_format: settings.use_on_type_format.unwrap(),
                 auto_indent: settings.auto_indent.unwrap(),
                 auto_indent_on_paste: settings.auto_indent_on_paste.unwrap(),
-                always_treat_brackets_as_autoclosed: settings
-                    .always_treat_brackets_as_autoclosed
-                    .unwrap(),
+                always_treat_brackets_as_autoclosed: settings.always_treat_brackets_as_autoclosed.unwrap(),
                 code_actions_on_format: settings.code_actions_on_format.unwrap(),
                 linked_edits: settings.linked_edits.unwrap(),
                 tasks: LanguageTaskSettings {
@@ -516,10 +484,8 @@ impl settings::Settings for AllLanguageSettings {
         for (language_name, settings) in &all_languages.languages.0 {
             let mut language_settings = all_languages.defaults.clone();
             settings::merge_from::MergeFrom::merge_from(&mut language_settings, settings);
-            languages.insert(
-                LanguageName(language_name.clone().into()),
-                Arc::new(load_from_content(language_settings)),
-            );
+            languages
+                .insert(LanguageName(language_name.clone().into()), Arc::new(load_from_content(language_settings)));
         }
 
         let mut file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)> = FxHashMap::default();
@@ -546,17 +512,10 @@ impl settings::Settings for AllLanguageSettings {
                 );
                 GlobSet::empty()
             });
-            file_types.insert(
-                language.clone(),
-                (matcher, patterns.0.iter().cloned().collect()),
-            );
+            file_types.insert(language.clone(), (matcher, patterns.0.iter().cloned().collect()));
         }
 
-        Self {
-            defaults: default_language_settings,
-            languages,
-            file_types,
-        }
+        Self { defaults: default_language_settings, languages, file_types }
     }
 }
 

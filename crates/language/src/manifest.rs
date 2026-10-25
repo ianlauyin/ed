@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use settings::WorktreeId;
-use util::rel_path::RelPath;
-
 // Re-export ManifestName from language_core.
 pub use language_core::ManifestName;
+use settings::WorktreeId;
+use util::rel_path::RelPath;
 
 /// Represents a manifest query; given a path to a file, the manifest provider is tasked with finding a path to the directory containing the manifest for that file.
 ///

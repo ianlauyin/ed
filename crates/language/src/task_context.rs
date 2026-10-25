@@ -1,13 +1,19 @@
-use std::{path::PathBuf, sync::Arc};
-
-use crate::{Buffer, Location, RunnableResolver};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use collections::HashMap;
 use fs::Fs;
-use gpui::{App, Entity, Task};
+use gpui::App;
+use gpui::Entity;
+use gpui::Task;
 use lsp::LanguageServerName;
-use task::{TaskTemplates, TaskVariables};
+use task::TaskTemplates;
+use task::TaskVariables;
+
+use crate::Buffer;
+use crate::Location;
+use crate::RunnableResolver;
 
 /// Language Contexts are used by Zed tasks to extract information about the source file where the tasks are supposed to be scheduled from.
 /// Multiple context providers may be used together: by default, Zed provides a base [`BasicContextProvider`] context that fills all non-custom [`VariableName`] variants.
