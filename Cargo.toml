@@ -119,7 +119,7 @@ breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
 call_hierarchy = { path = "crates/call_hierarchy" }
 clock = { path = "crates/clock" }
-collections = { path = "crates/collections", version = "0.1.0" }
+collections = { path = "crates/collections" }
 command_palette = { path = "crates/command_palette" }
 component = { path = "crates/component" }
 db = { path = "crates/db" }

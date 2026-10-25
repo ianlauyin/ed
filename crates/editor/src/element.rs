@@ -33,7 +33,6 @@ use gpui::AvailableSpace;
 use gpui::Axis as ScrollbarAxis;
 use gpui::BorderStyle;
 use gpui::Bounds;
-use gpui::ClipboardItem;
 use gpui::ContentMask;
 use gpui::Context;
 use gpui::Corners;
@@ -4959,8 +4958,6 @@ pub fn render_breadcrumb_text(
 
     let editor = active_item.downcast::<Editor>().map(|editor| editor.downgrade());
 
-    let has_project_path = active_item.project_path(cx).is_some();
-
     match editor {
         Some(editor) => element
             .id("breadcrumb_container")
@@ -4970,55 +4967,12 @@ pub fn render_breadcrumb_text(
                     .child(breadcrumbs)
                     .when(multibuffer_header, |this| this.style(ButtonStyle::Transparent))
                     .when(!multibuffer_header, |this| {
-                        let focus_handle = editor.upgrade().unwrap().focus_handle(cx);
-
-                        this.tooltip(Tooltip::element(move |_window, cx| {
-                            v_flex()
-                                .gap_1()
-                                .child(
-                                    h_flex().gap_1().justify_between().child(Label::new("Show Symbol Outline")).child(
-                                        ui::KeyBinding::for_action_in(
-                                            &zed_actions::outline::ToggleOutline,
-                                            &focus_handle,
-                                            cx,
-                                        ),
-                                    ),
-                                )
-                                .when(has_project_path, |this| {
-                                    this.child(
-                                        h_flex()
-                                            .gap_1()
-                                            .justify_between()
-                                            .pt_1()
-                                            .border_t_1()
-                                            .border_color(cx.theme().colors().border_variant)
-                                            .child(Label::new("Right-Click to Copy Path")),
-                                    )
-                                })
-                                .into_any_element()
-                        }))
-                        .on_click({
-                            let editor = editor.clone();
-                            move |_, window, cx| {
-                                if let Some((editor, callback)) =
-                                    editor.upgrade().zip(zed_actions::outline::TOGGLE_OUTLINE.get())
-                                {
-                                    callback(editor.to_any_view(), window, cx);
-                                }
+                        this.on_click(move |_, window, cx| {
+                            if let Some((editor, callback)) =
+                                editor.upgrade().zip(zed_actions::outline::TOGGLE_OUTLINE.get())
+                            {
+                                callback(editor.to_any_view(), window, cx);
                             }
-                        })
-                        .when(has_project_path, |this| {
-                            this.on_right_click({
-                                let editor = editor.clone();
-                                move |_, _, cx| {
-                                    if let Some(abs_path) = editor.upgrade().and_then(|editor| {
-                                        editor.update(cx, |editor, cx| editor.target_file_abs_path(cx))
-                                    }) && let Some(path_str) = abs_path.to_str()
-                                    {
-                                        cx.write_to_clipboard(ClipboardItem::new_string(path_str.to_string()));
-                                    }
-                                }
-                            })
                         })
                     }),
             )

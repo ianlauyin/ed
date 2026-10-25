@@ -59,6 +59,8 @@ because it hurt readability; an opaque window is also cheaper to composite.
   content below the pills, and inactive-pane dimming covers the whole card.
 - Pane toolbars (search bars, breadcrumbs) have no bottom line either; they sit
   flat inside the card.
+- Breadcrumbs have no hover tooltip and no right-click action (no copy path);
+  clicking them still toggles the symbol outline.
 - An empty pane (hints or welcome page) leaves a blank strip of tab-bar height
   above its card, so the card does not jump when the first tab opens or the
   last one closes.
