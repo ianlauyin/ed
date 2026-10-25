@@ -1,14 +1,16 @@
+use std::sync::Arc;
+
 use futures::FutureExt as _;
-use gpui::{App, SharedString, UpdateGlobal};
+use gpui::App;
+use gpui::SharedString;
+use gpui::UpdateGlobal;
+pub use language::*;
 use project::Fs;
 use python::PyprojectTomlManifestProvider;
 use rust::CargoManifestProvider;
-use settings::{SemanticTokenRules, SettingsStore};
-use smol::stream::StreamExt;
-use std::sync::Arc;
+use settings::SemanticTokenRules;
+use settings::SettingsStore;
 use util::ResultExt;
-
-pub use language::*;
 
 use crate::json::JsonTaskProvider;
 
@@ -26,7 +28,8 @@ mod tsgo;
 mod typescript;
 mod yaml;
 
-pub(crate) use package_json::{PackageJson, PackageJsonData};
+pub(crate) use package_json::PackageJson;
+pub(crate) use package_json::PackageJsonData;
 
 pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     #[cfg(feature = "load-grammars")]
@@ -54,31 +57,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             adapters: vec![bash_lsp_adapter],
             ..Default::default()
         },
-        LanguageInfo {
-            name: "c",
-            adapters: vec![],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "cpp",
-            adapters: vec![],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "css",
-            adapters: vec![css_lsp_adapter, biome_lsp_adapter.clone()],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "diff",
-            adapters: vec![],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "env",
-            adapters: vec![],
-            ..Default::default()
-        },
+        LanguageInfo { name: "c", adapters: vec![], ..Default::default() },
+        LanguageInfo { name: "cpp", adapters: vec![], ..Default::default() },
+        LanguageInfo { name: "css", adapters: vec![css_lsp_adapter, biome_lsp_adapter.clone()], ..Default::default() },
+        LanguageInfo { name: "diff", adapters: vec![], ..Default::default() },
+        LanguageInfo { name: "env", adapters: vec![], ..Default::default() },
         LanguageInfo {
             name: "go",
             adapters: vec![go_lsp_adapter.clone()],
@@ -98,11 +81,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             context: Some(go_context_provider),
             ..Default::default()
         },
-        LanguageInfo {
-            name: "html",
-            adapters: vec![html_lsp_adapter],
-            ..Default::default()
-        },
+        LanguageInfo { name: "html", adapters: vec![html_lsp_adapter], ..Default::default() },
         LanguageInfo {
             name: "json",
             adapters: vec![json_lsp_adapter.clone(), biome_lsp_adapter.clone()],
@@ -115,22 +94,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             context: Some(json_context_provider),
             ..Default::default()
         },
-        LanguageInfo {
-            name: "markdown",
-            adapters: vec![],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "markdown-inline",
-            adapters: vec![],
-            ..Default::default()
-        },
+        LanguageInfo { name: "markdown", adapters: vec![], ..Default::default() },
+        LanguageInfo { name: "markdown-inline", adapters: vec![], ..Default::default() },
         LanguageInfo {
             name: "python",
-            adapters: vec![
-                Arc::new(python::TyLspAdapter),
-                Arc::new(python::RuffLspAdapter),
-            ],
+            adapters: vec![Arc::new(python::TyLspAdapter), Arc::new(python::RuffLspAdapter)],
             context: Some(python_context_provider),
             manifest_name: Some(SharedString::new_static("pyproject.toml").into()),
             semantic_token_rules: Some(python::semantic_token_rules()),
@@ -160,15 +128,8 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             context: Some(typescript_context),
             ..Default::default()
         },
-        LanguageInfo {
-            name: "yaml",
-            adapters: vec![yaml_lsp_adapter],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "gitcommit",
-            ..Default::default()
-        },
+        LanguageInfo { name: "yaml", adapters: vec![yaml_lsp_adapter], ..Default::default() },
+        LanguageInfo { name: "gitcommit", ..Default::default() },
     ];
 
     for registration in built_in_languages {
@@ -187,16 +148,14 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let mut prev_language_settings = languages.language_settings();
 
     cx.spawn(async move |cx| {
-        while subscription.next().await.is_some() {
+        while subscription.changed().await.is_ok() {
             let language_settings = languages.language_settings();
             if language_settings != prev_language_settings {
                 cx.update(|cx| {
                     SettingsStore::update_global(cx, |settings, cx| {
                         settings
                             .set_language_defaults(
-                                settings::LanguageDefaultsContent {
-                                    all_languages: language_settings.clone(),
-                                },
+                                settings::LanguageDefaultsContent { all_languages: language_settings.clone() },
                                 cx,
                             )
                             .log_err();
@@ -208,10 +167,8 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         anyhow::Ok(())
     })
     .detach();
-    let manifest_providers: [Arc<dyn ManifestProvider>; 2] = [
-        Arc::from(CargoManifestProvider),
-        Arc::from(PyprojectTomlManifestProvider),
-    ];
+    let manifest_providers: [Arc<dyn ManifestProvider>; 2] =
+        [Arc::from(CargoManifestProvider), Arc::from(PyprojectTomlManifestProvider)];
     for provider in manifest_providers {
         project::ManifestProvidersStore::global(cx).register(provider);
     }

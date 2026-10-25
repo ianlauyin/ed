@@ -31,12 +31,11 @@ use clock::Lamport;
 pub use clock::ReplicaId;
 use collections::HashMap;
 use collections::HashSet;
+use futures::channel::oneshot;
 use gpui_util::debug_panic;
 use locator::Locator;
 use operation_queue::OperationQueue;
 pub use patch::Patch;
-use postage::oneshot;
-use postage::prelude::*;
 use regex::Regex;
 pub use rope::*;
 pub use selection::*;
@@ -858,14 +857,11 @@ impl Buffer {
                 }
             }
         }
-        self.wait_for_version_txs.retain_mut(|(version, tx)| {
-            if self.snapshot.version().observed_all(version) {
-                tx.try_send(()).ok();
-                false
-            } else {
-                true
-            }
-        });
+        for (_, tx) in
+            self.wait_for_version_txs.extract_if(.., |(version, _)| self.snapshot.version().observed_all(version))
+        {
+            tx.send(()).ok();
+        }
     }
 
     fn apply_remote_edit(
@@ -1406,8 +1402,8 @@ impl Buffer {
         }
 
         async move {
-            for mut future in futures {
-                if future.recv().await.is_none() {
+            for future in futures {
+                if future.await.is_err() {
                     anyhow::bail!("gave up waiting for edits");
                 }
             }
@@ -1429,8 +1425,8 @@ impl Buffer {
         }
 
         async move {
-            for mut future in futures {
-                if future.recv().await.is_none() {
+            for future in futures {
+                if future.await.is_err() {
                     anyhow::bail!("gave up waiting for anchors");
                 }
             }
@@ -1446,8 +1442,8 @@ impl Buffer {
             rx = Some(channel.1);
         }
         async move {
-            if let Some(mut rx) = rx
-                && rx.recv().await.is_none()
+            if let Some(rx) = rx
+                && rx.await.is_err()
             {
                 anyhow::bail!("gave up waiting for version");
             }
@@ -1461,8 +1457,8 @@ impl Buffer {
     }
 
     fn resolve_edit(&mut self, edit_id: clock::Lamport) {
-        for mut tx in self.edit_id_resolvers.remove(&edit_id).into_iter().flatten() {
-            tx.try_send(()).ok();
+        for tx in self.edit_id_resolvers.remove(&edit_id).into_iter().flatten() {
+            tx.send(()).ok();
         }
     }
 

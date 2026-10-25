@@ -1,12 +1,21 @@
-use anyhow::{Context as _, Result};
+use std::path::Path;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
 use gpui::AsyncApp;
-use language::{LanguageName, LspAdapter, LspAdapterDelegate};
-use lsp::{LanguageServerBinary, LanguageServerName, Uri};
-use project::{Fs, lsp_store::language_server_settings};
-use serde_json::{Value, json};
-use std::{path::Path, sync::Arc};
+use language::LanguageName;
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
+use lsp::Uri;
+use project::Fs;
+use project::lsp_store::language_server_settings;
+use serde_json::Value;
+use serde_json::json;
 
 /// The TypeScript 7 native language server (`tsc --lsp --stdio`), for TypeScript,
 /// TSX and JavaScript. Older TypeScript versions are not supported.
@@ -36,11 +45,7 @@ impl TsgoLspAdapter {
                 .and_then(|json| json.get("version")?.as_str().map(str::to_owned))
                 .unwrap_or_default();
             let bin_link = dir.join("node_modules").join(".bin").join("tsc");
-            let bin = if self.fs.is_file(&bin_link).await {
-                bin_link
-            } else {
-                package_dir.join("bin").join("tsc")
-            };
+            let bin = if self.fs.is_file(&bin_link).await { bin_link } else { package_dir.join("bin").join("tsc") };
             return Some(InstalledTypeScript { version, bin });
         }
         None
@@ -64,17 +69,9 @@ impl LspAdapter for TsgoLspAdapter {
 
     /// Uses the project's `typescript` when it is 7 or newer and refuses to start for
     /// older versions. Projects without `typescript` run the latest 7.x through npx.
-    async fn find_binary(
-        &self,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        _: &AsyncApp,
-    ) -> Result<LanguageServerBinary> {
-        if let Some(installed) = self
-            .installed_typescript(delegate.worktree_root_path())
-            .await
-        {
-            let supported = major_version(&installed.version)
-                .is_some_and(|major| major >= Self::MIN_MAJOR_VERSION);
+    async fn find_binary(&self, delegate: &Arc<dyn LspAdapterDelegate>, _: &AsyncApp) -> Result<LanguageServerBinary> {
+        if let Some(installed) = self.installed_typescript(delegate.worktree_root_path()).await {
+            let supported = major_version(&installed.version).is_some_and(|major| major >= Self::MIN_MAJOR_VERSION);
             anyhow::ensure!(
                 supported,
                 "{} requires TypeScript {} or newer, but the project has typescript {} \
@@ -91,15 +88,13 @@ impl LspAdapter for TsgoLspAdapter {
             });
         }
 
-        crate::npx::npx_binary(delegate, &[Self::NPX_PACKAGE], "tsc", Self::ARGUMENTS)
-            .await
-            .with_context(|| {
-                format!(
-                    "language server {} is not installed: `node_modules/.bin/tsc` was not \
+        crate::npx::npx_binary(delegate, &[Self::NPX_PACKAGE], "tsc", Self::ARGUMENTS).await.with_context(|| {
+            format!(
+                "language server {} is not installed: `node_modules/.bin/tsc` was not \
                     found in the project, and `npx` was not found on your PATH",
-                    Self::SERVER_NAME,
-                )
-            })
+                Self::SERVER_NAME,
+            )
+        })
     }
 
     async fn label_for_completion(
@@ -120,10 +115,8 @@ impl LspAdapter for TsgoLspAdapter {
             _ => None,
         }?;
 
-        let text = if let Some(description) = item
-            .label_details
-            .as_ref()
-            .and_then(|label_details| label_details.description.as_ref())
+        let text = if let Some(description) =
+            item.label_details.as_ref().and_then(|label_details| label_details.description.as_ref())
         {
             format!("{} {}", item.label, description)
         } else if let Some(detail) = &item.detail {
@@ -146,8 +139,7 @@ impl LspAdapter for TsgoLspAdapter {
         cx: &mut AsyncApp,
     ) -> Result<Value> {
         let settings = cx.update(|cx| {
-            language_server_settings(delegate.as_ref(), &Self::SERVER_NAME, cx)
-                .and_then(|s| s.settings.clone())
+            language_server_settings(delegate.as_ref(), &Self::SERVER_NAME, cx).and_then(|s| s.settings.clone())
         });
         Ok(settings.unwrap_or_else(|| json!({})))
     }

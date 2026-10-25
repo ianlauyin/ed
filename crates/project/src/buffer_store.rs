@@ -10,7 +10,6 @@ use collections::HashSet;
 use collections::hash_map;
 use futures::Future;
 use futures::FutureExt as _;
-use futures::StreamExt as _;
 use futures::channel::oneshot;
 use futures::future::Shared;
 use gpui::App;
@@ -479,12 +478,12 @@ impl LocalBufferStore {
             && snapshot.entry_for_path(path.as_ref()).is_none()
             && Self::unloaded_ancestor_hides_path(snapshot, path)
         {
-            let mut refresh = worktree.read(cx).as_local()?.refresh_entries_for_paths(vec![path.clone()]);
+            let refresh = worktree.read(cx).as_local()?.refresh_entries_for_paths(vec![path.clone()]);
             cx.spawn({
                 let path = path.clone();
                 let worktree = worktree.clone();
                 async move |this, cx| {
-                    refresh.next().await;
+                    refresh.await.ok();
                     this.update(cx, |this, cx| {
                         let snapshot = worktree.read(cx).snapshot();
                         if Self::unloaded_ancestor_hides_path(&snapshot, &path) {

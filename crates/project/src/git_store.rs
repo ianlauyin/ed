@@ -122,7 +122,6 @@ use pending_op::PendingOp;
 use pending_op::PendingOpId;
 use pending_op::PendingOps;
 use pending_op::PendingOpsSummary;
-use postage::stream::Stream as _;
 use rpc::AnyProtoClient;
 use rpc::ProjectId;
 use rpc::TypedEnvelope;
@@ -226,7 +225,7 @@ struct BufferGitState {
     language: Option<Arc<Language>>,
     language_registry: Option<Arc<LanguageRegistry>>,
     conflict_updated_futures: Vec<oneshot::Sender<()>>,
-    recalculating_tx: postage::watch::Sender<bool>,
+    recalculating: (watch::Sender<bool>, watch::Receiver<bool>),
 
     /// These operation counts are used to ensure that head and index text
     /// values read from the git repository are up-to-date with any hunk staging
@@ -3960,7 +3959,7 @@ impl BufferGitState {
             recalculate_diff_task: Option::default(),
             language: Option::default(),
             language_registry: Option::default(),
-            recalculating_tx: postage::watch::channel_with(false).0,
+            recalculating: watch::channel(false),
             hunk_staging_operation_count: 0,
             hunk_staging_operation_count_as_of_write: 0,
             head_text: Option::default(),
@@ -4209,16 +4208,9 @@ impl BufferGitState {
     }
 
     pub fn wait_for_recalculation(&mut self) -> Option<impl Future<Output = ()> + use<>> {
-        if *self.recalculating_tx.borrow() {
-            let mut rx = self.recalculating_tx.subscribe();
-            Some(async move {
-                loop {
-                    let is_recalculating = rx.recv().await;
-                    if is_recalculating != Some(true) {
-                        break;
-                    }
-                }
-            })
+        if *watch::Receiver::borrow(&mut self.recalculating.1) {
+            let mut rx = self.recalculating.0.receiver();
+            Some(async move { while rx.changed().await.is_ok() && *watch::Receiver::borrow(&mut rx) {} })
         } else {
             None
         }
@@ -4274,7 +4266,7 @@ impl BufferGitState {
     }
 
     fn recalculate_diffs(&mut self, buffer: text::BufferSnapshot, cx: &Context<Self>) {
-        *self.recalculating_tx.borrow_mut() = true;
+        self.recalculating.0.send(true).ok();
 
         let language = self.language.clone();
         let language_registry = self.language_registry.clone();
@@ -4480,7 +4472,7 @@ impl BufferGitState {
                 // state too quickly; another recalculation will come along
                 // later and clear the pending state once the state of the index has settled.
                 if this.hunk_staging_operation_count > prev_hunk_staging_operation_count {
-                    *this.recalculating_tx.borrow_mut() = false;
+                    this.recalculating.0.send(false).ok();
                     true
                 } else {
                     false
@@ -4562,7 +4554,7 @@ impl BufferGitState {
                     this.index_changed = false;
                     this.head_changed = false;
                     this.language_changed = false;
-                    *this.recalculating_tx.borrow_mut() = false;
+                    this.recalculating.0.send(false).ok();
                 });
             }
 

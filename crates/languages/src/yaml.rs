@@ -1,13 +1,20 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use language::{LspAdapter, LspAdapterDelegate, language_settings::AllLanguageSettings};
-use lsp::{LanguageServerBinary, LanguageServerName, Uri};
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use language::language_settings::AllLanguageSettings;
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
+use lsp::Uri;
 use project::lsp_store::language_server_settings;
 use serde_json::Value;
-use settings::{Settings, SettingsLocation};
-use std::sync::Arc;
-use util::{merge_json_value_into, rel_path::RelPath};
+use settings::Settings;
+use settings::SettingsLocation;
+use util::merge_json_value_into;
+use util::rel_path::RelPath;
 
 pub struct YamlLspAdapter;
 
@@ -36,16 +43,10 @@ impl LspAdapter for YamlLspAdapter {
         _: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {
-        let location = SettingsLocation {
-            worktree_id: delegate.worktree_id(),
-            path: RelPath::empty(),
-        };
+        let location = SettingsLocation { worktree_id: delegate.worktree_id(), path: RelPath::empty() };
 
-        let tab_size = cx.update(|cx| {
-            AllLanguageSettings::get(Some(location), cx)
-                .language(Some(&"YAML".into()))
-                .tab_size
-        });
+        let tab_size =
+            cx.update(|cx| AllLanguageSettings::get(Some(location), cx).language(Some(&"YAML".into())).tab_size);
 
         let mut options = serde_json::json!({
             "[yaml]": {"editor.tabSize": tab_size},
@@ -82,10 +83,7 @@ fn worktree_root(delegate: &Arc<dyn LspAdapterDelegate>, settings: Option<Value>
             if !url.starts_with(".") && !url.starts_with("~") {
                 (url, v)
             } else {
-                let resolved_url = delegate
-                    .resolve_relative_path(url.into())
-                    .to_string_lossy()
-                    .into_owned();
+                let resolved_url = delegate.resolve_relative_path(url.into()).to_string_lossy().into_owned();
                 (resolved_url, v)
             }
         })

@@ -1,12 +1,17 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
 use gpui::AsyncApp;
-use language::{LanguageName, LspAdapter, LspAdapterDelegate};
-use lsp::{LanguageServerBinary, LanguageServerName, Uri};
+use language::LanguageName;
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
+use lsp::Uri;
 use project::lsp_store::language_server_settings;
 use serde_json::json;
-use std::sync::Arc;
 
 pub struct HtmlLspAdapter;
 
@@ -47,16 +52,13 @@ impl LspAdapter for HtmlLspAdapter {
         cx: &mut AsyncApp,
     ) -> Result<serde_json::Value> {
         let project_options = cx.update(|cx| {
-            language_server_settings(delegate.as_ref(), &self.name(), cx)
-                .and_then(|s| s.settings.clone())
+            language_server_settings(delegate.as_ref(), &self.name(), cx).and_then(|s| s.settings.clone())
         });
 
         Ok(project_options.unwrap_or_else(|| json!({})))
     }
 
     fn language_ids(&self) -> HashMap<LanguageName, String> {
-        [(LanguageName::new_static("HTML"), "html".into())]
-            .into_iter()
-            .collect()
+        [(LanguageName::new_static("HTML"), "html".into())].into_iter().collect()
     }
 }

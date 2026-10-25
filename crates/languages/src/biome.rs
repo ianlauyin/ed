@@ -1,12 +1,19 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
 use gpui::AsyncApp;
-use language::{LanguageName, LspAdapter, LspAdapterDelegate};
-use lsp::{LanguageServerBinary, LanguageServerName, Uri};
-use project::{Fs, lsp_store::language_server_settings};
-use serde_json::{Value, json};
-use std::sync::Arc;
+use language::LanguageName;
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
+use lsp::Uri;
+use project::Fs;
+use project::lsp_store::language_server_settings;
+use serde_json::Value;
+use serde_json::json;
 
 /// Biome's language server (`biome lsp-proxy`): lint diagnostics and code actions
 /// (quick fixes, `source.fixAll.biome`, `source.organizeImports.biome`).
@@ -52,8 +59,7 @@ impl LspAdapter for BiomeLspAdapter {
                 });
             }
         }
-        crate::npx::node_server_binary(delegate, &[Self::NPX_PACKAGE], "biome", Self::ARGUMENTS)
-            .await
+        crate::npx::node_server_binary(delegate, &[Self::NPX_PACKAGE], "biome", Self::ARGUMENTS).await
     }
 
     async fn workspace_configuration(
@@ -63,8 +69,7 @@ impl LspAdapter for BiomeLspAdapter {
         cx: &mut AsyncApp,
     ) -> Result<Value> {
         let settings = cx.update(|cx| {
-            language_server_settings(delegate.as_ref(), &Self::SERVER_NAME, cx)
-                .and_then(|s| s.settings.clone())
+            language_server_settings(delegate.as_ref(), &Self::SERVER_NAME, cx).and_then(|s| s.settings.clone())
         });
         Ok(settings.unwrap_or_else(|| json!({})))
     }

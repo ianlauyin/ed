@@ -69,6 +69,7 @@ use futures::AsyncWriteExt;
 use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
+use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::future::Shared;
 use futures::future::join_all;
@@ -180,10 +181,6 @@ pub use lsp_store::inlay_hints::CacheInlayHints;
 pub use lsp_store::inlay_hints::CacheInlayHintsTask;
 pub use lsp_store::inlay_hints::InvalidationStrategy;
 use parking_lot::Mutex;
-use postage::mpsc;
-use postage::sink::Sink;
-use postage::stream::Stream;
-use postage::watch;
 use rand::prelude::*;
 use rpc::AnyProtoClient;
 use rpc::ErrorCode;
@@ -588,13 +585,13 @@ impl LocalLspStore {
                 match self.restricted_worktrees_tasks.entry(worktree_id) {
                     hash_map::Entry::Occupied(o) => Some(o.get().1.clone()),
                     hash_map::Entry::Vacant(v) => {
-                        let (mut tx, rx) = watch::channel::<bool>();
+                        let (mut tx, rx) = watch::channel(false);
                         let lsp_store = self.weak.clone();
                         let subscription = cx.subscribe(&trusted_worktrees, move |_, e, cx| {
                             if let TrustedWorktreesEvent::Trusted(_, trusted_paths) = e
                                 && trusted_paths.contains(&PathTrust::Worktree(worktree_id))
                             {
-                                tx.blocking_send(true).ok();
+                                tx.send(true).ok();
                                 lsp_store
                                     .update(cx, |lsp_store, _| {
                                         if let Some(local_lsp_store) = lsp_store.as_local_mut() {
@@ -786,8 +783,8 @@ impl LocalLspStore {
                         before starting language server {}",
                         adapter.name(),
                     );
-                    while let Some(worktree_trusted) = wait_until_worktree_trust.recv().await {
-                        if worktree_trusted {
+                    while wait_until_worktree_trust.changed().await.is_ok() {
+                        if *wait_until_worktree_trust.borrow() {
                             break;
                         }
                     }
@@ -3614,7 +3611,7 @@ impl LocalLspStore {
                 watched.worktree_paths.entry(worktree_id).or_default().add(registration_id, glob);
                 worktree.update(cx, |worktree, _| {
                     if let Some(tree) = worktree.as_local_mut() {
-                        tree.add_path_prefix_to_scan(literal_prefix);
+                        drop(tree.add_path_prefix_to_scan(literal_prefix));
                     }
                 });
             }
@@ -4308,7 +4305,7 @@ impl LspStore {
         let binary_status_task = subscribe_to_binary_statuses(&languages, cx);
 
         let _maintain_workspace_config = {
-            let (sender, receiver) = watch::channel();
+            let (sender, receiver) = watch::channel(());
             (Self::maintain_workspace_config(receiver, cx), sender)
         };
 
@@ -4354,7 +4351,7 @@ impl LspStore {
             worktree_store,
             languages: languages.clone(),
             language_server_statuses: BTreeMap::default(),
-            nonce: StdRng::from_os_rng().random(),
+            nonce: rand::make_rng::<StdRng>().random(),
             diagnostic_summaries: HashMap::default(),
             lsp_server_capabilities: HashMap::default(),
             lsp_server_initial_capabilities: HashMap::default(),
@@ -4403,7 +4400,7 @@ impl LspStore {
         cx.subscribe(&buffer_store, Self::on_buffer_store_event).detach();
         cx.subscribe(&worktree_store, Self::on_worktree_store_event).detach();
         let _maintain_workspace_config = {
-            let (sender, receiver) = watch::channel();
+            let (sender, receiver) = watch::channel(());
             (Self::maintain_workspace_config(receiver, cx), sender)
         };
         Self {
@@ -4417,7 +4414,7 @@ impl LspStore {
             worktree_store,
             languages: languages.clone(),
             language_server_statuses: BTreeMap::default(),
-            nonce: StdRng::from_os_rng().random(),
+            nonce: rand::make_rng::<StdRng>().random(),
             diagnostic_summaries: HashMap::default(),
             lsp_server_capabilities: HashMap::default(),
             lsp_server_initial_capabilities: HashMap::default(),
@@ -4505,7 +4502,7 @@ impl LspStore {
     }
 
     fn request_workspace_config_refresh(&mut self) {
-        *self._maintain_workspace_config.1.borrow_mut() = ();
+        self._maintain_workspace_config.1.send(()).ok();
     }
 
     fn on_buffer_event(&mut self, buffer: Entity<Buffer>, event: &language::BufferEvent, cx: &mut Context<Self>) {
@@ -4722,7 +4719,9 @@ impl LspStore {
         let mut subscription = languages.subscribe();
         let mut prev_reload_count = languages.reload_count();
         cx.spawn(async move |this, cx| {
-            while let Some(()) = subscription.next().await {
+            // Run once up front, then on every registry change.
+            let mut initial = true;
+            while mem::take(&mut initial) || subscription.changed().await.is_ok() {
                 if let Some(this) = this.upgrade() {
                     // If the language registry has been reloaded, then remove and
                     // re-assign the languages on all open buffers.
@@ -8137,7 +8136,9 @@ impl LspStore {
         // which writes to `external_refresh_requests`. Observing `SettingsStore` here as well would cause every
         // settings change to drive the loop twice and emit duplicate `workspace/didChangeConfiguration` notifications.
         cx.spawn(async move |this, cx| {
-            while let Some(()) = external_refresh_requests.next().await {
+            // Refresh once up front, then on every request.
+            let mut initial = true;
+            while mem::take(&mut initial) || external_refresh_requests.changed().await.is_ok() {
                 this.update(cx, |this, cx| {
                     this.refresh_server_tree(cx);
                 })
@@ -12539,7 +12540,7 @@ fn lsp_workspace_diagnostics_refresh(
         let mut requests = 0;
 
         loop {
-            let Some(completion_tx) = refresh_rx.recv().await else {
+            let Some(completion_tx) = refresh_rx.next().await else {
                 return;
             };
             let mut completion_txs = completion_tx.into_iter().collect::<Vec<_>>();
@@ -12611,8 +12612,8 @@ fn lsp_workspace_diagnostics_refresh(
                 let response_result = 'response: loop {
                     let mut inactivity_timer = pin!(server.request_timer(timeout).fuse());
                     loop {
-                        let mut progress = pin!(progress_rx.recv().fuse());
-                        let mut refresh = pin!(refresh_rx.recv().fuse());
+                        let mut progress = pin!(progress_rx.next().fuse());
+                        let mut refresh = pin!(refresh_rx.next().fuse());
                         select_biased! {
                             response = request => break 'response response,
                             new_progress = progress => match new_progress {
@@ -12706,7 +12707,7 @@ fn lsp_workspace_diagnostics_refresh(
                     continue 'request;
                 }
                 let mut repull_timer = pin!(cx.background_executor().timer(WORKSPACE_DIAGNOSTICS_REPULL_DELAY).fuse());
-                let mut refresh = pin!(refresh_rx.recv().fuse());
+                let mut refresh = pin!(refresh_rx.next().fuse());
                 select_biased! {
                     new_refresh = refresh => match new_refresh {
                         Some(completion_tx) => completion_txs.extend(completion_tx),

@@ -28,7 +28,6 @@ pub use language_core::ServerHealth;
 use lsp::LanguageServerId;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use postage::watch;
 use settings::AllLanguageSettingsContent;
 use settings::LanguageSettingsContent;
 use smallvec::SmallVec;
@@ -66,7 +65,7 @@ struct LanguageRegistryState {
     lsp_adapters: HashMap<LanguageName, Vec<Arc<CachedLspAdapter>>>,
     all_lsp_adapters: HashMap<LanguageServerName, Arc<CachedLspAdapter>>,
     loading_languages: HashMap<LanguageId, Vec<oneshot::Sender<Result<Arc<Language>>>>>,
-    subscription: (watch::Sender<()>, watch::Receiver<()>),
+    subscription: watch::Sender<()>,
     theme: Option<Arc<Theme>>,
     version: usize,
     reload_count: usize,
@@ -115,7 +114,7 @@ impl LanguageRegistry {
                 loading_languages: HashMap::default(),
                 lsp_adapters: HashMap::default(),
                 all_lsp_adapters: HashMap::default(),
-                subscription: watch::channel(),
+                subscription: watch::channel(()).0,
                 theme: Option::default(),
                 version: 0,
                 reload_count: 0,
@@ -139,7 +138,7 @@ impl LanguageRegistry {
         state.lsp_adapters.entry(language_name).or_default().push(cached.clone());
         state.all_lsp_adapters.insert(cached.name.clone(), cached.clone());
         state.version += 1;
-        *state.subscription.0.borrow_mut() = ();
+        state.subscription.send(()).ok();
     }
 
     /// Adds a language to the registry, which can be loaded if needed.
@@ -162,7 +161,7 @@ impl LanguageRegistry {
 
         state.version += 1;
         state.reload_count += 1;
-        *state.subscription.0.borrow_mut() = ();
+        state.subscription.send(()).ok();
     }
 
     /// Adds grammars to the registry. Language configurations reference a grammar by name. The
@@ -210,7 +209,7 @@ impl LanguageRegistry {
     }
 
     pub fn subscribe(&self) -> watch::Receiver<()> {
-        self.state.read().subscription.1.clone()
+        self.state.read().subscription.receiver()
     }
 
     /// Returns the number of times that the registry has been changed,
@@ -543,7 +542,7 @@ impl LanguageRegistryState {
         );
         self.languages.push(language);
         self.version += 1;
-        *self.subscription.0.borrow_mut() = ();
+        self.subscription.send(()).ok();
     }
 
     fn reload(&mut self) {
@@ -551,7 +550,7 @@ impl LanguageRegistryState {
         self.version += 1;
         self.reload_count += 1;
         self.available_languages.mark_all_unloaded();
-        *self.subscription.0.borrow_mut() = ();
+        self.subscription.send(()).ok();
     }
 
     /// Mark the given language as having been loaded, so that the

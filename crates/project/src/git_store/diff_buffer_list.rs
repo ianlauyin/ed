@@ -3,7 +3,6 @@ use buffer_diff::BufferDiff;
 use collections::HashMap;
 use collections::HashSet;
 use futures::FutureExt;
-use futures::StreamExt;
 use futures::future::LocalBoxFuture;
 use git::repository::RepoPath;
 use git::status::DiffTreeType;
@@ -57,7 +56,7 @@ pub struct DiffBufferList {
     statuses_by_path: Option<SumTree<StatusEntry>>,
     tree_diff_base_task: Option<Task<()>>,
     _subscription: Subscription,
-    update_needed: postage::watch::Sender<()>,
+    update_needed: watch::Sender<()>,
     _task: Task<()>,
 }
 
@@ -95,11 +94,11 @@ impl DiffBufferList {
                 if !this.diff_base.is_merge_base() {
                     cx.emit(BranchDiffEvent::FileListChanged);
                 }
-                *this.update_needed.borrow_mut() = ();
+                this.update_needed.send(()).ok();
             }
         });
 
-        let (send, recv) = postage::watch::channel::<()>();
+        let (send, recv) = watch::channel(());
         let worker = cx.spawn(async move |this, cx| Self::handle_status_updates(this, recv, cx).await);
 
         Self {
@@ -136,12 +135,12 @@ impl DiffBufferList {
         self.statuses_by_path = None;
         self.tree_diff_base_task = None;
         cx.emit(BranchDiffEvent::FileListChanged);
-        *self.update_needed.borrow_mut() = ();
+        self.update_needed.send(()).ok();
     }
 
     pub fn set_diff_base(&mut self, diff_base: DiffBase, cx: &mut Context<Self>) {
         if self.diff_base == diff_base {
-            *self.update_needed.borrow_mut() = ();
+            self.update_needed.send(()).ok();
             return;
         }
 
@@ -152,16 +151,12 @@ impl DiffBufferList {
         self.diff_base = diff_base;
 
         cx.emit(BranchDiffEvent::DiffBaseChanged);
-        *self.update_needed.borrow_mut() = ();
+        self.update_needed.send(()).ok();
     }
 
-    pub async fn handle_status_updates(
-        this: WeakEntity<Self>,
-        mut recv: postage::watch::Receiver<()>,
-        cx: &mut AsyncApp,
-    ) {
+    pub async fn handle_status_updates(this: WeakEntity<Self>, mut recv: watch::Receiver<()>, cx: &mut AsyncApp) {
         this.update(cx, |this, cx| this.spawn_reload_tree_diff(cx)).log_err();
-        while recv.next().await.is_some() {
+        while recv.changed().await.is_ok() {
             let Ok(()) = this.update(cx, |this, cx| {
                 if this.repo.is_none() {
                     this.repo = this.git_store.upgrade().and_then(|git_store| git_store.read(cx).active_repository());

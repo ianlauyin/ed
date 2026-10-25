@@ -1,28 +1,36 @@
+use std::borrow::Cow;
+use std::ffi::OsString;
+use std::ops::Range;
+use std::str;
+use std::sync::Arc;
+use std::sync::LazyLock;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
-use gpui::{App, AsyncApp, Entity, Task};
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
+use gpui::Task;
+use language::LanguageName;
+use language::LspAdapterDelegate;
+use language::language_settings::LanguageSettings;
 pub use language::*;
-use language::{LanguageName, LspAdapterDelegate, language_settings::LanguageSettings};
-use lsp::{LanguageServerBinary, LanguageServerName};
-
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
 use project::lsp_store::language_server_settings;
 use regex::Regex;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use settings::SemanticTokenRules;
-use std::{
-    borrow::Cow,
-    ffi::OsString,
-    ops::Range,
-    str,
-    sync::{Arc, LazyLock},
-};
-use task::{TaskTemplate, TaskTemplates, TaskVariables, VariableName};
+use task::TaskTemplate;
+use task::TaskTemplates;
+use task::TaskVariables;
+use task::VariableName;
 use util::merge_json_value_into;
 
 pub(crate) fn semantic_token_rules() -> SemanticTokenRules {
-    let content = grammars::get_file("go/semantic_token_rules.json")
-        .expect("missing go/semantic_token_rules.json");
+    let content = grammars::get_file("go/semantic_token_rules.json").expect("missing go/semantic_token_rules.json");
     let json = std::str::from_utf8(&content.data).expect("invalid utf-8 in semantic_token_rules");
     settings::parse_json_with_comments::<SemanticTokenRules>(json)
         .expect("failed to parse go semantic_token_rules.json")
@@ -39,9 +47,8 @@ impl GoLspAdapter {
     const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("gopls");
 }
 
-static GO_ESCAPE_SUBTEST_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"[.*+?^${}()|\[\]\\"']"#).expect("Failed to create GO_ESCAPE_SUBTEST_NAME_REGEX")
-});
+static GO_ESCAPE_SUBTEST_NAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"[.*+?^${}()|\[\]\\"']"#).expect("Failed to create GO_ESCAPE_SUBTEST_NAME_REGEX"));
 
 #[async_trait(?Send)]
 impl LspAdapter for GoLspAdapter {
@@ -55,11 +62,7 @@ impl LspAdapter for GoLspAdapter {
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         let path = delegate.which(Self::SERVER_NAME.as_ref()).await?;
-        Some(LanguageServerBinary {
-            path,
-            arguments: server_binary_arguments(),
-            env: None,
-        })
+        Some(LanguageServerBinary { path, arguments: server_binary_arguments(), env: None })
     }
 
     async fn initialization_options(
@@ -67,11 +70,8 @@ impl LspAdapter for GoLspAdapter {
         delegate: &Arc<dyn LspAdapterDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<Option<serde_json::Value>> {
-        let semantic_tokens_enabled = cx.update(|cx| {
-            LanguageSettings::resolve(None, Some(&LanguageName::new("Go")), cx)
-                .semantic_tokens
-                .enabled()
-        });
+        let semantic_tokens_enabled = cx
+            .update(|cx| LanguageSettings::resolve(None, Some(&LanguageName::new("Go")), cx).semantic_tokens.enabled());
 
         let mut default_config = json!({
             "usePlaceholders": false,
@@ -88,8 +88,7 @@ impl LspAdapter for GoLspAdapter {
         });
 
         let project_initialization_options = cx.update(|cx| {
-            language_server_settings(delegate.as_ref(), &self.name(), cx)
-                .and_then(|s| s.initialization_options.clone())
+            language_server_settings(delegate.as_ref(), &self.name(), cx).and_then(|s| s.initialization_options.clone())
         });
 
         if let Some(override_options) = project_initialization_options {
@@ -129,23 +128,15 @@ impl LspAdapter for GoLspAdapter {
             Some((lsp::CompletionItemKind::MODULE, detail)) => {
                 let text = format!("{label} {detail}");
                 let source = format!("import {text}");
-                let runs = language
-                    .highlight_text(source.as_str(), 7..7 + text[name_offset..].len())
-                    .collect();
+                let runs = language.highlight_text(source.as_str(), 7..7 + text[name_offset..].len()).collect();
                 let filter_range = completion
                     .filter_text
                     .as_deref()
-                    .and_then(|filter_text| {
-                        text.find(filter_text)
-                            .map(|start| start..start + filter_text.len())
-                    })
+                    .and_then(|filter_text| text.find(filter_text).map(|start| start..start + filter_text.len()))
                     .unwrap_or(0..label.len());
                 return Some(CodeLabel::new(text, filter_range, runs));
             }
-            Some((
-                lsp::CompletionItemKind::CONSTANT | lsp::CompletionItemKind::VARIABLE,
-                detail,
-            )) => {
+            Some((lsp::CompletionItemKind::CONSTANT | lsp::CompletionItemKind::VARIABLE, detail)) => {
                 let text = format!("{label} {detail}");
                 let source = format!("var {} {}", &text[name_offset..], detail);
                 let runs = adjust_runs(
@@ -155,10 +146,7 @@ impl LspAdapter for GoLspAdapter {
                 let filter_range = completion
                     .filter_text
                     .as_deref()
-                    .and_then(|filter_text| {
-                        text.find(filter_text)
-                            .map(|start| start..start + filter_text.len())
-                    })
+                    .and_then(|filter_text| text.find(filter_text).map(|start| start..start + filter_text.len()))
                     .unwrap_or(0..label.len());
                 return Some(CodeLabel::new(text, filter_range, runs));
             }
@@ -172,10 +160,7 @@ impl LspAdapter for GoLspAdapter {
                 let filter_range = completion
                     .filter_text
                     .as_deref()
-                    .and_then(|filter_text| {
-                        text.find(filter_text)
-                            .map(|start| start..start + filter_text.len())
-                    })
+                    .and_then(|filter_text| text.find(filter_text).map(|start| start..start + filter_text.len()))
                     .unwrap_or(0..label.len());
                 return Some(CodeLabel::new(text, filter_range, runs));
             }
@@ -189,10 +174,7 @@ impl LspAdapter for GoLspAdapter {
                 let filter_range = completion
                     .filter_text
                     .as_deref()
-                    .and_then(|filter_text| {
-                        text.find(filter_text)
-                            .map(|start| start..start + filter_text.len())
-                    })
+                    .and_then(|filter_text| text.find(filter_text).map(|start| start..start + filter_text.len()))
                     .unwrap_or(0..label.len());
                 return Some(CodeLabel::new(text, filter_range, runs));
             }
@@ -206,10 +188,7 @@ impl LspAdapter for GoLspAdapter {
                 let filter_range = completion
                     .filter_text
                     .as_deref()
-                    .and_then(|filter_text| {
-                        text.find(filter_text)
-                            .map(|start| start..start + filter_text.len())
-                    })
+                    .and_then(|filter_text| text.find(filter_text).map(|start| start..start + filter_text.len()))
                     .unwrap_or(0..label.len());
                 return Some(CodeLabel::new(text, filter_range, runs));
             }
@@ -224,10 +203,7 @@ impl LspAdapter for GoLspAdapter {
                     let filter_range = completion
                         .filter_text
                         .as_deref()
-                        .and_then(|filter_text| {
-                            text.find(filter_text)
-                                .map(|start| start..start + filter_text.len())
-                        })
+                        .and_then(|filter_text| text.find(filter_text).map(|start| start..start + filter_text.len()))
                         .unwrap_or(0..label.len());
                     return Some(CodeLabel::new(text, filter_range, runs));
                 }
@@ -237,11 +213,7 @@ impl LspAdapter for GoLspAdapter {
         None
     }
 
-    async fn label_for_symbol(
-        &self,
-        symbol: &language::Symbol,
-        language: &Arc<Language>,
-    ) -> Option<CodeLabel> {
+    async fn label_for_symbol(&self, symbol: &language::Symbol, language: &Arc<Language>) -> Option<CodeLabel> {
         let name = &symbol.name;
         let (text, filter_range, display_range) = match symbol.kind {
             language::SymbolKind::Method | language::SymbolKind::Function => {
@@ -292,15 +264,12 @@ impl LspAdapter for GoLspAdapter {
         Some(CodeLabel::new(
             text[display_range.clone()].to_string(),
             filter_range,
-            language
-                .highlight_text(text.as_str(), display_range)
-                .collect(),
+            language.highlight_text(text.as_str(), display_range).collect(),
         ))
     }
 
     fn diagnostic_message_to_markdown(&self, message: &str) -> Option<String> {
-        static REGEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"(?m)\n\s*").expect("Failed to create REGEX"));
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)\n\s*").expect("Failed to create REGEX"));
         Some(REGEX.replace_all(message, "\n\n").to_string())
     }
 }
@@ -309,8 +278,7 @@ fn adjust_runs(
     delta: usize,
     runs: impl Iterator<Item = (Range<usize>, HighlightId)>,
 ) -> Vec<(Range<usize>, HighlightId)> {
-    runs.map(|(range, highlight_id)| (range.start + delta..range.end + delta, highlight_id))
-        .collect()
+    runs.map(|(range, highlight_id)| (range.start + delta..range.end + delta, highlight_id)).collect()
 }
 
 pub(crate) struct GoContextProvider;
@@ -348,10 +316,7 @@ impl RunnableResolver for GoRunnableResolver {
 
         // `@run` and `@_table_test_case_name` tag the same string literal, so the chosen
         // run's text is the case name.
-        let run_capture = local_captures
-            .iter()
-            .filter(|capture| capture.is_run())
-            .nth(pair_index)?;
+        let run_capture = local_captures.iter().filter(|capture| capture.is_run()).nth(pair_index)?;
         Some(ResolvedRunnable {
             run_range: run_capture.range(),
             extra_captures: smallvec::smallvec![(
@@ -363,14 +328,11 @@ impl RunnableResolver for GoRunnableResolver {
 }
 
 const GO_PACKAGE_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("GO_PACKAGE"));
-const GO_MODULE_ROOT_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("GO_MODULE_ROOT"));
-const GO_SUBTEST_NAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("GO_SUBTEST_NAME"));
+const GO_MODULE_ROOT_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("GO_MODULE_ROOT"));
+const GO_SUBTEST_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("GO_SUBTEST_NAME"));
 const GO_TABLE_TEST_CASE_NAME_TASK_VARIABLE: VariableName =
     VariableName::Custom(Cow::Borrowed("GO_TABLE_TEST_CASE_NAME"));
-const GO_SUITE_NAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("GO_SUITE_NAME"));
+const GO_SUITE_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("GO_SUITE_NAME"));
 
 impl ContextProvider for GoContextProvider {
     fn build_context(
@@ -380,17 +342,11 @@ impl ContextProvider for GoContextProvider {
         _: Option<HashMap<String, String>>,
         cx: &mut gpui::App,
     ) -> Task<Result<TaskVariables>> {
-        let local_abs_path = location
-            .file_location
-            .buffer
-            .read(cx)
-            .file()
-            .and_then(|file| Some(file.as_local()?.abs_path(cx)));
+        let local_abs_path =
+            location.file_location.buffer.read(cx).file().and_then(|file| Some(file.as_local()?.abs_path(cx)));
 
-        let go_package_variable = local_abs_path
-            .as_deref()
-            .and_then(|local_abs_path| local_abs_path.parent())
-            .map(|buffer_dir| {
+        let go_package_variable =
+            local_abs_path.as_deref().and_then(|local_abs_path| local_abs_path.parent()).map(|buffer_dir| {
                 // Prefer the relative form `./my-nested-package/is-here` over
                 // absolute path, because it's more readable in the modal, but
                 // the absolute path also works.
@@ -409,10 +365,8 @@ impl ContextProvider for GoContextProvider {
                 (GO_PACKAGE_TASK_VARIABLE.clone(), package_name)
             });
 
-        let go_module_root_variable = local_abs_path
-            .as_deref()
-            .and_then(|local_abs_path| local_abs_path.parent())
-            .map(|buffer_dir| {
+        let go_module_root_variable =
+            local_abs_path.as_deref().and_then(|local_abs_path| local_abs_path.parent()).map(|buffer_dir| {
                 // Walk dirtree up until getting the first go.mod file
                 let module_dir = buffer_dir
                     .ancestors()
@@ -428,9 +382,7 @@ impl ContextProvider for GoContextProvider {
         let go_subtest_variable = extract_subtest_name(_subtest_name.unwrap_or(""))
             .map(|subtest_name| (GO_SUBTEST_NAME_TASK_VARIABLE.clone(), subtest_name));
 
-        let _table_test_case_name = variables.get(&VariableName::Custom(Cow::Borrowed(
-            "_table_test_case_name",
-        )));
+        let _table_test_case_name = variables.get(&VariableName::Custom(Cow::Borrowed("_table_test_case_name")));
 
         let go_table_test_case_variable = _table_test_case_name
             .and_then(extract_subtest_name)
@@ -456,11 +408,8 @@ impl ContextProvider for GoContextProvider {
     }
 
     fn associated_tasks(&self, _: Option<Entity<Buffer>>, _: &App) -> Task<Option<TaskTemplates>> {
-        let package_cwd = if GO_PACKAGE_TASK_VARIABLE.template_value() == "." {
-            None
-        } else {
-            Some("$ZED_DIRNAME".to_string())
-        };
+        let package_cwd =
+            if GO_PACKAGE_TASK_VARIABLE.template_value() == "." { None } else { Some("$ZED_DIRNAME".to_string()) };
         let module_cwd = Some(GO_MODULE_ROOT_TASK_VARIABLE.template_value());
 
         Task::ready(Some(TaskTemplates(vec![
@@ -505,10 +454,7 @@ impl ContextProvider for GoContextProvider {
                     ),
                 ],
                 cwd: package_cwd.clone(),
-                tags: vec![
-                    "go-table-test-case".to_owned(),
-                    "go-table-test-case-without-explicit-variable".to_owned(),
-                ],
+                tags: vec!["go-table-test-case".to_owned(), "go-table-test-case-without-explicit-variable".to_owned()],
                 ..TaskTemplate::default()
             },
             TaskTemplate {
@@ -518,11 +464,7 @@ impl ContextProvider for GoContextProvider {
                     VariableName::Symbol.template_value(),
                 ),
                 command: "go".into(),
-                args: vec![
-                    "test".into(),
-                    "-run".into(),
-                    format!("\\^{}\\$", VariableName::Symbol.template_value(),),
-                ],
+                args: vec!["test".into(), "-run".into(), format!("\\^{}\\$", VariableName::Symbol.template_value(),)],
                 tags: vec!["go-test".to_owned()],
                 cwd: package_cwd.clone(),
                 ..TaskTemplate::default()
@@ -534,11 +476,7 @@ impl ContextProvider for GoContextProvider {
                     VariableName::Symbol.template_value(),
                 ),
                 command: "go".into(),
-                args: vec![
-                    "test".into(),
-                    "-run".into(),
-                    format!("\\^{}\\$", VariableName::Symbol.template_value(),),
-                ],
+                args: vec!["test".into(), "-run".into(), format!("\\^{}\\$", VariableName::Symbol.template_value(),)],
                 tags: vec!["go-example".to_owned()],
                 cwd: package_cwd.clone(),
                 ..TaskTemplate::default()
@@ -654,22 +592,14 @@ impl ContextProvider for GoContextProvider {
 }
 
 fn extract_subtest_name(input: &str) -> Option<String> {
-    let content = if input.starts_with('`') && input.ends_with('`') {
-        input.trim_matches('`')
-    } else {
-        input.trim_matches('"')
-    };
+    let content =
+        if input.starts_with('`') && input.ends_with('`') { input.trim_matches('`') } else { input.trim_matches('"') };
 
-    let processed = content
-        .chars()
-        .map(|c| if c.is_whitespace() { '_' } else { c })
-        .collect::<String>();
+    let processed = content.chars().map(|c| if c.is_whitespace() { '_' } else { c }).collect::<String>();
 
     Some(
         GO_ESCAPE_SUBTEST_NAME_REGEX
-            .replace_all(&processed, |caps: &regex::Captures| {
-                format!("\\{}", &caps[0])
-            })
+            .replace_all(&processed, |caps: &regex::Captures| format!("\\{}", &caps[0]))
             .to_string(),
     )
 }

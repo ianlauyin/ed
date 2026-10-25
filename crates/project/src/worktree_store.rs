@@ -26,8 +26,6 @@ use gpui::Task;
 use gpui::TaskExt;
 use gpui::WeakEntity;
 use itertools::Either;
-use postage::prelude::Stream as _;
-use postage::watch;
 use rpc::AnyProtoClient;
 use rpc::ErrorExt;
 use rpc::TypedEnvelope;
@@ -248,7 +246,7 @@ impl WorktreeStore {
             worktrees: Vec::new(),
             scanning_enabled: true,
             retain_worktrees,
-            initial_scan_complete: watch::channel_with(true),
+            initial_scan_complete: watch::channel(true),
             state: WorktreeStoreState::Local { fs },
         }
     }
@@ -268,7 +266,7 @@ impl WorktreeStore {
             worktrees: Vec::new(),
             scanning_enabled: true,
             retain_worktrees,
-            initial_scan_complete: watch::channel_with(true),
+            initial_scan_complete: watch::channel(true),
             state: WorktreeStoreState::Remote { upstream_client, upstream_project_id, path_style },
         }
     }
@@ -298,7 +296,7 @@ impl WorktreeStore {
 
     pub fn disable_scanner(&mut self) {
         self.scanning_enabled = false;
-        *self.initial_scan_complete.0.borrow_mut() = true;
+        self.initial_scan_complete.0.send(true).ok();
     }
 
     /// Returns a future that resolves when all visible worktrees have completed
@@ -306,11 +304,8 @@ impl WorktreeStore {
     pub fn wait_for_initial_scan(&self) -> impl Future<Output = ()> + use<> {
         let mut rx = self.initial_scan_complete.1.clone();
         async move {
-            let mut done = *rx.borrow();
-            while !done {
-                if let Some(value) = rx.recv().await {
-                    done = value;
-                } else {
+            while !*watch::Receiver::borrow(&mut rx) {
+                if rx.changed().await.is_err() {
                     break;
                 }
             }
@@ -319,7 +314,7 @@ impl WorktreeStore {
 
     /// Returns whether all visible worktrees have completed their initial scan.
     pub fn initial_scan_completed(&self) -> bool {
-        *self.initial_scan_complete.1.borrow()
+        *watch::Receiver::borrow(&mut self.initial_scan_complete.1.clone())
     }
 
     /// Checks whether all visible worktrees have completed their initial scan
@@ -327,7 +322,7 @@ impl WorktreeStore {
     fn update_initial_scan_state(&mut self, cx: &App) {
         let complete = self.loading_worktrees.is_empty()
             && self.visible_worktrees(cx).all(|wt| wt.read(cx).completed_scan_id() >= 1);
-        *self.initial_scan_complete.0.borrow_mut() = complete;
+        self.initial_scan_complete.0.send(complete).ok();
     }
 
     /// Spawns a detached task that waits for a worktree's initial scan to complete,
@@ -624,7 +619,7 @@ impl WorktreeStore {
                             } else {
                                 // First refresh the parent directory (in case it was newly created)
                                 if let Some(parent) = new_project_path.path.parent() {
-                                    let _ = local.refresh_entries_for_paths(vec![parent.into()]);
+                                    drop(local.refresh_entries_for_paths(vec![parent.into()]));
                                 }
                                 // Then refresh the new path
                                 local.refresh_entry(new_project_path.path.clone(), Some(old_entry.path), cx)
@@ -721,7 +716,7 @@ impl WorktreeStore {
             self.loading_worktrees.insert(abs_path.clone(), loading_task.shared());
 
             if visible && self.scanning_enabled {
-                *self.initial_scan_complete.0.borrow_mut() = false;
+                self.initial_scan_complete.0.send(false).ok();
             }
         }
         let task = self.loading_worktrees.get(&abs_path).unwrap().clone();

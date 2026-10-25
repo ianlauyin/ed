@@ -12,13 +12,13 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
+async-channel.workspace = true
 db.workspace = true
 fuzzy_nucleo.workspace = true
 gpui.workspace = true
 menu.workspace = true
 log.workspace = true
 picker.workspace = true
-postage.workspace = true
 serde.workspace = true
 settings.workspace = true
 time.workspace = true

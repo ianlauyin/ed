@@ -8,7 +8,6 @@ use anyhow::Result;
 use collections::HashMap;
 use collections::HashSet;
 use collections::hash_map;
-use futures::StreamExt;
 use futures::channel::oneshot;
 use gpui::App;
 use gpui::Asset;
@@ -339,7 +338,7 @@ pub struct ImageStore {
     worktree_store: Entity<WorktreeStore>,
     #[allow(clippy::type_complexity)]
     loading_images_by_path:
-        HashMap<ProjectPath, postage::watch::Receiver<Option<Result<Entity<ImageItem>, Arc<anyhow::Error>>>>>,
+        HashMap<ProjectPath, watch::Receiver<Option<Result<Entity<ImageItem>, Arc<anyhow::Error>>>>>,
 }
 
 impl ImageStore {
@@ -415,19 +414,20 @@ impl ImageStore {
 
             // Otherwise, record the fact that this path is now being loaded.
             hash_map::Entry::Vacant(entry) => {
-                let (mut tx, rx) = postage::watch::channel();
+                let (mut tx, rx) = watch::channel(None);
                 entry.insert(rx.clone());
 
                 let load_image = self.state.open_image(project_path.path.clone(), worktree, cx);
 
                 cx.spawn(async move |this, cx| {
                     let load_result = load_image.await;
-                    *tx.borrow_mut() = Some(this.update(cx, |this, _cx| {
+                    let result = this.update(cx, |this, _cx| {
                         // Record the fact that the image is no longer loading.
                         this.loading_images_by_path.remove(&project_path);
                         let image = load_result.map_err(Arc::new)?;
                         Ok(image)
-                    })?);
+                    })?;
+                    tx.send(Some(result)).ok();
                     anyhow::Ok(())
                 })
                 .detach();
@@ -439,7 +439,7 @@ impl ImageStore {
     }
 
     pub async fn wait_for_loading_image(
-        mut receiver: postage::watch::Receiver<Option<Result<Entity<ImageItem>, Arc<anyhow::Error>>>>,
+        mut receiver: watch::Receiver<Option<Result<Entity<ImageItem>, Arc<anyhow::Error>>>>,
     ) -> Result<Entity<ImageItem>, Arc<anyhow::Error>> {
         loop {
             if let Some(result) = receiver.borrow().as_ref() {
@@ -448,7 +448,9 @@ impl ImageStore {
                     Err(e) => return Err(e.to_owned()),
                 }
             }
-            receiver.next().await;
+            if receiver.changed().await.is_err() {
+                return Err(Arc::new(anyhow::anyhow!("image loading was dropped")));
+            }
         }
     }
 

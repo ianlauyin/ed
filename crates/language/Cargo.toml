@@ -30,7 +30,6 @@ language_core.workspace = true
 log.workspace = true
 lsp.workspace = true
 parking_lot.workspace = true
-postage = { workspace = true, features = ["futures-traits", "logging", "blocking"] }
 regex.workspace = true
 rpc.workspace = true
 semver.workspace = true

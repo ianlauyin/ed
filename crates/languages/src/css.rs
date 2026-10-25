@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use language::{LspAdapter, LspAdapterDelegate};
-use lsp::{LanguageServerBinary, LanguageServerName, Uri};
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
+use lsp::Uri;
 use project::lsp_store::language_server_settings;
 use serde_json::json;
-use std::sync::Arc;
 use util::merge_json_value_into;
 
 pub struct CssLspAdapter;
@@ -59,8 +63,7 @@ impl LspAdapter for CssLspAdapter {
         });
 
         let project_options = cx.update(|cx| {
-            language_server_settings(delegate.as_ref(), &self.name(), cx)
-                .and_then(|s| s.settings.clone())
+            language_server_settings(delegate.as_ref(), &self.name(), cx).and_then(|s| s.settings.clone())
         });
 
         if let Some(override_options) = project_options {

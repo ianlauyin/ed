@@ -1,12 +1,20 @@
+use std::sync::Arc;
+use std::vec;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use language::{LanguageServerName, LspAdapter, LspAdapterDelegate};
-use lsp::{LanguageServerBinary, Uri};
-use project::{ContextProviderWithTasks, lsp_store::language_server_settings};
+use language::LanguageServerName;
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use lsp::LanguageServerBinary;
+use lsp::Uri;
+use project::ContextProviderWithTasks;
+use project::lsp_store::language_server_settings;
 use serde_json::Value;
-use std::{sync::Arc, vec};
-use task::{TaskTemplate, TaskTemplates, VariableName};
+use task::TaskTemplate;
+use task::TaskTemplates;
+use task::VariableName;
 
 pub(super) fn bash_task_context() -> ContextProviderWithTasks {
     ContextProviderWithTasks::new(TaskTemplates(vec![
@@ -41,13 +49,7 @@ impl LspAdapter for BashLspAdapter {
         delegate: &Arc<dyn LspAdapterDelegate>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        crate::npx::node_server_binary(
-            delegate,
-            &[Self::PACKAGE_NAME],
-            Self::PACKAGE_NAME,
-            &["start"],
-        )
-        .await
+        crate::npx::node_server_binary(delegate, &[Self::PACKAGE_NAME], Self::PACKAGE_NAME, &["start"]).await
     }
 
     async fn workspace_configuration(
@@ -57,8 +59,7 @@ impl LspAdapter for BashLspAdapter {
         cx: &mut AsyncApp,
     ) -> Result<Value> {
         let settings = cx.update(|cx| {
-            language_server_settings(delegate.as_ref(), &self.name(), cx)
-                .and_then(|s| s.settings.clone())
+            language_server_settings(delegate.as_ref(), &self.name(), cx).and_then(|s| s.settings.clone())
         });
 
         Ok(settings.unwrap_or_default())

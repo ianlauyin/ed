@@ -97,10 +97,6 @@ pub use ignore::IgnoreKind;
 pub use ignore::IgnoreStack;
 use language::DiskState;
 use parking_lot::Mutex;
-use postage::barrier;
-use postage::prelude::Sink as _;
-use postage::prelude::Stream as _;
-use postage::watch;
 use rpc::AnyProtoClient;
 use rpc::proto::split_worktree_update;
 use rpc::proto::{self};
@@ -207,12 +203,12 @@ pub struct LocalWorktree {
 
 pub struct PathPrefixScanRequest {
     path: Arc<RelPath>,
-    done: SmallVec<[barrier::Sender; 1]>,
+    done: SmallVec<[oneshot::Sender<()>; 1]>,
 }
 
 struct ScanRequest {
     relative_paths: Vec<Arc<RelPath>>,
-    done: SmallVec<[barrier::Sender; 1]>,
+    done: SmallVec<[oneshot::Sender<()>; 1]>,
 }
 
 pub struct RemoteWorktree {
@@ -484,7 +480,7 @@ enum ScanState {
     Updated {
         snapshot: LocalSnapshot,
         changes: UpdatedEntriesSet,
-        barrier: SmallVec<[barrier::Sender; 1]>,
+        barrier: SmallVec<[oneshot::Sender<()>; 1]>,
         scanning: bool,
     },
     RootUpdated {
@@ -607,7 +603,7 @@ impl Worktree {
             let mut worktree = LocalWorktree {
                 next_entry_id,
                 snapshot,
-                is_scanning: watch::channel_with(true),
+                is_scanning: watch::channel(true),
                 snapshot_subscriptions: VecDeque::default(),
                 update_observer: None,
                 scan_requests_tx,
@@ -647,7 +643,7 @@ impl Worktree {
 
             let background_snapshot = Arc::new(Mutex::new((snapshot.clone(), Vec::<proto::UpdateWorktree>::new())));
             let (background_updates_tx, mut background_updates_rx) = mpsc::unbounded::<proto::UpdateWorktree>();
-            let (mut snapshot_updated_tx, mut snapshot_updated_rx) = watch::channel();
+            let (mut snapshot_updated_tx, mut snapshot_updated_rx) = watch::channel(());
 
             let worktree_id = snapshot.id();
             let settings_location = Some(SettingsLocation { worktree_id, path: RelPath::empty() });
@@ -677,7 +673,7 @@ impl Worktree {
                         lock.0.apply_remote_update(update.clone(), &settings.parent_dir_scan_inclusions);
                         lock.1.push(update);
                     }
-                    snapshot_updated_tx.send(()).await.ok();
+                    snapshot_updated_tx.send(()).ok();
                 }
             })
             .detach();
@@ -685,12 +681,11 @@ impl Worktree {
             // On the foreground task, update to the latest snapshot and notify
             // any update observer of all updates that led to that snapshot.
             cx.spawn(async move |this, cx| {
-                while (snapshot_updated_rx.recv().await).is_some() {
+                while snapshot_updated_rx.changed().await.is_ok() {
                     this.update(cx, |this, cx| {
                         let this = this.as_remote_mut().unwrap();
 
-                        // The watch channel delivers an initial signal before
-                        // any real updates arrive. Skip these spurious wakeups.
+                        // An earlier wakeup may already have drained these updates.
                         if this.background_snapshot.lock().1.is_empty() {
                             return;
                         }
@@ -1213,7 +1208,7 @@ impl LocalWorktree {
 
         // Cleans up old always included entries to ensure they get updated properly. Otherwise,
         // nested always included entries may not get updated and will result in out-of-date info.
-        self.refresh_entries_for_paths(always_included_entries);
+        drop(self.refresh_entries_for_paths(always_included_entries));
     }
 
     fn start_background_scanner(
@@ -1281,10 +1276,10 @@ impl LocalWorktree {
                     let this = this.as_local_mut().unwrap();
                     match state {
                         ScanState::Started => {
-                            *this.is_scanning.0.borrow_mut() = true;
+                            this.is_scanning.0.send(true).ok();
                         }
                         ScanState::Updated { snapshot, changes, barrier, scanning } => {
-                            *this.is_scanning.0.borrow_mut() = scanning;
+                            this.is_scanning.0.send(scanning).ok();
                             this.set_snapshot(snapshot, changes, cx);
                             drop(barrier);
                         }
@@ -1303,7 +1298,7 @@ impl LocalWorktree {
             }
         });
         self._background_scanner_tasks = vec![background_scanner, scan_state_updater];
-        *self.is_scanning.0.borrow_mut() = true;
+        self.is_scanning.0.send(true).ok();
     }
 
     fn set_snapshot(
@@ -1456,11 +1451,8 @@ impl LocalWorktree {
     pub fn scan_complete(&self) -> impl Future<Output = ()> + use<> {
         let mut is_scanning_rx = self.is_scanning.1.clone();
         async move {
-            let mut is_scanning = *is_scanning_rx.borrow();
-            while is_scanning {
-                if let Some(value) = is_scanning_rx.recv().await {
-                    is_scanning = value;
-                } else {
+            while *watch::Receiver::borrow(&mut is_scanning_rx) {
+                if is_scanning_rx.changed().await.is_err() {
                     break;
                 }
             }
@@ -1708,8 +1700,8 @@ impl LocalWorktree {
             };
 
             this.update(cx, |this, _| this.as_local_mut().unwrap().refresh_entries_for_paths(vec![entry.path]))?
-                .recv()
-                .await;
+                .await
+                .ok();
 
             Ok(trash_id)
         })
@@ -1727,8 +1719,8 @@ impl LocalWorktree {
             };
 
             this.update(cx, |this, _| this.as_local_mut().unwrap().refresh_entries_for_paths(vec![entry.path]))?
-                .recv()
-                .await;
+                .await
+                .ok();
 
             Ok(())
         })
@@ -1799,8 +1791,8 @@ impl LocalWorktree {
             })
             .await
             .log_err();
-            let mut refresh = cx.read_entity(&this.upgrade().with_context(|| "Dropped worktree")?, |this, _| {
-                anyhow::Ok::<postage::barrier::Receiver>(
+            let refresh = cx.read_entity(&this.upgrade().with_context(|| "Dropped worktree")?, |this, _| {
+                anyhow::Ok::<oneshot::Receiver<()>>(
                     this.as_local()
                         .with_context(|| "Worktree is not local")?
                         .refresh_entries_for_paths(paths_to_refresh.clone()),
@@ -1808,7 +1800,7 @@ impl LocalWorktree {
             })?;
 
             cx.background_spawn(async move {
-                refresh.next().await;
+                refresh.await.ok();
                 anyhow::Ok(())
             })
             .await
@@ -1823,30 +1815,30 @@ impl LocalWorktree {
 
     fn expand_entry(&self, entry_id: ProjectEntryId, cx: &Context<Worktree>) -> Option<Task<Result<()>>> {
         let path = self.entry_for_id(entry_id)?.path.clone();
-        let mut refresh = self.refresh_entries_for_paths(vec![path]);
+        let refresh = self.refresh_entries_for_paths(vec![path]);
         Some(cx.background_spawn(async move {
-            refresh.next().await;
+            refresh.await.ok();
             Ok(())
         }))
     }
 
     fn expand_all_for_entry(&self, entry_id: ProjectEntryId, cx: &Context<Worktree>) -> Option<Task<Result<()>>> {
         let path = self.entry_for_id(entry_id).unwrap().path.clone();
-        let mut rx = self.add_path_prefix_to_scan(path);
+        let rx = self.add_path_prefix_to_scan(path);
         Some(cx.background_spawn(async move {
-            rx.next().await;
+            rx.await.ok();
             Ok(())
         }))
     }
 
-    pub fn refresh_entries_for_paths(&self, paths: Vec<Arc<RelPath>>) -> barrier::Receiver {
-        let (tx, rx) = barrier::channel();
+    pub fn refresh_entries_for_paths(&self, paths: Vec<Arc<RelPath>>) -> oneshot::Receiver<()> {
+        let (tx, rx) = oneshot::channel();
         self.scan_requests_tx.try_send(ScanRequest { relative_paths: paths, done: smallvec![tx] }).ok();
         rx
     }
 
-    pub fn add_path_prefix_to_scan(&self, path_prefix: Arc<RelPath>) -> barrier::Receiver {
-        let (tx, rx) = barrier::channel();
+    pub fn add_path_prefix_to_scan(&self, path_prefix: Arc<RelPath>) -> oneshot::Receiver<()> {
+        let (tx, rx) = oneshot::channel();
         self.path_prefixes_to_scan_tx.try_send(PathPrefixScanRequest { path: path_prefix, done: smallvec![tx] }).ok();
         rx
     }
@@ -1866,10 +1858,10 @@ impl LocalWorktree {
             vec![path.clone()]
         };
         let t0 = Instant::now();
-        let mut refresh = self.refresh_entries_for_paths(paths);
+        let refresh = self.refresh_entries_for_paths(paths);
         // todo(lw): Hot foreground spawn
         cx.spawn(async move |this, cx| {
-            refresh.recv().await;
+            refresh.await.ok();
             log::trace!("refreshed entry {path:?} in {:?}", t0.elapsed());
             let new_entry = this.read_with(cx, |this, _| {
                 this.entry_for_path(&path)
@@ -1886,11 +1878,11 @@ impl LocalWorktree {
         Fut: 'static + Send + Future<Output = bool>,
     {
         if let Some(observer) = self.update_observer.as_mut() {
-            *observer.resume_updates.borrow_mut() = ();
+            observer.resume_updates.send(()).ok();
             return;
         }
 
-        let (resume_updates_tx, mut resume_updates_rx) = watch::channel::<()>();
+        let (resume_updates_tx, mut resume_updates_rx) = watch::channel(());
         let (snapshots_tx, mut snapshots_rx) = mpsc::unbounded::<(LocalSnapshot, UpdatedEntriesSet)>();
         snapshots_tx.unbounded_send((self.snapshot(), Arc::default())).ok();
 
@@ -1906,14 +1898,14 @@ impl LocalWorktree {
                 };
 
                 for update in proto::split_worktree_update(update) {
-                    let _ = resume_updates_rx.try_recv();
+                    drop(watch::Receiver::borrow(&mut resume_updates_rx));
                     loop {
                         let result = callback(update.clone());
                         if result.await {
                             break;
                         } else {
                             log::info!("waiting to resume updates");
-                            if resume_updates_rx.next().await.is_none() {
+                            if resume_updates_rx.changed().await.is_err() {
                                 return Some(());
                             }
                         }
@@ -4469,7 +4461,7 @@ impl BackgroundScanner {
     async fn send_status_update(
         &self,
         scanning: bool,
-        barrier: SmallVec<[barrier::Sender; 1]>,
+        barrier: SmallVec<[oneshot::Sender<()>; 1]>,
         event_roots: &[EventRoot],
     ) -> bool {
         let mut state = self.state.lock().await;

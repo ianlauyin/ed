@@ -1,7 +1,10 @@
-use crate::UndoOperation;
-use clock::Lamport;
 use std::cmp;
-use sum_tree::{Bias, SumTree};
+
+use clock::Lamport;
+use sum_tree::Bias;
+use sum_tree::SumTree;
+
+use crate::UndoOperation;
 
 #[derive(Copy, Clone, Debug)]
 struct UndoMapEntry {
@@ -33,10 +36,7 @@ struct UndoMapKey {
 
 impl sum_tree::ContextLessSummary for UndoMapKey {
     fn zero() -> Self {
-        UndoMapKey {
-            edit_id: Lamport::MIN,
-            undo_id: Lamport::MIN,
-        }
+        UndoMapKey { edit_id: Lamport::MIN, undo_id: Lamport::MIN }
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -54,10 +54,7 @@ impl UndoMap {
             .iter()
             .map(|(edit_id, count)| {
                 sum_tree::Edit::Insert(UndoMapEntry {
-                    key: UndoMapKey {
-                        edit_id: *edit_id,
-                        undo_id: undo.timestamp,
-                    },
+                    key: UndoMapKey { edit_id: *edit_id, undo_id: undo.timestamp },
                     undo_count: *count,
                 })
             })
@@ -70,13 +67,7 @@ impl UndoMap {
     }
     pub fn was_undone(&self, edit_id: clock::Lamport, version: &clock::Global) -> bool {
         let mut cursor = self.0.cursor::<UndoMapKey>(());
-        cursor.seek(
-            &UndoMapKey {
-                edit_id,
-                undo_id: Lamport::MIN,
-            },
-            Bias::Left,
-        );
+        cursor.seek(&UndoMapKey { edit_id, undo_id: Lamport::MIN }, Bias::Left);
 
         let mut undo_count = 0;
         for entry in cursor {
@@ -94,13 +85,7 @@ impl UndoMap {
 
     pub fn undo_count(&self, edit_id: clock::Lamport) -> u32 {
         let mut cursor = self.0.cursor::<UndoMapKey>(());
-        cursor.seek(
-            &UndoMapKey {
-                edit_id,
-                undo_id: Lamport::MIN,
-            },
-            Bias::Left,
-        );
+        cursor.seek(&UndoMapKey { edit_id, undo_id: Lamport::MIN }, Bias::Left);
 
         let mut undo_count = 0;
         for entry in cursor {

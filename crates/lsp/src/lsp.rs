@@ -49,8 +49,6 @@ pub use lsp_types::*;
 use notification::DidChangeWorkspaceFolders;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use postage::barrier;
-use postage::prelude::Stream;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -149,7 +147,7 @@ pub struct LanguageServer {
     executor: BackgroundExecutor,
     #[allow(clippy::type_complexity)]
     io_tasks: Mutex<Option<(Task<Option<()>>, Task<Option<()>>)>>,
-    output_done_rx: Mutex<Option<barrier::Receiver>>,
+    output_done_rx: Mutex<Option<oneshot::Receiver<()>>>,
     server: Arc<Mutex<Option<Child>>>,
     workspace_folders: Option<Arc<Mutex<BTreeSet<Uri>>>>,
     root_uri: Uri,
@@ -590,7 +588,7 @@ impl LanguageServer {
     {
         let (outbound_tx, outbound_rx) = async_channel::unbounded::<OutboundMessage>();
         let (serialized_tx, serialized_rx) = async_channel::unbounded::<String>();
-        let (output_done_tx, output_done_rx) = barrier::channel();
+        let (output_done_tx, output_done_rx) = oneshot::channel::<()>();
         let notification_handlers = Arc::new(Mutex::new(HashMap::<_, NotificationHandler>::default()));
         let response_handlers = Arc::new(Mutex::new(Some(HashMap::<_, ResponseHandler>::default())));
         let pending_respond_tasks = PendingRespondTasks::default();
@@ -798,7 +796,7 @@ impl LanguageServer {
     async fn handle_outgoing_messages<Stdin>(
         stdin: Stdin,
         outbound_rx: async_channel::Receiver<String>,
-        output_done_tx: barrier::Sender,
+        output_done_tx: oneshot::Sender<()>,
         response_handlers: Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
         io_handlers: Arc<Mutex<HashMap<i32, IoHandler>>>,
     ) -> anyhow::Result<()>
@@ -1111,7 +1109,7 @@ impl LanguageServer {
         let next_id = AtomicI32::new(self.next_id.load(SeqCst));
         let outbound_tx = self.outbound_tx.clone();
         let executor = self.executor.clone();
-        let mut output_done = self.output_done_rx.lock().take().unwrap();
+        let output_done = self.output_done_rx.lock().take().unwrap();
         let shutdown_request = Self::request_internal::<request::Shutdown>(
             &next_id,
             &response_handlers,
@@ -1156,7 +1154,7 @@ impl LanguageServer {
             outbound_tx.close();
             if !shutdown_timed_out {
                 select! {
-                    _ = output_done.recv().fuse() => {},
+                    _ = output_done.fuse() => {},
                     _ = timer => {
                         log::info!("timeout draining output for language server {name} (id {server_id}) during shutdown");
                     },

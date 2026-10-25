@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use language::LspAdapterDelegate;
 use lsp::LanguageServerBinary;
-use std::sync::Arc;
 
 /// Resolves a Node-based language server: `bin` on the shell `PATH`, otherwise
 /// the latest `packages` run through `npx`, which prefers a version installed
@@ -57,14 +58,7 @@ mod tests {
     fn runs_bin_from_requested_packages() {
         assert_eq!(
             npx_arguments(&["typescript@^7"], "tsc", &["--lsp", "--stdio"],),
-            [
-                "--yes",
-                "--package",
-                "typescript@^7",
-                "tsc",
-                "--lsp",
-                "--stdio"
-            ]
+            ["--yes", "--package", "typescript@^7", "tsc", "--lsp", "--stdio"]
         );
     }
 }

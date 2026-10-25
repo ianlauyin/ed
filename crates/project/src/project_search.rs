@@ -25,8 +25,8 @@ use file_content::detect_encoding;
 use fs::Fs;
 use fs::ReadSeek;
 use futures::FutureExt as _;
-use futures::SinkExt;
 use futures::StreamExt;
+use futures::channel::oneshot;
 use futures::select_biased;
 use futures::stream::FuturesOrdered;
 use gpui::App;
@@ -40,7 +40,6 @@ use language::Buffer;
 use language::BufferSnapshot;
 use language::Point;
 use parking_lot::Mutex;
-use postage::oneshot;
 use rpc::AnyProtoClient;
 use rpc::proto;
 use text::Rope;
@@ -490,8 +489,8 @@ impl Search {
     ) {
         let mut rx = pin!(rx);
         let mut matched = 0;
-        while let Some(mut next_path_result) = rx.next().await {
-            let Some((successful_path, line_hint)) = next_path_result.next().await else {
+        while let Some(next_path_result) = rx.next().await {
+            let Ok((successful_path, line_hint)) = next_path_result.await else {
                 // This file did not produce a match, hence skip it.
                 continue;
             };
@@ -578,12 +577,11 @@ impl Search {
         rx: Receiver<oneshot::Receiver<(Entity<Buffer>, Vec<Range<language::Anchor>>)>>,
         tx: Sender<SearchResult>,
     ) {
-        use postage::stream::Stream;
         _ = maybe!(async move {
             let mut matched_buffers = 0;
             let mut matches = 0;
-            while let Ok(mut next_buffer_matches) = rx.recv().await {
-                let Some((buffer, ranges)) = next_buffer_matches.recv().await else {
+            while let Ok(next_buffer_matches) = rx.recv().await {
+                let Ok((buffer, ranges)) = next_buffer_matches.await else {
                     continue;
                 };
 
@@ -722,7 +720,7 @@ struct RequestHandler<'worker> {
 
 impl RequestHandler<'_> {
     async fn handle_find_all_matches(&self, request: FindAllMatchesRequest) {
-        let FindAllMatchesRequest { buffer, snapshot, line_hint, mut report_matches } = request;
+        let FindAllMatchesRequest { buffer, snapshot, line_hint, report_matches } = request;
         let range_offset = match line_hint {
             MatchPositionHint::Line(line_number) if line_number > 0 => {
                 snapshot.point_to_offset(Point::new(line_number, 0))
@@ -742,10 +740,10 @@ impl RequestHandler<'_> {
             })
             .collect::<Vec<_>>();
 
-        _ = report_matches.send((buffer, ranges)).await;
+        _ = report_matches.send((buffer, ranges));
     }
 
-    async fn handle_find_first_match(&self, mut entry: MatchingEntry) {
+    async fn handle_find_first_match(&self, entry: MatchingEntry) {
         async move {
             let abs_path = entry.worktree_root.join(entry.path.path.as_std_path());
             let fs = self.fs.context("Trying to query filesystem in remote project search")?;
@@ -784,7 +782,7 @@ impl RequestHandler<'_> {
 
             if first_match.is_some() {
                 // Yes, we should scan the whole file.
-                entry.should_scan_tx.send((entry.path, MatchPositionHint::default())).await?;
+                _ = entry.should_scan_tx.send((entry.path, MatchPositionHint::default()));
             }
             Ok(())
         }
@@ -811,7 +809,7 @@ impl RequestHandler<'_> {
 
     async fn handle_scan_path(&self, req: InputPath) {
         _ = maybe!(async move {
-            let InputPath { entry, snapshot, mut should_scan_tx } = req;
+            let InputPath { entry, snapshot, should_scan_tx } = req;
 
             if entry.is_fifo || !entry.is_file() {
                 return Ok(());
@@ -834,12 +832,10 @@ impl RequestHandler<'_> {
                 if self.query.detect(&mut text.bytes_in_range(0..text.len())).await?.is_none() {
                     return Ok(());
                 }
-                should_scan_tx
-                    .send((
-                        ProjectPath { worktree_id: snapshot.id(), path: entry.path.clone() },
-                        MatchPositionHint::default(),
-                    ))
-                    .await?;
+                _ = should_scan_tx.send((
+                    ProjectPath { worktree_id: snapshot.id(), path: entry.path.clone() },
+                    MatchPositionHint::default(),
+                ));
             } else {
                 self.confirm_contents_will_match_tx
                     .send(MatchingEntry {

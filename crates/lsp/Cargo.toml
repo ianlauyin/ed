@@ -22,7 +22,6 @@ gpui_util.workspace = true
 log.workspace = true
 lsp_types.workspace = true
 parking_lot.workspace = true
-postage.workspace = true
 settings_content.workspace = true
 schemars.workspace = true
 serde.workspace = true

@@ -80,7 +80,6 @@ members = [
     "crates/spell_check",
     "crates/sqlez",
     "crates/sqlez_macros",
-    "crates/streaming_diff",
     "crates/sum_tree",
     "crates/svg_preview",
     "crates/syntax_theme",
@@ -234,7 +233,7 @@ base64 = "0.22"
 bitflags = "2.6.0"
 block2 = "0.6"
 bytes = "1.0"
-cbindgen = { version = "0.28.0", default-features = false }
+cbindgen = { version = "0.29", default-features = false }
 chardetng = "0.1"
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 clap_complete = "4.4"
@@ -272,12 +271,12 @@ imara-diff = { version = "0.2", default-features = false }
 indexmap = { version = "2.7.0", features = ["serde"] }
 indoc = "2"
 inventory = "0.3.19"
-itertools = "0.14.0"
+itertools = "0.15"
 libc = "0.2"
 libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 linkify = "0.10.0"
 log = { version = "0.4", default-features = false, features = ["std"] }
-lru = "0.16"
+lru = "0.19"
 mach2 = "0.6"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
@@ -337,14 +336,13 @@ parking_lot = "0.12.1"
 pathfinder_geometry = "0.5"
 percent-encoding = "2.3.2"
 plist = "1.3"
-postage = { version = "0.5", default-features = false }
 proc-macro2 = "1.0.93"
 prost = "0.14"
 prost-build = { version = "0.14", default-features = false }
-protox = "0.9"
+protox = "0.10"
 pulldown-cmark = { version = "0.13.0", default-features = false }
 quote = "1.0.9"
-rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }
+rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "sys_rng"] }
 raw-window-handle = "0.6"
 rayon = "1.8"
 regex = { version = "1.5", default-features = false, features = ["std", "perf"] }

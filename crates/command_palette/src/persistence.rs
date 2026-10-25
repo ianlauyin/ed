@@ -1,13 +1,12 @@
 use anyhow::Result;
-use db::{
-    query,
-    sqlez::{
-        bindable::Column, domain::Domain, statement::Statement,
-        thread_safe_connection::ThreadSafeConnection,
-    },
-    sqlez_macros::sql,
-};
-use serde::{Deserialize, Serialize};
+use db::query;
+use db::sqlez::bindable::Column;
+use db::sqlez::domain::Domain;
+use db::sqlez::statement::Statement;
+use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+use db::sqlez_macros::sql;
+use serde::Deserialize;
+use serde::Serialize;
 use time::OffsetDateTime;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -23,11 +22,8 @@ impl Column for SerializedCommandUsage {
         let (invocations, next_index): (u16, i32) = Column::column(statement, next_index)?;
         let (last_invoked_raw, next_index): (i64, i32) = Column::column(statement, next_index)?;
 
-        let usage = Self {
-            command_name,
-            invocations,
-            last_invoked: OffsetDateTime::from_unix_timestamp(last_invoked_raw)?,
-        };
+        let usage =
+            Self { command_name, invocations, last_invoked: OffsetDateTime::from_unix_timestamp(last_invoked_raw)? };
         Ok((usage, next_index))
     }
 }
@@ -56,11 +52,8 @@ impl CommandPaletteDB {
     ) -> Result<()> {
         let command_name = command_name.into();
         let user_query = user_query.into();
-        log::debug!(
-            "Writing command invocation: command_name={command_name}, user_query={user_query}"
-        );
-        self.write_command_invocation_internal(command_name, user_query)
-            .await
+        log::debug!("Writing command invocation: command_name={command_name}, user_query={user_query}");
+        self.write_command_invocation_internal(command_name, user_query).await
     }
 
     query! {

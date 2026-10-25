@@ -26,8 +26,6 @@ Snapshot: Oct 2026 (commit `c411ccc1`), macOS aarch64 build of `zed`, `cli` and
 | local | 106 | 473k | – |
 | external | 460 | 3.4M | 2.2M |
 
-`streaming_diff` is not reachable from any binary (dead crate).
-
 ## Largest local crates
 
 | crate | lines |
@@ -85,6 +83,20 @@ deps: removing them only saves their own code.
 - [ ] `proto`: check in generated code to drop the prost/protox build stack.
 - [ ] `stacksafe`: pulls `object` (48k) through `psm`'s build script; check need.
 - [x] `cli`: removed with `ipc-channel`, `quick-xml`, `plist`.
-- [ ] Remove dead `streaming_diff`.
-- [ ] Duplicate versions: `syn` 2/3, `hashbrown` ×3, `getrandom` ×3, and two
-  each of `unicode-width`, `toml`, `thiserror`, `rand`, `itertools`, `logos`.
+- [x] Remove dead `streaming_diff`.
+- [x] Duplicate versions: bumped `rand` 0.10, `itertools` 0.15, `lru` 0.19,
+  `cbindgen` 0.29, `protox` 0.10, `uuid` 1.29. Gone: `rand`/`getrandom` 0.3
+  (mac), `toml`, `logos`, `heck`. Still duplicated, blocked upstream (already
+  latest):
+  - `syn` 2/3: ~30 proc macros still on syn 2 (serde_derive is on 3).
+  - `hashbrown` 0.15 (`imara-diff` 0.2, `petgraph`), 0.16 (`libflate_lz77` via
+    `include-flate`), 0.17 (`indexmap`).
+  - `itertools` 0.14: `prost-build`/`prost-derive`, `wax` 0.7.
+  - `unicode-width` 0.1: `miette` (protox, build only).
+  - `base64` 0.22: pinned `alacritty_terminal` fork; `convert_case` 0.10:
+    `derive_more`.
+- [x] `thiserror` 1: dropped `postage` (oneshot/barrier → `futures` oneshot,
+  mpsc → `futures` mpsc, dispatch → `async-channel`, watch → local `watch`
+  crate); updated `lyon` for its `lyon_extra` copy. Local `watch` treats the
+  initial value as seen, unlike postage, so loops that relied on postage's
+  immediate first wakeup now run their body once up front.

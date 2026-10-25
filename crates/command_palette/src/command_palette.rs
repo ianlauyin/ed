@@ -33,8 +33,6 @@ use persistence::CommandPaletteDB;
 use picker::Direction;
 use picker::Picker;
 use picker::PickerDelegate;
-use postage::sink::Sink;
-use postage::stream::Stream;
 use settings::Settings;
 use ui::ButtonLike;
 use ui::HighlightedLabel;
@@ -179,7 +177,7 @@ pub struct CommandPaletteDelegate {
     selected_ix: usize,
     previous_focus_handle: FocusHandle,
     #[allow(clippy::type_complexity)]
-    updating_matches: Option<(Task<()>, postage::dispatch::Receiver<(Vec<Command>, Vec<StringMatch>)>)>,
+    updating_matches: Option<(Task<()>, async_channel::Receiver<(Vec<Command>, Vec<StringMatch>)>)>,
     query_history: QueryHistory,
 }
 
@@ -477,7 +475,7 @@ impl PickerDelegate for CommandPaletteDelegate {
             alias.as_ref().clone_into(&mut query);
         }
 
-        let (mut tx, mut rx) = postage::dispatch::channel(1);
+        let (tx, rx) = async_channel::bounded(1);
 
         let query_str = query.as_str();
 
@@ -521,7 +519,7 @@ impl PickerDelegate for CommandPaletteDelegate {
         self.updating_matches = Some((task, rx.clone()));
 
         cx.spawn_in(window, async move |picker, cx| {
-            let Some((commands, matches)) = rx.recv().await else {
+            let Ok((commands, matches)) = rx.recv().await else {
                 return;
             };
 
@@ -541,7 +539,7 @@ impl PickerDelegate for CommandPaletteDelegate {
         };
 
         match cx.foreground_executor().block_with_timeout(duration, rx.clone().recv()) {
-            Ok(Some((commands, matches))) => {
+            Ok(Ok((commands, matches))) => {
                 self.matches_updated(query, commands, matches, cx);
                 true
             }
