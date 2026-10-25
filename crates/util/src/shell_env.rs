@@ -149,24 +149,24 @@ async fn capture_unix(
 }
 
 async fn spawn_and_read_fd(
-    mut command: std::process::Command,
+    command: std::process::Command,
     child_fd: std::os::fd::RawFd,
 ) -> anyhow::Result<(Vec<u8>, std::process::Output)> {
     use std::io::Read;
     use std::process::Stdio;
 
-    use command_fds::CommandFdExt;
-    use command_fds::FdMapping;
-
     let (mut reader, writer) = std::io::pipe()?;
 
-    command.fd_mappings(vec![FdMapping { parent_fd: writer.into(), child_fd }])?;
+    // The env is written to stdin or stdout, so the pipe can be wired up via std's stdio.
+    let (stdin, stdout) = match child_fd {
+        0 => (Stdio::from(writer), Stdio::piped()),
+        1 => (Stdio::null(), Stdio::from(writer)),
+        _ => anyhow::bail!("unsupported fd {child_fd} for reading the shell env"),
+    };
 
-    let process = smol::process::Command::from(command)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    // The `Command` (and its copy of the writer) drops at the end of this statement, so
+    // `read_to_end` sees EOF once the child exits.
+    let process = smol::process::Command::from(command).stdin(stdin).stdout(stdout).stderr(Stdio::piped()).spawn()?;
 
     let mut buffer = Vec::new();
     reader.read_to_end(&mut buffer)?;

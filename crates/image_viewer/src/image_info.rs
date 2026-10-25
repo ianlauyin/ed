@@ -71,10 +71,6 @@ impl Render for ImageInfo {
                 ImageFormat::Jpeg => "JPEG",
                 ImageFormat::Gif => "GIF",
                 ImageFormat::WebP => "WebP",
-                ImageFormat::Tiff => "TIFF",
-                ImageFormat::Bmp => "BMP",
-                ImageFormat::Ico => "ICO",
-                ImageFormat::Avif => "Avif",
                 _ => "Unknown",
             }
             .to_string(),

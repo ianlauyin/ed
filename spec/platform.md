@@ -60,6 +60,8 @@ remote detection, command execution, and proxy startup are removed.
 - No HTTP client and no Tokio: the app runs on gpui's executors and smol only.
   Images load only from disk or embedded assets; gpui has no URI image source,
   and markdown preview skips `http`/`https` images like `data:` ones.
+- Image formats are PNG, JPEG, GIF, WebP and SVG only, for the image viewer,
+  markdown and the clipboard; `image` is built with just those decoders.
 - No proxy support: there is no `proxy` setting, environment proxy variables are
   ignored, and JSON language server proxy settings are not forwarded.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.

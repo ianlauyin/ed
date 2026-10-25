@@ -77,8 +77,9 @@ deps: removing them only saves their own code.
 
 ## Cleanup candidates
 
-- [ ] `image`: trim features to png/jpeg/gif/webp (drops exr, tiff, dds, hdr,
-  `moxcms`/`pxfm`, ...).
+- [x] `image`: features trimmed to png/jpeg/gif/webp; `gpui::ImageFormat` lost
+  bmp/tiff/ico/pnm (drops `exr`, `tiff`, `qoi`, `half`, `fax`, `zune-inflate`,
+  ...). `moxcms`/`pxfm` stay: they are non-optional deps of `image` 0.25.
 - [x] `env_logger`: removed; `remote_server` uses a fixed-level JSON logger (drops `jiff`).
 - [ ] `syntect`/`onig`: check whether still needed alongside tree-sitter.
 - [ ] `proto`: check in generated code to drop the prost/protox build stack.

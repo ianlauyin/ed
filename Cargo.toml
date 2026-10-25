@@ -266,25 +266,8 @@ globset = "0.4"
 heapless = "0.9.2"
 hex = "0.4.3"
 ignore = "0.4.22"
-# image's default features minus "avif", which only adds an encoder (rav1e);
-# decoding AVIF would additionally need the non-default "avif-native" feature.
-image = { version = "0.25.1", default-features = false, features = [
-    "bmp",
-    "dds",
-    "exr",
-    "ff",
-    "gif",
-    "hdr",
-    "ico",
-    "jpeg",
-    "png",
-    "pnm",
-    "qoi",
-    "rayon",
-    "tga",
-    "tiff",
-    "webp",
-] }
+# Only the formats the editor decodes; see `gpui::ImageFormat`.
+image = { version = "0.25.1", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 imara-diff = { version = "0.2", default-features = false }
 indexmap = { version = "2.7.0", features = ["serde"] }
 indoc = "2"
@@ -296,7 +279,6 @@ linkify = "0.10.0"
 log = { version = "0.4", default-features = false, features = ["std"] }
 lru = "0.16"
 mach2 = "0.6"
-nix = "0.30"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [

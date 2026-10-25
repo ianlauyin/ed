@@ -179,7 +179,7 @@ where
 /// and terminates the program with an error message unless explicitly allowed via the
 /// `ZED_ALLOW_ROOT` environment variable.
 pub fn prevent_root_execution() {
-    let is_root = nix::unistd::geteuid().is_root();
+    let is_root = unsafe { libc::geteuid() } == 0;
     let allow_root = std::env::var("ZED_ALLOW_ROOT").is_ok_and(|val| val == "true");
 
     if is_root && !allow_root {
@@ -198,24 +198,37 @@ Error: Running Zed as root or via sudo is unsupported.
 ///
 /// Call during startup, before spawning children that will inherit the limit.
 pub fn increase_open_file_limit() -> Result<()> {
-    use anyhow::Context as _;
-    use nix::sys::resource::Resource::RLIMIT_NOFILE;
-    use nix::sys::resource::getrlimit;
-    use nix::sys::resource::setrlimit;
+    fn get() -> std::io::Result<libc::rlimit> {
+        let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        match unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } {
+            0 => Ok(limit),
+            _ => Err(std::io::Error::last_os_error()),
+        }
+    }
 
-    let (soft_limit, hard_limit) = getrlimit(RLIMIT_NOFILE).context("getrlimit(RLIMIT_NOFILE)")?;
+    fn set(soft: libc::rlim_t, hard: libc::rlim_t) -> std::io::Result<()> {
+        let limit = libc::rlimit { rlim_cur: soft, rlim_max: hard };
+        match unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) } {
+            0 => Ok(()),
+            _ => Err(std::io::Error::last_os_error()),
+        }
+    }
+
+    use anyhow::Context as _;
+
+    let libc::rlimit { rlim_cur: soft_limit, rlim_max: hard_limit } = get().context("getrlimit(RLIMIT_NOFILE)")?;
     // These are startup targets, not OS ceilings. Preserve higher inherited limits.
     let target = if cfg!(target_os = "macos") { 10_240 } else { 65_536 };
     let mut requested_limit = hard_limit.min(target);
 
     while requested_limit > soft_limit {
-        let Err(error) = setrlimit(RLIMIT_NOFILE, requested_limit, hard_limit) else {
+        let Err(error) = set(requested_limit, hard_limit) else {
             log::info!("raised open file soft limit from {soft_limit} to {requested_limit}");
             return Ok(());
         };
 
         // Some systems enforce a ceiling below the reported hard limit.
-        if error != nix::errno::Errno::EINVAL || requested_limit == soft_limit + 1 {
+        if error.raw_os_error() != Some(libc::EINVAL) || requested_limit == soft_limit + 1 {
             return Err(error).context("setrlimit(RLIMIT_NOFILE)");
         }
         requested_limit = soft_limit + (requested_limit - soft_limit) / 2;

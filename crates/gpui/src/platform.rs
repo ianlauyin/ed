@@ -2347,14 +2347,6 @@ pub enum ImageFormat {
     Gif,
     /// .svg
     Svg,
-    /// .bmp
-    Bmp,
-    /// .tif or .tiff
-    Tiff,
-    /// .ico
-    Ico,
-    /// Netpbm image formats (.pbm, .ppm, .pgm).
-    Pnm,
 }
 
 impl ImageFormat {
@@ -2366,10 +2358,6 @@ impl ImageFormat {
             ImageFormat::Webp => "image/webp",
             ImageFormat::Gif => "image/gif",
             ImageFormat::Svg => "image/svg+xml",
-            ImageFormat::Bmp => "image/bmp",
-            ImageFormat::Tiff => "image/tiff",
-            ImageFormat::Ico => "image/ico",
-            ImageFormat::Pnm => "image/x-portable-anymap",
         }
     }
 
@@ -2381,10 +2369,6 @@ impl ImageFormat {
             ImageFormat::Webp => "webp",
             ImageFormat::Gif => "gif",
             ImageFormat::Svg => "svg",
-            ImageFormat::Bmp => "bmp",
-            ImageFormat::Tiff => "tiff",
-            ImageFormat::Ico => "ico",
-            ImageFormat::Pnm => "pnm",
         }
     }
 
@@ -2400,7 +2384,6 @@ impl ImageFormat {
     fn from_mime_type_alias(mime_type: &str) -> Option<Self> {
         match mime_type {
             "image/jpg" => Some(Self::Jpeg),
-            "image/tif" => Some(Self::Tiff),
             _ => None,
         }
     }
@@ -2504,13 +2487,9 @@ impl Image {
             ImageFormat::Png => decode_static_image(&self.bytes, image::ImageFormat::Png)?,
             ImageFormat::Jpeg => decode_static_image(&self.bytes, image::ImageFormat::Jpeg)?,
             ImageFormat::Webp => decode_static_image(&self.bytes, image::ImageFormat::WebP)?,
-            ImageFormat::Bmp => decode_static_image(&self.bytes, image::ImageFormat::Bmp)?,
-            ImageFormat::Tiff => decode_static_image(&self.bytes, image::ImageFormat::Tiff)?,
-            ImageFormat::Ico => decode_static_image(&self.bytes, image::ImageFormat::Ico)?,
             ImageFormat::Svg => {
                 return svg_renderer.render_single_frame(&self.bytes, 1.0).map_err(Into::into);
             }
-            ImageFormat::Pnm => decode_static_image(&self.bytes, image::ImageFormat::Pnm)?,
         };
 
         Ok(Arc::new(RenderImage::new(frames)))
