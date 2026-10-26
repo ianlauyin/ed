@@ -7,3 +7,6 @@
 - add complete rust / clippy lint
 - review async crates, replace smol with tokio? (as smol dev seems to be stopped)
 - keymap, construct directly rather than parse json, (simplify Deserialize on actions)
+
+- think about remote "download" vs local "open in default app", copy/paste file across local/remote
+- think about if we don't need external terminal, just do everything in ed?
