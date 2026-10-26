@@ -10,7 +10,6 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-dunce.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 
 [lints]

@@ -220,7 +220,7 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
             ]),
             path_hyperlink_timeout_ms: Some(1),
         },
-        line_height: Some(TerminalLineHeight::Comfortable),
+        line_height: Some(TerminalLineHeight::Standard),
         font_weight: Some(FontWeightContent(400.0)),
         cursor_shape: Some(CursorShapeContent::Bar),
         blinking: Some(TerminalBlink::On),

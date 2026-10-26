@@ -244,12 +244,10 @@ core-services = "1"
 core-text = "21"
 ctor = "1.0.12"
 derive_more = { version = "2.1", features = ["deref", "deref_mut", "from_str"] }
-dialoguer = { version = "0.12", default-features = false }
 diffy = "0.4.2"
 dirs = "6.0"
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
 documented = "0.10"
-dunce = "1.0"
 emojis = "0.9"
 encoding_rs = "0.8"
 etagere = "0.2"

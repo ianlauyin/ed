@@ -148,16 +148,14 @@ impl AbsPathBuf {
     /// Resolves `path` to its canonical on-disk spelling: symlinks and `..`
     /// are resolved, relative input is anchored on the current directory, and
     /// on case-insensitive filesystems each component takes the casing stored
-    /// on disk. Unlike [`std::fs::canonicalize`], the result never uses
-    /// Windows extended-length (`\\?\`) syntax, which chokes tools the path
-    /// is later handed to (e.g. `git`).
+    /// on disk.
     ///
     /// Paths act as identity in several places (lock keys, watch-target
     /// comparisons, persisted repository records), so canonicalize a path
     /// where it enters the system whenever it may have been spelled by a user
     /// or an external tool.
     pub fn canonicalize(path: impl AsRef<Path>) -> io::Result<Self> {
-        let canonical = dunce::canonicalize(path.as_ref())?;
+        let canonical = std::fs::canonicalize(path.as_ref())?;
         Self::new(canonical).map_err(io::Error::other)
     }
 
