@@ -187,7 +187,15 @@ pub struct IndentGuideLayout {
 mod uniform_list {
     use gpui::UniformListDecoration;
 
-    use super::*;
+    use super::AnyElement;
+    use super::App;
+    use super::Bounds;
+    use super::IndentGuides;
+    use super::Pixels;
+    use super::Point;
+    use super::Range;
+    use super::Window;
+    use super::compute_indent_guides;
 
     impl UniformListDecoration for IndentGuides {
         fn compute(
@@ -219,7 +227,15 @@ mod uniform_list {
 
 /// Implements the necessary functionality for rendering indent guides inside a sticky items.
 mod sticky_items {
-    use super::*;
+    use super::AnyElement;
+    use super::App;
+    use super::Bounds;
+    use super::IndentGuides;
+    use super::Pixels;
+    use super::Point;
+    use super::SmallVec;
+    use super::Window;
+    use super::compute_indent_guides;
     use crate::StickyItemsDecoration;
 
     impl StickyItemsDecoration for IndentGuides {

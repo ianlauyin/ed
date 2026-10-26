@@ -14,7 +14,32 @@ use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::bail;
 use futures::channel::oneshot;
-use gpui::*;
+use gpui::Action;
+use gpui::ActivityGuard;
+use gpui::AnyWindowHandle;
+use gpui::BackgroundExecutor;
+use gpui::ClipboardItem;
+use gpui::CursorStyle;
+use gpui::DummyKeyboardMapper;
+use gpui::ForegroundExecutor;
+use gpui::Keymap;
+use gpui::Menu;
+use gpui::MenuItem;
+use gpui::NoopTextSystem;
+use gpui::PathPromptOptions;
+use gpui::Platform;
+use gpui::PlatformDispatcher;
+use gpui::PlatformDisplay;
+use gpui::PlatformKeyboardLayout;
+use gpui::PlatformKeyboardMapper;
+use gpui::PlatformTextSystem;
+use gpui::PlatformWindow;
+use gpui::Priority;
+use gpui::RunnableVariant;
+use gpui::Task;
+use gpui::ThermalState;
+use gpui::WindowAppearance;
+use gpui::WindowParams;
 
 pub(crate) struct HeadlessPlatform {
     background: BackgroundExecutor,

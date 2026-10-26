@@ -1,7 +1,30 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use super::*;
+use super::CancelParams;
+use super::CreateFilesParams;
+use super::Debug;
+use super::DeleteFilesParams;
+use super::DidChangeConfigurationParams;
+use super::DidChangeTextDocumentParams;
+use super::DidChangeWatchedFilesParams;
+use super::DidChangeWorkspaceFoldersParams;
+use super::DidCloseTextDocumentParams;
+use super::DidOpenTextDocumentParams;
+use super::DidSaveTextDocumentParams;
+use super::InitializedParams;
+use super::LSPArray;
+use super::LSPObject;
+use super::LogMessageParams;
+use super::LogTraceParams;
+use super::OneOf;
+use super::ProgressParams;
+use super::PublishDiagnosticsParams;
+use super::RenameFilesParams;
+use super::SetTraceParams;
+use super::ShowMessageParams;
+use super::WillSaveTextDocumentParams;
+use super::WorkDoneProgressCancelParams;
 
 pub trait Notification {
     type Params: DeserializeOwned + Serialize + Send + Sync + 'static;

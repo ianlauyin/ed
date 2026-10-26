@@ -936,7 +936,9 @@ mod url_map {
     use std::fmt;
     use std::marker::PhantomData;
 
-    use super::*;
+    use super::HashMap;
+    use super::Uri;
+    use super::de;
 
     pub fn deserialize<'de, D, V>(deserializer: D) -> Result<Option<HashMap<Uri, V>>, D::Error>
     where

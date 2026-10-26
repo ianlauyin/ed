@@ -3179,7 +3179,14 @@ pub mod debug {
 
     use parking_lot::Mutex;
 
-    use super::*;
+    use super::Anchor;
+    use super::Arc;
+    use super::BufferSnapshot;
+    use super::HashMap;
+    use super::Iterator;
+    use super::Range;
+    use super::ToOffset;
+    use super::str;
 
     static GLOBAL_DEBUG_RANGES: Mutex<Option<GlobalDebugRanges>> = Mutex::new(None);
 

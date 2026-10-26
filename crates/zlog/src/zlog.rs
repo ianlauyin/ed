@@ -230,7 +230,10 @@ macro_rules! crate_name {
 /// functions that are used in macros, and therefore must be public,
 /// but should not be used directly
 pub mod private {
-    use super::*;
+    use super::SCOPE_DEPTH_MAX;
+    use super::Scope;
+    use super::ScopeAlloc;
+    use super::ScopeRef;
 
     pub const fn extract_crate_name_from_module_path(module_path: &str) -> &str {
         let mut i = 0;

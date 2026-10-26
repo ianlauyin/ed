@@ -18,8 +18,7 @@ where
     }
 
     pub fn new(edits: Vec<Edit<T>>) -> Self {
-        #[cfg(debug_assertions)]
-        {
+        if cfg!(debug_assertions) {
             let mut last_edit: Option<&Edit<T>> = None;
             for edit in &edits {
                 if let Some(last_edit) = last_edit {

@@ -1,5 +1,18 @@
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::ElementId;
+use gpui::InteractiveElement;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::RenderOnce;
+use gpui::ScrollHandle;
+use gpui::SharedString;
+use gpui::StatefulInteractiveElement;
+use gpui::Styled;
+use gpui::Window;
+use gpui::div;
 use gpui::prelude::FluentBuilder;
-use gpui::*;
 use smallvec::SmallVec;
 use theme::ActiveTheme;
 

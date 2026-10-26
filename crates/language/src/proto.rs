@@ -15,7 +15,16 @@ pub use proto::File;
 pub use proto::Operation;
 use rpc::proto;
 use serde_json::Value;
-use text::*;
+use text::Anchor;
+use text::Bias;
+use text::BufferId;
+use text::EditOperation;
+use text::FullOffset;
+use text::PointUtf16;
+use text::Selection;
+use text::SelectionGoal;
+use text::Transaction;
+use text::UndoOperation;
 
 use super::point_from_lsp;
 use super::point_to_lsp;

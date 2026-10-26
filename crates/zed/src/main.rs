@@ -194,7 +194,8 @@ fn main() {
         false
     } else {
         {
-            use zed::mac_only_instance::*;
+            use zed::mac_only_instance::IsOnlyInstance;
+            use zed::mac_only_instance::ensure_only_instance;
             ensure_only_instance() != IsOnlyInstance::Yes
         }
     };

@@ -6,7 +6,26 @@ use std::path::Path;
 use std::ptr;
 
 use anyhow::Result;
-use libsqlite3_sys::*;
+use libsqlite3_sys::SQLITE_OK;
+use libsqlite3_sys::SQLITE_OPEN_CREATE;
+use libsqlite3_sys::SQLITE_OPEN_NOMUTEX;
+use libsqlite3_sys::SQLITE_OPEN_READWRITE;
+use libsqlite3_sys::SQLITE_OPEN_URI;
+use libsqlite3_sys::SQLITE_ROW;
+use libsqlite3_sys::sqlite3;
+use libsqlite3_sys::sqlite3_backup_finish;
+use libsqlite3_sys::sqlite3_backup_init;
+use libsqlite3_sys::sqlite3_backup_step;
+use libsqlite3_sys::sqlite3_busy_timeout;
+use libsqlite3_sys::sqlite3_close;
+use libsqlite3_sys::sqlite3_errcode;
+use libsqlite3_sys::sqlite3_errmsg;
+use libsqlite3_sys::sqlite3_error_offset;
+use libsqlite3_sys::sqlite3_extended_result_codes;
+use libsqlite3_sys::sqlite3_finalize;
+use libsqlite3_sys::sqlite3_open_v2;
+use libsqlite3_sys::sqlite3_prepare_v2;
+use libsqlite3_sys::sqlite3_stmt;
 
 pub struct Connection {
     pub(crate) sqlite3: *mut sqlite3,

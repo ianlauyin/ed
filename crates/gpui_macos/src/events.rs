@@ -106,7 +106,51 @@ const TAB_KEY: u16 = 0x09;
 const SHIFT_TAB_KEY: u16 = 0x19;
 
 pub fn key_to_native(key: &str) -> Cow<'_, str> {
-    use function_keys::*;
+    use function_keys::NSDeleteFunctionKey;
+    use function_keys::NSDownArrowFunctionKey;
+    use function_keys::NSEndFunctionKey;
+    use function_keys::NSF1FunctionKey;
+    use function_keys::NSF2FunctionKey;
+    use function_keys::NSF3FunctionKey;
+    use function_keys::NSF4FunctionKey;
+    use function_keys::NSF5FunctionKey;
+    use function_keys::NSF6FunctionKey;
+    use function_keys::NSF7FunctionKey;
+    use function_keys::NSF8FunctionKey;
+    use function_keys::NSF9FunctionKey;
+    use function_keys::NSF10FunctionKey;
+    use function_keys::NSF11FunctionKey;
+    use function_keys::NSF12FunctionKey;
+    use function_keys::NSF13FunctionKey;
+    use function_keys::NSF14FunctionKey;
+    use function_keys::NSF15FunctionKey;
+    use function_keys::NSF16FunctionKey;
+    use function_keys::NSF17FunctionKey;
+    use function_keys::NSF18FunctionKey;
+    use function_keys::NSF19FunctionKey;
+    use function_keys::NSF20FunctionKey;
+    use function_keys::NSF21FunctionKey;
+    use function_keys::NSF22FunctionKey;
+    use function_keys::NSF23FunctionKey;
+    use function_keys::NSF24FunctionKey;
+    use function_keys::NSF25FunctionKey;
+    use function_keys::NSF26FunctionKey;
+    use function_keys::NSF27FunctionKey;
+    use function_keys::NSF28FunctionKey;
+    use function_keys::NSF29FunctionKey;
+    use function_keys::NSF30FunctionKey;
+    use function_keys::NSF31FunctionKey;
+    use function_keys::NSF32FunctionKey;
+    use function_keys::NSF33FunctionKey;
+    use function_keys::NSF34FunctionKey;
+    use function_keys::NSF35FunctionKey;
+    use function_keys::NSHelpFunctionKey;
+    use function_keys::NSHomeFunctionKey;
+    use function_keys::NSLeftArrowFunctionKey;
+    use function_keys::NSPageDownFunctionKey;
+    use function_keys::NSPageUpFunctionKey;
+    use function_keys::NSRightArrowFunctionKey;
+    use function_keys::NSUpArrowFunctionKey;
     let code = match key {
         "space" => SPACE_KEY,
         "backspace" => BACKSPACE_KEY,
@@ -387,7 +431,52 @@ pub(crate) unsafe fn platform_input_from_native(
 }
 
 fn parse_keystroke(native_event: &NSEvent) -> Keystroke {
-    use function_keys::*;
+    use function_keys::NSDeleteFunctionKey;
+    use function_keys::NSDownArrowFunctionKey;
+    use function_keys::NSEndFunctionKey;
+    use function_keys::NSF1FunctionKey;
+    use function_keys::NSF2FunctionKey;
+    use function_keys::NSF3FunctionKey;
+    use function_keys::NSF4FunctionKey;
+    use function_keys::NSF5FunctionKey;
+    use function_keys::NSF6FunctionKey;
+    use function_keys::NSF7FunctionKey;
+    use function_keys::NSF8FunctionKey;
+    use function_keys::NSF9FunctionKey;
+    use function_keys::NSF10FunctionKey;
+    use function_keys::NSF11FunctionKey;
+    use function_keys::NSF12FunctionKey;
+    use function_keys::NSF13FunctionKey;
+    use function_keys::NSF14FunctionKey;
+    use function_keys::NSF15FunctionKey;
+    use function_keys::NSF16FunctionKey;
+    use function_keys::NSF17FunctionKey;
+    use function_keys::NSF18FunctionKey;
+    use function_keys::NSF19FunctionKey;
+    use function_keys::NSF20FunctionKey;
+    use function_keys::NSF21FunctionKey;
+    use function_keys::NSF22FunctionKey;
+    use function_keys::NSF23FunctionKey;
+    use function_keys::NSF24FunctionKey;
+    use function_keys::NSF25FunctionKey;
+    use function_keys::NSF26FunctionKey;
+    use function_keys::NSF27FunctionKey;
+    use function_keys::NSF28FunctionKey;
+    use function_keys::NSF29FunctionKey;
+    use function_keys::NSF30FunctionKey;
+    use function_keys::NSF31FunctionKey;
+    use function_keys::NSF32FunctionKey;
+    use function_keys::NSF33FunctionKey;
+    use function_keys::NSF34FunctionKey;
+    use function_keys::NSF35FunctionKey;
+    use function_keys::NSHelpFunctionKey;
+    use function_keys::NSHomeFunctionKey;
+    use function_keys::NSLeftArrowFunctionKey;
+    use function_keys::NSModeSwitchFunctionKey;
+    use function_keys::NSPageDownFunctionKey;
+    use function_keys::NSPageUpFunctionKey;
+    use function_keys::NSRightArrowFunctionKey;
+    use function_keys::NSUpArrowFunctionKey;
 
     let characters =
         native_event.charactersIgnoringModifiers().map(|characters| characters.to_string()).unwrap_or_default();

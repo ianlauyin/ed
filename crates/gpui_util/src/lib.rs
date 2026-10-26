@@ -60,7 +60,7 @@ macro_rules! debug_panic {
 }
 
 #[track_caller]
-pub fn some_or_debug_panic<T>(option: Option<T>) -> Option<T> {
+pub const fn some_or_debug_panic<T>(option: Option<T>) -> Option<T> {
     #[cfg(debug_assertions)]
     if option.is_none() {
         panic!("Unexpected None");

@@ -73,7 +73,14 @@ impl AnyImageCache {
 }
 
 mod any_image_cache {
-    use super::*;
+    use super::AnyEntity;
+    use super::App;
+    use super::Arc;
+    use super::ImageCache;
+    use super::ImageCacheError;
+    use super::RenderImage;
+    use super::Resource;
+    use super::Window;
 
     pub(crate) fn load<I: 'static + ImageCache>(
         image_cache: &AnyEntity,

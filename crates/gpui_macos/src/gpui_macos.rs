@@ -26,10 +26,11 @@ use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ops::Range;
 
-pub(crate) use display::*;
+pub(crate) use display::MacDisplay;
 pub(crate) use gpui_apple::AppleActivity;
 pub(crate) use gpui_apple::AppleDispatcher;
-pub(crate) use keyboard::*;
+pub(crate) use keyboard::MacKeyboardLayout;
+pub(crate) use keyboard::MacKeyboardMapper;
 use ns::NSNotFound;
 use ns::NSUInteger;
 use ns::id;
@@ -38,9 +39,20 @@ use objc2::Encoding;
 use objc2::RefEncode;
 use objc2::class;
 use objc2::msg_send;
+pub(crate) use platform::LMGetKbdType;
 pub use platform::MacPlatform;
-pub(crate) use platform::*;
-pub(crate) use window::*;
+pub(crate) use platform::TISCopyCurrentKeyboardInputSource;
+pub(crate) use platform::TISCopyCurrentKeyboardLayoutInputSource;
+pub(crate) use platform::TISGetInputSourceProperty;
+pub(crate) use platform::UCKeyTranslate;
+pub(crate) use platform::kTISPropertyInputSourceID;
+pub(crate) use platform::kTISPropertyInputSourceIsASCIICapable;
+pub(crate) use platform::kTISPropertyInputSourceType;
+pub(crate) use platform::kTISPropertyLocalizedName;
+pub(crate) use platform::kTISPropertyUnicodeKeyLayoutData;
+pub(crate) use platform::kTISTypeKeyboardInputMode;
+pub(crate) use window::MacWindow;
+pub(crate) use window::set_active_window_cursor_style;
 
 trait NSStringExt {
     unsafe fn to_str(&self) -> &str;

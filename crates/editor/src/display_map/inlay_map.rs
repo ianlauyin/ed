@@ -1132,8 +1132,7 @@ impl InlaySnapshot {
     }
 
     fn check_invariants(&self) {
-        #[cfg(debug_assertions)]
-        {
+        if cfg!(debug_assertions) {
             assert_eq!(self.transforms.summary().input, self.buffer.text_summary());
             let mut transforms = self.transforms.iter().peekable();
             while let Some(transform) = transforms.next() {

@@ -52,8 +52,7 @@ impl ContextProvider for JsonTaskProvider {
             let contents_text = contents.text.to_string();
 
             let task_templates = if is_package_json {
-                let package_json =
-                    serde_json::from_str::<HashMap<String, serde_json::Value>>(&contents_text).ok()?;
+                let package_json = serde_json::from_str::<HashMap<String, serde_json::Value>>(&contents_text).ok()?;
                 let package_json = PackageJsonData::new(path, package_json);
                 let command = package_json.package_manager.unwrap_or("npm").to_owned();
                 package_json
