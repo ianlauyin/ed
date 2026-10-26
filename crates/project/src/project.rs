@@ -227,6 +227,9 @@ pub enum OpenedBufferEvent {
 /// Projects are local or use an explicit remote server connection.
 pub struct Project {
     active_entry: Option<ProjectEntryId>,
+    /// The active path whose entry its worktree hasn't listed yet (e.g. a just-opened
+    /// remote library); it becomes the active entry once a worktree update lists it.
+    pending_active_path: Option<ProjectPath>,
 
     languages: Arc<LanguageRegistry>,
 
@@ -1085,6 +1088,7 @@ impl Project {
 
                 _subscriptions: vec![cx.on_release(Self::release)],
                 active_entry: None,
+                pending_active_path: None,
                 languages,
 
                 task_store,
@@ -1222,6 +1226,7 @@ impl Project {
                     }),
                 ],
                 active_entry: None,
+                pending_active_path: None,
                 languages,
 
                 task_store,
@@ -2238,7 +2243,11 @@ impl Project {
             WorktreeStoreEvent::WorktreeOrderChanged => cx.emit(Event::WorktreeOrderChanged),
             WorktreeStoreEvent::WorktreeUpdateSent(_) => {}
             WorktreeStoreEvent::WorktreeUpdatedEntries(worktree_id, changes) => {
-                cx.emit(Event::WorktreeUpdatedEntries(*worktree_id, changes.clone()))
+                cx.emit(Event::WorktreeUpdatedEntries(*worktree_id, changes.clone()));
+                if self.pending_active_path.as_ref().is_some_and(|path| path.worktree_id == *worktree_id) {
+                    let pending_active_path = self.pending_active_path.take();
+                    self.set_active_path(pending_active_path, cx);
+                }
             }
             WorktreeStoreEvent::WorktreeDeletedEntry(worktree_id, id) => {
                 cx.emit(Event::DeletedEntry(*worktree_id, *id))
@@ -3096,11 +3105,12 @@ impl Project {
             self.worktree_store
                 .update(cx, |worktree_store, cx| worktree_store.show_library(project_path.worktree_id, cx));
         }
-        let new_active_entry = entry.and_then(|project_path| {
+        let new_active_entry = entry.as_ref().and_then(|project_path| {
             let worktree = self.worktree_for_id(project_path.worktree_id, cx)?;
             let entry = worktree.read(cx).entry_for_path(&project_path.path)?;
             Some(entry.id)
         });
+        self.pending_active_path = if new_active_entry.is_none() { entry } else { None };
         if new_active_entry != self.active_entry {
             self.active_entry = new_active_entry;
             self.lsp_store.update(cx, |lsp_store, _| {

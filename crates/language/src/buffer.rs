@@ -449,6 +449,12 @@ pub trait File: Send + Sync + Any {
     fn can_open(&self) -> bool {
         !self.is_local()
     }
+
+    /// Returns whether this file belongs to a worktree shown as a project root.
+    /// Files elsewhere (e.g. external library sources) are labeled by their full path.
+    fn is_in_visible_worktree(&self, _cx: &App) -> bool {
+        true
+    }
 }
 
 /// The file's storage status - whether it's stored (`Present`), and if so when it was last
@@ -4769,7 +4775,7 @@ impl BufferSnapshot {
 
     pub fn resolve_file_path(&self, include_root: bool, cx: &App) -> Option<String> {
         if let Some(file) = self.file() {
-            if file.path().file_name().is_none() || include_root {
+            if file.path().file_name().is_none() || include_root || !file.is_in_visible_worktree(cx) {
                 Some(file.full_path(cx).to_string_lossy().into_owned())
             } else {
                 Some(file.path().display(file.path_style(cx)).to_string())

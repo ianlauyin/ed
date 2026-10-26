@@ -1691,7 +1691,7 @@ impl ProjectPanel {
         EntryDetails {
             filename: "External Libraries".to_string(),
             chevron,
-            icon: Some(IconName::BookCopy.path().into()),
+            icon: Some(IconName::Library.path().into()),
             path: entry.entry.path,
             depth: 0,
             kind: EntryKind::Dir,
@@ -6164,7 +6164,9 @@ impl ProjectPanel {
         let worktree_id = worktree.id();
         let is_ignored =
             worktree.entry_for_id(entry_id).is_none_or(|entry| entry.is_ignored && !entry.is_always_included);
-        if skip_ignored && is_ignored {
+        // Library sources are often gitignored (e.g. by an ignore file above the
+        // registry), but opening one should still reveal it.
+        if skip_ignored && is_ignored && worktree.library_name().is_none() {
             if self.index_for_entry(entry_id, worktree_id).is_none() {
                 anyhow::bail!("can't reveal an ignored entry in the project panel");
             }

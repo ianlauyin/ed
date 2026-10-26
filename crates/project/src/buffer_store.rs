@@ -188,6 +188,7 @@ impl RemoteBufferStore {
             proto::create_buffer_for_peer::Variant::State(mut state) => {
                 let buffer_id = BufferId::new(state.id)?;
 
+                let mut capability = capability;
                 let buffer_file_result = maybe!({
                     let mut buffer_file = None;
                     if let Some(file) = state.file.take() {
@@ -197,6 +198,11 @@ impl RemoteBufferStore {
                             .read(cx)
                             .worktree_for_id(worktree_id, cx)
                             .with_context(|| format!("no worktree found for id {}", file.worktree_id))?;
+                        // Buffers the host opens itself (e.g. a go-to-definition target)
+                        // arrive here without passing through `open_buffer`.
+                        if worktree.read(cx).library_name().is_some() {
+                            capability = Capability::ReadOnly;
+                        }
                         buffer_file = Some(Arc::new(File::from_proto(file, worktree, cx)?) as Arc<dyn language::File>);
                     }
                     anyhow::Ok(buffer_file)

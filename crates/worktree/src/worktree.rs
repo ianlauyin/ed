@@ -3204,6 +3204,10 @@ impl language::File for File {
         self.worktree.read(cx).id()
     }
 
+    fn is_in_visible_worktree(&self, cx: &App) -> bool {
+        self.worktree.read(cx).is_visible()
+    }
+
     fn to_proto(&self, cx: &App) -> rpc::proto::File {
         rpc::proto::File {
             worktree_id: self.worktree.read(cx).id().to_proto(),

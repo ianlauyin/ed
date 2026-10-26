@@ -144,6 +144,7 @@ pub enum IconName {
     Json,
     Keyboard,
     LineHeight,
+    Library,
     Link,
     Linux,
     ListCollapse,

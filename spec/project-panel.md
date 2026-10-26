@@ -39,7 +39,9 @@
 - A library worktree is invisible: it is not a project root for the title,
   search, tasks or terminals. It reuses the project's running language servers.
   It is returned only after its first scan, so manifest lookups (the crate's
-  `Cargo.toml`) never see a half-scanned library.
+  `Cargo.toml`) never see a half-scanned library. On a remote project the
+  client's copy fills in asynchronously, so an active path whose entry isn't
+  listed yet becomes the active entry (and is revealed) once it arrives.
 - A library is listed in the panel, and held strongly, once one of its files
   becomes the active item. Until then it lives only as long as something
   references it, so crates that only appear in inlay hints or hovers don't
@@ -50,11 +52,16 @@
   The group row is a one-entry section with ids no worktree uses, so row
   indexing, selection and scrolling treat it like any other row. Revealing a
   library file expands the group, including the first time its library is
-  listed.
+  listed. Auto-reveal skips ignored files, but not library files, which are
+  often gitignored on their host.
+- Outside the panel, a library file is labeled by its full path (multibuffer
+  headers, breadcrumbs), since a library-relative path like `src/lib.rs` reads
+  as a project file.
 - Library sources are read-only:
-  - Buffers open with `Capability::ReadOnly`, which can't be toggled: the tab's
-    lock is shown disabled ("Locked Tab"), and "Make Tab Editable" and
-    "Toggle Read Only" do nothing.
+  - Buffers open with `Capability::ReadOnly`, including buffers a remote host
+    pushes to the client (e.g. a go-to-definition target). It can't be
+    toggled: the tab's lock is shown disabled ("Locked Tab"), and
+    "Make Tab Editable" and "Toggle Read Only" do nothing.
   - `Project` refuses to create, rename, move into or out of, trash or delete
     library entries. Copying out of a library is allowed.
   - The context menu shows only non-mutating actions, plus "Remove Library" on
