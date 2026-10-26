@@ -14,8 +14,5 @@ doctest = false
 [dependencies]
 time.workspace = true
 
-[target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
-sys-locale.workspace = true
-
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = { workspace = true, features = ["std", "CFDate", "CFDateFormatter", "CFLocale", "CFString"] }
