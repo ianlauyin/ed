@@ -195,6 +195,7 @@ pub struct LocalWorktree {
     fs: Arc<dyn Fs>,
     fs_case_sensitive: bool,
     visible: bool,
+    library_name: Option<Arc<str>>,
     next_entry_id: Arc<AtomicUsize>,
     settings: WorktreeSettings,
     scanning_enabled: bool,
@@ -222,6 +223,7 @@ pub struct RemoteWorktree {
     snapshot_subscriptions: VecDeque<(usize, oneshot::Sender<()>)>,
     replica_id: ReplicaId,
     visible: bool,
+    library_name: Option<Arc<str>>,
     disconnected: bool,
     received_initial_update: bool,
 }
@@ -612,6 +614,7 @@ impl Worktree {
                 fs,
                 fs_case_sensitive,
                 visible,
+                library_name: None,
                 settings,
                 scanning_enabled,
                 force_defer_watch: false,
@@ -660,6 +663,7 @@ impl Worktree {
                 update_observer: None,
                 snapshot_subscriptions: VecDeque::default(),
                 visible: worktree.visible,
+                library_name: worktree.library_name.map(Into::into),
                 disconnected: false,
                 received_initial_update: false,
             };
@@ -800,6 +804,7 @@ impl Worktree {
             id: self.id().to_proto(),
             root_name: self.root_name().as_unix_str().to_owned(),
             visible: self.is_visible(),
+            library_name: self.library_name().map(ToString::to_string),
             abs_path: self.abs_path().to_string_lossy().into_owned(),
             root_repo_common_dir: self.root_repo_common_dir().map(|p| p.to_string_lossy().into_owned()),
             root_repo_is_linked_worktree: self.root_repo_is_linked_worktree(),
@@ -817,6 +822,23 @@ impl Worktree {
         match self {
             Worktree::Local(worktree) => worktree.visible,
             Worktree::Remote(worktree) => worktree.visible,
+        }
+    }
+
+    /// External library sources (e.g. a crate in the cargo registry) are
+    /// invisible worktrees shown in their own project panel section, and
+    /// their buffers open read-only.
+    pub const fn library_name(&self) -> Option<&Arc<str>> {
+        match self {
+            Worktree::Local(worktree) => worktree.library_name.as_ref(),
+            Worktree::Remote(worktree) => worktree.library_name.as_ref(),
+        }
+    }
+
+    pub fn set_library_name(&mut self, library_name: Option<Arc<str>>) {
+        match self {
+            Worktree::Local(worktree) => worktree.library_name = library_name,
+            Worktree::Remote(worktree) => worktree.library_name = library_name,
         }
     }
 

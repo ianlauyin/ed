@@ -7,6 +7,7 @@ use gpui::UpdateGlobal;
 pub use language::*;
 use project::Fs;
 use python::PyprojectTomlManifestProvider;
+use rust::CargoLibraryProvider;
 use rust::CargoManifestProvider;
 use settings::SemanticTokenRules;
 use settings::SettingsStore;
@@ -172,6 +173,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     for provider in manifest_providers {
         project::ManifestProvidersStore::global(cx).register(provider);
     }
+    project::library::LibraryProviders::register(Arc::new(CargoLibraryProvider), cx);
 }
 
 #[derive(Default)]

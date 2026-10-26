@@ -69,6 +69,7 @@ message WorktreeMetadata {
   string abs_path = 4;
   optional string root_repo_common_dir = 5;
   bool root_repo_is_linked_worktree = 6;
+  optional string library_name = 7;
 }
 
 message ProjectPath {

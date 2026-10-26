@@ -831,6 +831,7 @@ impl BufferStore {
                 let Some(worktree) = self.worktree_store.read(cx).worktree_for_id(project_path.worktree_id, cx) else {
                     return Task::ready(Err(anyhow!("no such worktree")));
                 };
+                let is_library = worktree.read(cx).library_name().is_some();
                 let load_buffer = match &self.state {
                     BufferStoreState::Local(this) => this.open_buffer(path, worktree, cx),
                     BufferStoreState::Remote(this) => this.open_buffer(path, worktree, cx),
@@ -840,11 +841,15 @@ impl BufferStore {
                     .insert(
                         cx.spawn(async move |this, cx| {
                             let load_result = load_buffer.await;
-                            this.update(cx, |this, _cx| {
+                            this.update(cx, |this, cx| {
                                 // Record the fact that the buffer is no longer loading.
                                 this.loading_buffers.remove(&project_path);
 
                                 let buffer = load_result.map_err(Arc::new)?;
+                                // `ReadOnly` rather than `Read`, so it can't be toggled editable.
+                                if is_library {
+                                    buffer.update(cx, |buffer, cx| buffer.set_capability(Capability::ReadOnly, cx));
+                                }
                                 Ok(buffer)
                             })?
                         })

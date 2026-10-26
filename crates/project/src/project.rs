@@ -4,6 +4,7 @@ pub mod color_extractor;
 pub mod debounced_delay;
 pub mod git_store;
 pub mod image_store;
+pub mod library;
 pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
@@ -1414,6 +1415,15 @@ impl Project {
         self.worktree_store.read(cx).visible_worktrees(cx)
     }
 
+    /// Library worktrees shown in the project panel, sorted by library name.
+    pub fn library_worktrees(&self, cx: &App) -> Vec<Entity<Worktree>> {
+        let worktree_store = self.worktree_store.read(cx);
+        let mut worktrees: Vec<Entity<Worktree>> =
+            self.worktrees(cx).filter(|worktree| worktree_store.is_library_shown(worktree.read(cx).id())).collect();
+        worktrees.sort_by_cached_key(|worktree| worktree.read(cx).library_name().cloned());
+        worktrees
+    }
+
     pub(crate) fn default_visible_worktree_paths(worktree_store: &WorktreeStore, cx: &App) -> Vec<PathBuf> {
         worktree_store
             .visible_worktrees(cx)
@@ -1545,7 +1555,18 @@ impl Project {
         let Some(worktree) = self.worktree_for_id(project_path.worktree_id, cx) else {
             return Task::ready(Err(anyhow!(format!("No worktree for path {project_path:?}"))));
         };
+        if worktree.read(cx).library_name().is_some() {
+            return Task::ready(Err(library_read_only_error()));
+        }
         worktree.update(cx, |worktree, cx| worktree.create_entry(project_path.path, is_directory, None, cx))
+    }
+
+    pub fn is_library_worktree(&self, worktree_id: WorktreeId, cx: &App) -> bool {
+        self.worktree_for_id(worktree_id, cx).is_some_and(|worktree| worktree.read(cx).library_name().is_some())
+    }
+
+    fn is_library_entry(&self, entry_id: ProjectEntryId, cx: &App) -> bool {
+        self.worktree_for_entry(entry_id, cx).is_some_and(|worktree| worktree.read(cx).library_name().is_some())
     }
 
     #[inline]
@@ -1555,6 +1576,9 @@ impl Project {
         new_project_path: ProjectPath,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Entry>>> {
+        if self.is_library_worktree(new_project_path.worktree_id, cx) {
+            return Task::ready(Err(library_read_only_error()));
+        }
         self.worktree_store.update(cx, |worktree_store, cx| worktree_store.copy_entry(entry_id, new_project_path, cx))
     }
 
@@ -1568,6 +1592,9 @@ impl Project {
         new_path: ProjectPath,
         cx: &mut Context<Self>,
     ) -> Task<Result<CreatedEntry>> {
+        if self.is_library_entry(entry_id, cx) || self.is_library_worktree(new_path.worktree_id, cx) {
+            return Task::ready(Err(library_read_only_error()));
+        }
         let worktree_store = self.worktree_store.clone();
         let Some((worktree, old_path, is_dir)) = worktree_store
             .read(cx)
@@ -1640,6 +1667,9 @@ impl Project {
     #[inline]
     pub fn trash_entry(&mut self, entry_id: ProjectEntryId, cx: &mut Context<Self>) -> Option<Task<Result<TrashId>>> {
         let worktree = self.worktree_for_entry(entry_id, cx)?;
+        if worktree.read(cx).library_name().is_some() {
+            return Some(Task::ready(Err(library_read_only_error())));
+        }
         cx.emit(Event::DeletedEntry(worktree.read(cx).id(), entry_id));
         worktree.update(cx, |worktree, cx| worktree.trash_entry(entry_id, cx))
     }
@@ -1647,6 +1677,9 @@ impl Project {
     #[inline]
     pub fn delete_entry(&mut self, entry_id: ProjectEntryId, cx: &mut Context<Self>) -> Option<Task<Result<()>>> {
         let worktree = self.worktree_for_entry(entry_id, cx)?;
+        if worktree.read(cx).library_name().is_some() {
+            return Some(Task::ready(Err(library_read_only_error())));
+        }
         cx.emit(Event::DeletedEntry(worktree.read(cx).id(), entry_id));
         worktree.update(cx, |worktree, cx| worktree.delete_entry(entry_id, cx))
     }
@@ -3059,6 +3092,10 @@ impl Project {
     }
 
     pub fn set_active_path(&mut self, entry: Option<ProjectPath>, cx: &mut Context<Self>) {
+        if let Some(project_path) = &entry {
+            self.worktree_store
+                .update(cx, |worktree_store, cx| worktree_store.show_library(project_path.worktree_id, cx));
+        }
         let new_active_entry = entry.and_then(|project_path| {
             let worktree = self.worktree_for_id(project_path.worktree_id, cx)?;
             let entry = worktree.read(cx).entry_for_path(&project_path.path)?;
@@ -4126,4 +4163,8 @@ const fn proto_to_prompt(level: proto::language_server_prompt_request::Level) ->
         proto::language_server_prompt_request::Level::Warning(_) => gpui::PromptLevel::Warning,
         proto::language_server_prompt_request::Level::Critical(_) => gpui::PromptLevel::Critical,
     }
+}
+
+fn library_read_only_error() -> anyhow::Error {
+    anyhow!("External library sources are read-only")
 }

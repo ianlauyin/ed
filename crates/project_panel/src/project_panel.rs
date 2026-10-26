@@ -26,6 +26,7 @@ use editor::items::entry_diagnostic_aware_icon_name_and_color;
 use editor::items::entry_git_aware_label_color;
 use file_icons::FileIcons;
 use fs::TrashId;
+use fuzzy::CharBag;
 use git::status::GitSummary;
 use git_ui_core::file_diff_view::FileDiffView;
 use gpui::Action;
@@ -180,9 +181,15 @@ use crate::undo::project_path_display;
 
 const PROJECT_PANEL_KEY: &str = "ProjectPanel";
 const NEW_ENTRY_ID: ProjectEntryId = ProjectEntryId::MAX;
+/// The "External Libraries" group row is a one-entry section with ids that no
+/// worktree uses, so row indexing, selection and scrolling treat it like any other row.
+const LIBRARIES_WORKTREE_ID: WorktreeId = WorktreeId::from_usize(usize::MAX);
+const LIBRARIES_ENTRY_ID: ProjectEntryId = ProjectEntryId::from_usize(usize::MAX - 1);
 
 struct VisibleEntriesForWorktree {
     worktree_id: WorktreeId,
+    /// Library worktrees are nested one level under the "External Libraries" row.
+    depth_offset: usize,
     entries: Vec<GitEntry>,
     index: OnceCell<HashSet<Arc<RelPath>>>,
 }
@@ -242,6 +249,7 @@ pub struct ProjectPanel {
     diagnostics: HashMap<(WorktreeId, Arc<RelPath>), DiagnosticSeverity>,
     diagnostic_counts: HashMap<(WorktreeId, Arc<RelPath>), DiagnosticCount>,
     diagnostic_summary_update: Task<()>,
+    libraries_expanded: bool,
     // We keep track of the mouse down state on entries so we don't flash the UI
     // in case a user clicks to open a file.
     mouse_down: bool,
@@ -258,6 +266,9 @@ struct UpdateVisibleEntriesTask {
     _visible_entries_task: Task<()>,
     focus_filename_editor: bool,
     autoscroll: bool,
+    /// Kept across superseding updates, so a reveal isn't lost when another
+    /// update (e.g. a library becoming listed) replaces its task.
+    selected_entry: Option<(WorktreeId, ProjectEntryId)>,
 }
 
 #[derive(Debug)]
@@ -272,6 +283,7 @@ impl Default for UpdateVisibleEntriesTask {
             _visible_entries_task: Task::ready(()),
             focus_filename_editor: Default::default(),
             autoscroll: Default::default(),
+            selected_entry: None,
         }
     }
 }
@@ -918,6 +930,7 @@ impl ProjectPanel {
                     diagnostics: HashMap::default(),
                     diagnostic_counts: HashMap::default(),
                     diagnostic_summary_update: Task::ready(()),
+                    libraries_expanded: true,
                     scroll_handle,
                     mouse_down: false,
                     hover_expand_task: None,
@@ -1136,6 +1149,7 @@ impl ProjectPanel {
             let is_foldable = auto_fold_dirs && self.is_foldable(entry, worktree);
             let is_unfoldable = auto_fold_dirs && self.is_unfoldable(entry, worktree);
             let is_read_only = project.is_read_only(cx);
+            let is_library = worktree.library_name().is_some();
             let is_remote = project.is_remote();
 
             let is_local = project.is_local();
@@ -1164,6 +1178,28 @@ impl ProjectPanel {
                         menu.when(is_previewable, |menu| menu.action("Open Preview", Box::new(OpenMarkdownPreview)))
                             .when(is_svg, |menu| menu.action("Open SVG Preview", Box::new(OpenSvgPreview)))
                             .when(is_dir, |menu| menu.action("Search Inside", Box::new(NewSearchInDirectory)))
+                    } else if is_library {
+                        menu.when(is_local, |menu| {
+                            menu.action(
+                                ui::utils::reveal_in_file_manager_label(is_remote),
+                                Box::new(RevealInFileManager),
+                            )
+                        })
+                        .action("Open in Terminal", Box::new(OpenInTerminal))
+                        .when(is_previewable, |menu| menu.action("Open Preview", Box::new(OpenMarkdownPreview)))
+                        .when(is_svg, |menu| menu.action("Open SVG Preview", Box::new(OpenSvgPreview)))
+                        .when(is_unfoldable, |menu| menu.action("Unfold Directory", Box::new(UnfoldDirectory)))
+                        .when(is_foldable, |menu| menu.action("Fold Directory", Box::new(FoldDirectory)))
+                        .separator()
+                        .action("Copy", Box::new(Copy))
+                        .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
+                        .action("Copy Relative Path", Box::new(zed_actions::workspace::CopyRelativePath))
+                        .when(is_dir && !is_root, |menu| {
+                            menu.separator()
+                                .action("Expand All", Box::new(ExpandSelectedEntryAndChildren))
+                                .action("Collapse All", Box::new(CollapseSelectedEntryAndChildren))
+                        })
+                        .when(is_root, |menu| menu.separator().action("Remove Library", Box::new(RemoveFromProject)))
                     } else {
                         menu.action("New File", Box::new(NewFile))
                             .action("New Folder", Box::new(NewDirectory))
@@ -1385,6 +1421,14 @@ impl ProjectPanel {
     }
 
     fn expand_selected_entry(&mut self, _: &ExpandSelectedEntry, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_libraries_header_selected() {
+            if self.libraries_expanded {
+                self.select_next(&SelectNext, window, cx);
+            } else {
+                self.set_libraries_expanded(true, window, cx);
+            }
+            return;
+        }
         if let Some((worktree, entry)) = self.selected_entry(cx) {
             if let Some(folded_ancestors) = self.state.ancestors.get_mut(&entry.id)
                 && folded_ancestors.current_ancestor_depth > 0
@@ -1420,6 +1464,10 @@ impl ProjectPanel {
     }
 
     fn collapse_selected_entry(&mut self, _: &CollapseSelectedEntry, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_libraries_header_selected() {
+            self.set_libraries_expanded(false, window, cx);
+            return;
+        }
         let Some((worktree, entry)) = self.selected_entry_handle(cx) else {
             return;
         };
@@ -1623,7 +1671,55 @@ impl ProjectPanel {
         }
     }
 
+    fn is_libraries_header_selected(&self) -> bool {
+        self.selection.is_some_and(|selection| selection.entry_id == LIBRARIES_ENTRY_ID)
+    }
+
+    fn set_libraries_expanded(&mut self, expanded: bool, window: &Window, cx: &mut Context<Self>) {
+        self.libraries_expanded = expanded;
+        self.update_visible_entries(Some((LIBRARIES_WORKTREE_ID, LIBRARIES_ENTRY_ID)), false, false, window, cx);
+        cx.notify();
+    }
+
+    fn libraries_header_details(&self, cx: &App) -> EntryDetails {
+        let entry = libraries_header_entry();
+        let (chevron, _) = Self::entry_icons(&entry, self.libraries_expanded, cx);
+        let folder_indicator = ProjectPanelSettings::get_global(cx).folder_indicator;
+        let selection = SelectedEntry { worktree_id: LIBRARIES_WORKTREE_ID, entry_id: LIBRARIES_ENTRY_ID };
+        let reserves_chevron_slot =
+            chevron.is_none() && folder_indicator.shows_chevron() && folder_indicator.shows_icon();
+        EntryDetails {
+            filename: "External Libraries".to_string(),
+            chevron,
+            icon: Some(IconName::BookCopy.path().into()),
+            path: entry.entry.path,
+            depth: 0,
+            kind: EntryKind::Dir,
+            is_ignored: false,
+            is_expanded: self.libraries_expanded,
+            is_selected: self.selection == Some(selection),
+            is_marked: false,
+            is_editing: false,
+            is_processing: false,
+            is_cut: false,
+            sticky: None,
+            filename_text_color: Color::Default,
+            diagnostic_severity: None,
+            diagnostic_mark: None,
+            reserves_chevron_slot,
+            diagnostic_count: None,
+            git_status: GitSummary::default(),
+            worktree_id: LIBRARIES_WORKTREE_ID,
+            canonical_path: None,
+        }
+    }
+
     fn toggle_expanded(&mut self, entry_id: ProjectEntryId, window: &mut Window, cx: &mut Context<Self>) {
+        if entry_id == LIBRARIES_ENTRY_ID {
+            self.set_libraries_expanded(!self.libraries_expanded, window, cx);
+            window.focus(&self.focus_handle, cx);
+            return;
+        }
         if let Some(worktree_id) = self.project.read(cx).worktree_id_for_entry(entry_id, cx)
             && let Some(expanded_dir_ids) = self.state.expanded_dir_ids.get_mut(&worktree_id)
         {
@@ -1832,6 +1928,10 @@ impl ProjectPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.is_libraries_header_selected() {
+            self.set_libraries_expanded(!self.libraries_expanded, window, cx);
+            return;
+        }
         if let Some((_, entry)) = self.selected_entry(cx) {
             if entry.is_file() {
                 if split_direction.is_some() {
@@ -2210,6 +2310,9 @@ impl ProjectPanel {
         else {
             return;
         };
+        if self.project.read(cx).is_library_worktree(worktree_id, cx) {
+            return;
+        }
 
         let directory_id;
         let new_entry_id = self.resolve_entry(entry_id);
@@ -2289,6 +2392,9 @@ impl ProjectPanel {
         if let Some(SelectedEntry { worktree_id, entry_id }) = self.selection
             && let Some(worktree) = self.project.read(cx).worktree_for_id(worktree_id, cx)
         {
+            if worktree.read(cx).library_name().is_some() {
+                return;
+            }
             let sub_entry_id = self.unflatten_entry_id(entry_id);
             if let Some(entry) = worktree.read(cx).entry_for_id(sub_entry_id) {
                 if Some(entry) == worktree.read(cx).root_entry() {
@@ -2562,10 +2668,12 @@ impl ProjectPanel {
     fn remove(&self, trash: bool, skip_prompt: bool, window: &mut Window, cx: &mut Context<ProjectPanel>) {
         maybe!({
             let items_to_delete = self.disjoint_effective_entries_excluding_roots(cx);
-            if items_to_delete.is_empty() {
+            let project = self.project.read(cx);
+            if items_to_delete.is_empty()
+                || items_to_delete.iter().any(|selection| project.is_library_worktree(selection.worktree_id, cx))
+            {
                 return None;
             }
-            let project = self.project.read(cx);
 
             let mut dirty_buffers = 0;
             let file_paths = items_to_delete
@@ -2997,7 +3105,12 @@ impl ProjectPanel {
 
     fn select_parent(&mut self, _: &SelectParent, window: &mut Window, cx: &mut Context<Self>) {
         if let Some((worktree, entry)) = self.selected_sub_entry(cx) {
-            if let Some(parent) = entry.path.parent() {
+            if entry.path.is_empty() && worktree.read(cx).library_name().is_some() {
+                self.selection =
+                    Some(SelectedEntry { worktree_id: LIBRARIES_WORKTREE_ID, entry_id: LIBRARIES_ENTRY_ID });
+                self.autoscroll(cx);
+                cx.notify();
+            } else if let Some(parent) = entry.path.parent() {
                 let worktree = worktree.read(cx);
                 if let Some(parent_entry) = worktree.entry_for_path(parent) {
                     self.selection = Some(SelectedEntry { worktree_id: worktree.id(), entry_id: parent_entry.id });
@@ -3895,15 +4008,35 @@ impl ProjectPanel {
         let mut max_width_item = None;
 
         let visible_worktrees: Vec<_> =
-            project.visible_worktrees(cx).map(|worktree| worktree.read(cx).snapshot()).collect();
+            project.visible_worktrees(cx).map(|worktree| (worktree.read(cx).snapshot(), false)).collect();
         let hide_root = settings.hide_root && visible_worktrees.len() == 1;
         let hide_hidden = settings.hide_hidden;
+        // External libraries follow the project roots, each under its own root row.
+        let worktrees = visible_worktrees
+            .into_iter()
+            .chain(project.library_worktrees(cx).into_iter().map(|worktree| (worktree.read(cx).snapshot(), true)))
+            .collect::<Vec<_>>();
+        let libraries_expanded = self.libraries_expanded;
 
         let visible_entries_task = cx.spawn_in(window, async move |this, cx| {
             let new_state = cx
                 .background_spawn(async move {
-                    for worktree_snapshot in visible_worktrees {
+                    let mut libraries_header_pushed = false;
+                    for (worktree_snapshot, is_library) in worktrees {
+                        if is_library && !libraries_header_pushed {
+                            libraries_header_pushed = true;
+                            new_state.visible_entries.push(VisibleEntriesForWorktree {
+                                worktree_id: LIBRARIES_WORKTREE_ID,
+                                depth_offset: 0,
+                                entries: vec![libraries_header_entry()],
+                                index: OnceCell::new(),
+                            });
+                        }
+                        if is_library && !libraries_expanded {
+                            continue;
+                        }
                         let worktree_id = worktree_snapshot.id();
+                        let hide_root = hide_root && !is_library;
 
                         let mut new_entry_parent_id = None;
                         let mut new_entry_kind = EntryKind::Dir;
@@ -4086,6 +4219,7 @@ impl ProjectPanel {
                         par_sort_worktree_entries(&mut visible_worktree_entries, sort_mode, sort_order);
                         new_state.visible_entries.push(VisibleEntriesForWorktree {
                             worktree_id,
+                            depth_offset: usize::from(is_library),
                             entries: visible_worktree_entries,
                             index: OnceCell::new(),
                         })
@@ -4109,7 +4243,7 @@ impl ProjectPanel {
                 .await;
             this.update_in(cx, |this, window, cx| {
                 this.state = new_state;
-                if let Some((worktree_id, entry_id)) = new_selected_entry {
+                if let Some((worktree_id, entry_id)) = this.update_visible_entries_task.selected_entry.take() {
                     this.selection = Some(SelectedEntry { worktree_id, entry_id });
                 }
 
@@ -4133,6 +4267,7 @@ impl ProjectPanel {
             _visible_entries_task: visible_entries_task,
             focus_filename_editor: focus_filename_editor || self.update_visible_entries_task.focus_filename_editor,
             autoscroll: autoscroll || self.update_visible_entries_task.autoscroll,
+            selected_entry: new_selected_entry.or(self.update_visible_entries_task.selected_entry),
         };
     }
 
@@ -4198,9 +4333,10 @@ impl ProjectPanel {
 
     fn expand_entry(&mut self, worktree_id: WorktreeId, entry_id: ProjectEntryId, cx: &mut Context<Self>) {
         self.project.update(cx, |project, cx| {
-            if let Some((worktree, expanded_dir_ids)) =
-                project.worktree_for_id(worktree_id, cx).zip(self.state.expanded_dir_ids.get_mut(&worktree_id))
-            {
+            // A worktree the panel hasn't listed yet (e.g. a just-opened library) has
+            // no expanded dirs; start them here so the first reveal expands its path.
+            if let Some(worktree) = project.worktree_for_id(worktree_id, cx) {
+                let expanded_dir_ids = self.state.expanded_dir_ids.entry(worktree_id).or_default();
                 project.expand_entry(worktree_id, entry_id, cx);
                 let worktree = worktree.read(cx);
 
@@ -4685,7 +4821,7 @@ impl ProjectPanel {
         range: Range<usize>,
         window: &mut Window,
         cx: &mut Context<ProjectPanel>,
-        callback: &mut dyn FnMut(&Entry, usize, &HashSet<Arc<RelPath>>, &mut Window, &mut Context<ProjectPanel>),
+        callback: &mut dyn FnMut(&Entry, usize, &HashSet<Arc<RelPath>>, usize, &mut Window, &mut Context<ProjectPanel>),
     ) {
         let mut ix = 0;
         for visible in &self.state.visible_entries {
@@ -4704,7 +4840,7 @@ impl ProjectPanel {
             let base_index = ix + entry_range.start;
             for (i, entry) in visible.entries[entry_range].iter().enumerate() {
                 let global_index = base_index + i;
-                callback(entry, global_index, entries, window, cx);
+                callback(entry, global_index, entries, visible.depth_offset, window, cx);
             }
             ix = end_ix;
         }
@@ -4730,6 +4866,11 @@ impl ProjectPanel {
             }
 
             let end_ix = range.end.min(ix + visible.entries.len());
+            if visible.worktree_id == LIBRARIES_WORKTREE_ID {
+                callback(LIBRARIES_ENTRY_ID, self.libraries_header_details(cx), window, cx);
+                ix = end_ix;
+                continue;
+            }
             let git_status_setting = {
                 let settings = ProjectPanelSettings::get_global(cx);
                 settings.git_status
@@ -5907,12 +6048,33 @@ impl ProjectPanel {
         let expanded_entry_ids = self.state.expanded_dir_ids.get(&worktree_id).map(Vec::as_slice).unwrap_or(&[]);
         let is_expanded = expanded_entry_ids.binary_search(&entry.id).is_ok();
 
-        let (chevron, icon) = Self::entry_icons(entry, is_expanded, cx);
+        let (chevron, mut icon) = Self::entry_icons(entry, is_expanded, cx);
 
         let path_style = self.project.read(cx).path_style(cx);
         let (depth, difference) = ProjectPanel::calculate_depth_and_difference(entry, entries_paths);
+        let depth = depth
+            + self
+                .state
+                .visible_entries
+                .iter()
+                .find(|visible| visible.worktree_id == worktree_id)
+                .map_or(0, |visible| visible.depth_offset);
 
-        let filename = if difference > 1 {
+        let library_name = if entry.path.is_empty() {
+            self.project
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .and_then(|worktree| worktree.read(cx).library_name().cloned())
+        } else {
+            None
+        };
+        if library_name.is_some() {
+            icon = Some(IconName::Box.path().into());
+        }
+
+        let filename = if let Some(library_name) = library_name {
+            library_name.to_string()
+        } else if difference > 1 {
             entry
                 .path
                 .last_n_components(difference)
@@ -6024,6 +6186,9 @@ impl ProjectPanel {
             return Ok(());
         }
 
+        if worktree.library_name().is_some() {
+            self.libraries_expanded = true;
+        }
         self.expand_entry(worktree_id, entry_id, cx);
         self.update_visible_entries(Some((worktree_id, entry_id)), false, true, window, cx);
         self.marked_entries.clear();
@@ -6075,7 +6240,7 @@ impl ProjectPanel {
 
             // Calculate the actual depth of the entry, taking into account that directories can be auto-folded.
             let (depth, _) = Self::calculate_depth_and_difference(entry, visible_worktree_entries);
-            (start..end, depth)
+            (start..end, depth + visible_worktree.depth_offset)
         };
 
         let candidates = indent_guides.iter().enumerate().filter(|(_, indent_guide)| indent_guide.offset.x == depth);
@@ -6415,10 +6580,10 @@ impl Render for ProjectPanel {
                                                 range,
                                                 window,
                                                 cx,
-                                                &mut |entry, _, entries, _, _| {
+                                                &mut |entry, _, entries, depth_offset, _, _| {
                                                     let (depth, _) =
                                                         Self::calculate_depth_and_difference(entry, entries);
-                                                    items.push(depth);
+                                                    items.push(depth + depth_offset);
                                                 },
                                             );
                                             items
@@ -6493,9 +6658,10 @@ impl Render for ProjectPanel {
                                             range,
                                             window,
                                             cx,
-                                            &mut |entry, index, entries, _, _| {
+                                            &mut |entry, index, entries, depth_offset, _, _| {
                                                 let (depth, _) = Self::calculate_depth_and_difference(entry, entries);
-                                                let candidate = StickyProjectPanelCandidate { index, depth };
+                                                let candidate =
+                                                    StickyProjectPanelCandidate { index, depth: depth + depth_offset };
                                                 items.push(candidate);
                                             },
                                         );
@@ -6952,4 +7118,25 @@ const fn git_status_indicator(git_status: GitSummary) -> Option<(&'static str, C
         return Some(("A", Color::Created));
     }
     None
+}
+
+fn libraries_header_entry() -> GitEntry {
+    GitEntry {
+        entry: Entry {
+            id: LIBRARIES_ENTRY_ID,
+            kind: EntryKind::Dir,
+            path: RelPath::empty_arc(),
+            inode: 0,
+            mtime: None,
+            canonical_path: None,
+            is_ignored: false,
+            is_hidden: false,
+            is_always_included: false,
+            is_external: false,
+            size: 0,
+            char_bag: CharBag::default(),
+            is_fifo: false,
+        },
+        git_summary: GitSummary::default(),
+    }
 }

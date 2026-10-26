@@ -117,6 +117,37 @@ impl ManifestProvider for CargoManifestProvider {
     }
 }
 
+pub(crate) struct CargoLibraryProvider;
+
+/// Recognizes library sources by their directory layout, so this works for any
+/// `CARGO_HOME` / `RUSTUP_HOME` and on remote hosts:
+/// - `<cargo home>/registry/src/<index>/<name>-<version>/`
+/// - `<cargo home>/git/checkouts/<repo>-<hash>/<rev>/`
+/// - `<toolchain>/lib/rustlib/src/rust/library/<crate>/`
+impl LibraryProvider for CargoLibraryProvider {
+    fn library_root(&self, abs_path: &Path) -> Option<LibraryRoot> {
+        // The outermost match wins, so a crate that happens to contain a
+        // matching layout still maps to its own root.
+        abs_path.ancestors().filter_map(cargo_library_root_at).last()
+    }
+}
+
+fn cargo_library_root_at(dir: &Path) -> Option<LibraryRoot> {
+    let names: Vec<&str> =
+        dir.ancestors().take(6).map(|path| path.file_name()?.to_str()).map_while(|name| name).collect();
+    let name = |index: usize| names.get(index).copied();
+    let library_name = match (name(0)?, name(1), name(2), name(3), name(4), name(5)) {
+        (krate, Some(_index), Some("src"), Some("registry"), _, _) => krate.to_string(),
+        (rev, Some(repo), Some("checkouts"), Some("git"), _, _) => {
+            let repo = repo.rsplit_once('-').map_or(repo, |(repo, _hash)| repo);
+            format!("{repo}@{rev}")
+        }
+        (krate, Some("library"), Some("rust"), Some("src"), Some("rustlib"), Some("lib")) => krate.to_string(),
+        _ => return None,
+    };
+    Some(LibraryRoot { path: dir.to_path_buf(), name: library_name })
+}
+
 #[async_trait(?Send)]
 impl LspAdapter for RustLspAdapter {
     fn name(&self) -> LanguageServerName {
@@ -913,4 +944,66 @@ fn test_fragment(variables: &TaskVariables, path: &Path, stem: &str) -> String {
         Some(stem.to_owned())
     };
     fragment.unwrap_or_else(|| "--".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn library_root(abs_path: &str) -> Option<LibraryRoot> {
+        CargoLibraryProvider.library_root(Path::new(abs_path))
+    }
+
+    #[test]
+    fn detects_registry_crate() {
+        assert_eq!(
+            library_root(
+                "/Users/me/.local/share/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vte-0.15.0/src/ansi.rs"
+            ),
+            Some(LibraryRoot {
+                path: PathBuf::from(
+                    "/Users/me/.local/share/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vte-0.15.0"
+                ),
+                name: "vte-0.15.0".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn detects_git_checkout() {
+        assert_eq!(
+            library_root("/home/me/.cargo/git/checkouts/zed-a1b2c3d4e5f60718/9f8e7d6/crates/gpui/src/lib.rs"),
+            Some(LibraryRoot {
+                path: PathBuf::from("/home/me/.cargo/git/checkouts/zed-a1b2c3d4e5f60718/9f8e7d6"),
+                name: "zed@9f8e7d6".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn detects_std_sources() {
+        assert_eq!(
+            library_root(
+                "/Users/me/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs"
+            ),
+            Some(LibraryRoot {
+                path: PathBuf::from(
+                    "/Users/me/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core"
+                ),
+                name: "core".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn outermost_match_wins() {
+        let root = library_root("/c/registry/src/idx/foo-1.0.0/fixtures/registry/src/idx/bar-2.0.0/lib.rs");
+        assert_eq!(root.map(|root| root.name), Some("foo-1.0.0".into()));
+    }
+
+    #[test]
+    fn ignores_other_paths() {
+        assert_eq!(library_root("/Users/me/projects/editor/crates/project/src/project.rs"), None);
+        assert_eq!(library_root("/c/registry/src/idx"), None);
+    }
 }

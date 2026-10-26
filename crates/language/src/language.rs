@@ -14,6 +14,7 @@ mod fallback_highlight;
 mod language_registry;
 
 pub mod language_settings;
+mod library;
 mod manifest;
 pub mod modeline;
 mod outline;
@@ -113,6 +114,8 @@ pub use language_registry::QueryFile;
 pub use language_registry::QueryFileContents;
 pub use language_registry::QueryFiles;
 pub use language_registry::ServerHealth;
+pub use library::LibraryProvider;
+pub use library::LibraryRoot;
 use lsp::CodeActionKind;
 use lsp::InitializeParams;
 use lsp::LanguageServerBinary;

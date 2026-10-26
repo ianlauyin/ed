@@ -28,3 +28,34 @@
   or folder already exists there. Detection uses the error kind
   (`io::ErrorKind::AlreadyExists` locally, `ErrorCode::AlreadyExists` from a
   remote server), never the message text.
+
+## External libraries
+
+- A path inside a library (as recognized by a language's `LibraryProvider`)
+  joins one worktree rooted at that library instead of getting its own
+  single-file worktree. Later files from the same library reuse it. This
+  includes visible opens such as a file passed on the command line. Opening
+  the library's root folder itself still makes a normal project root.
+- A library worktree is invisible: it is not a project root for the title,
+  search, tasks or terminals. It reuses the project's running language servers.
+  It is returned only after its first scan, so manifest lookups (the crate's
+  `Cargo.toml`) never see a half-scanned library.
+- A library is listed in the panel, and held strongly, once one of its files
+  becomes the active item. Until then it lives only as long as something
+  references it, so crates that only appear in inlay hints or hovers don't
+  pile up. Libraries are not persisted; restoring a tab brings its library back.
+- The panel groups all listed libraries under one collapsible
+  "External Libraries" row after the project roots. Each library is a
+  package-icon root, sorted by name and nested one level under that row.
+  The group row is a one-entry section with ids no worktree uses, so row
+  indexing, selection and scrolling treat it like any other row. Revealing a
+  library file expands the group, including the first time its library is
+  listed.
+- Library sources are read-only:
+  - Buffers open with `Capability::ReadOnly`, which can't be toggled: the tab's
+    lock is shown disabled ("Locked Tab"), and "Make Tab Editable" and
+    "Toggle Read Only" do nothing.
+  - `Project` refuses to create, rename, move into or out of, trash or delete
+    library entries. Copying out of a library is allowed.
+  - The context menu shows only non-mutating actions, plus "Remove Library" on
+    a library root.

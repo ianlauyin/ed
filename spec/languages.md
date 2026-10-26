@@ -143,3 +143,11 @@
   - Format Selections formats the whole buffer and keeps only edits that overlap
     the selections.
   - As with other `"auto"` formatters, Biome failures are logged and not shown to the user.
+- External library sources (e.g. dependency crates) open as library worktrees,
+  see "External libraries" in `project-panel.md`. Each language recognizes its
+  own library paths through a `LibraryProvider` registered by the `languages`
+  crate. Rust recognizes, by directory layout only (any `CARGO_HOME` /
+  `RUSTUP_HOME`):
+  - `registry/src/<index>/<name>-<version>/`, named `<name>-<version>`
+  - `git/checkouts/<repo>-<hash>/<rev>/`, named `<repo>@<rev>`
+  - `lib/rustlib/src/rust/library/<crate>/` (std sources), named `<crate>`

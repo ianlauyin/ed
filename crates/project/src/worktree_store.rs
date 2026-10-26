@@ -10,6 +10,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::bail;
 use collections::HashMap;
+use collections::HashSet;
 use fs::Fs;
 use fs::copy_recursive;
 use futures::FutureExt;
@@ -47,6 +48,7 @@ use worktree::Worktree;
 use worktree::WorktreeId;
 
 use crate::ProjectPath;
+use crate::library::library_root;
 use crate::trusted_worktrees::TrustedWorktrees;
 
 /// The current paths for a project's worktrees. Each folder path has a corresponding
@@ -200,6 +202,10 @@ pub struct WorktreeStore {
     downstream_client: Option<(AnyProtoClient, u64)>,
     retain_worktrees: bool,
     worktrees: Vec<WorktreeHandle>,
+    /// Library worktrees the user opened a file from. They are held strongly
+    /// and listed in the project panel; other library worktrees only live as
+    /// long as something (e.g. an inlay hint's location) references them.
+    shown_libraries: HashSet<WorktreeId>,
     scanning_enabled: bool,
     #[allow(clippy::type_complexity)]
     loading_worktrees: HashMap<Arc<SanitizedPath>, Shared<Task<Result<Entity<Worktree>, Arc<anyhow::Error>>>>>,
@@ -244,6 +250,7 @@ impl WorktreeStore {
             loading_worktrees: HashMap::default(),
             downstream_client: None,
             worktrees: Vec::new(),
+            shown_libraries: HashSet::default(),
             scanning_enabled: true,
             retain_worktrees,
             initial_scan_complete: watch::channel(true),
@@ -264,6 +271,7 @@ impl WorktreeStore {
             loading_worktrees: HashMap::default(),
             downstream_client: None,
             worktrees: Vec::new(),
+            shown_libraries: HashSet::default(),
             scanning_enabled: true,
             retain_worktrees,
             initial_scan_complete: watch::channel(true),
@@ -456,8 +464,22 @@ impl WorktreeStore {
         if let Some((tree, relative_path)) = self.find_worktree(abs_path, cx) {
             Task::ready(Ok((tree, relative_path)))
         } else {
-            let worktree = self.create_worktree(abs_path, visible, cx);
-            cx.background_spawn(async move { Ok((worktree.await?, RelPath::empty_arc())) })
+            let abs_path = abs_path.to_path_buf();
+            let worktree = self.create_worktree(&abs_path, visible, cx);
+            cx.spawn(async move |_, cx| {
+                let worktree = worktree.await?;
+                // A library worktree is rooted at the library, not at `abs_path`.
+                let relative_path = worktree.read_with(cx, |worktree, _| {
+                    let path_style = worktree.path_style();
+                    path_style
+                        .strip_prefix(&abs_path, worktree.abs_path().as_ref())
+                        .ok()
+                        .and_then(|path| RelPath::new(path, path_style).ok())
+                        .map(|path| path.into_arc())
+                        .context("path is outside of the created worktree")
+                })?;
+                Ok((worktree, relative_path))
+            })
         }
     }
 
@@ -666,15 +688,31 @@ impl WorktreeStore {
         visible: bool,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Worktree>>> {
-        let abs_path: Arc<SanitizedPath> = SanitizedPath::new_arc(&abs_path);
+        // Anything inside a library joins its library worktree, even when opened
+        // as a visible path (e.g. a file passed on the command line). Opening the
+        // library's root folder itself still makes a normal project root.
+        let library =
+            library_root(abs_path.as_ref(), cx).filter(|library| !visible || library.path != abs_path.as_ref());
+        let visible = visible && library.is_none();
+        let abs_path: Arc<SanitizedPath> = match &library {
+            Some(library) => SanitizedPath::new_arc(&library.path),
+            None => SanitizedPath::new_arc(&abs_path),
+        };
+        if library.is_some()
+            && let Some(worktree) =
+                self.worktrees().find(|worktree| worktree.read(cx).abs_path().as_ref() == abs_path.as_path())
+        {
+            return Task::ready(Ok(worktree));
+        }
+        let library_name: Option<Arc<str>> = library.map(|library| library.name.into());
         if !self.loading_worktrees.contains_key(&abs_path) {
             let task = match &self.state {
                 WorktreeStoreState::Remote { upstream_client, path_style, .. } => {
                     let abs_path = RemotePathBuf::new(abs_path.to_string(), *path_style);
-                    self.create_remote_worktree(upstream_client.clone(), abs_path, visible, cx)
+                    self.create_remote_worktree(upstream_client.clone(), abs_path, visible, library_name, cx)
                 }
                 WorktreeStoreState::Local { fs } => {
-                    self.create_local_worktree(fs.clone(), abs_path.clone(), visible, cx)
+                    self.create_local_worktree(fs.clone(), abs_path.clone(), visible, library_name, cx)
                 }
             };
 
@@ -728,6 +766,7 @@ impl WorktreeStore {
         client: AnyProtoClient,
         abs_path: RemotePathBuf,
         visible: bool,
+        library_name: Option<Arc<str>>,
         cx: &Context<Self>,
     ) -> Task<Result<Entity<Worktree>, Arc<anyhow::Error>>> {
         let path_style = abs_path.path_style();
@@ -771,6 +810,7 @@ impl WorktreeStore {
                         id: response.worktree_id,
                         root_name,
                         visible,
+                        library_name: library_name.map(|name| name.to_string()),
                         abs_path: response.canonicalized_path,
                         root_repo_common_dir: response.root_repo_common_dir,
                         root_repo_is_linked_worktree: response.root_repo_is_linked_worktree,
@@ -793,6 +833,7 @@ impl WorktreeStore {
         fs: Arc<dyn Fs>,
         abs_path: Arc<SanitizedPath>,
         visible: bool,
+        library_name: Option<Arc<str>>,
         cx: &Context<Self>,
     ) -> Task<Result<Entity<Worktree>, Arc<anyhow::Error>>> {
         let next_entry_id = self.next_entry_id.clone();
@@ -812,6 +853,16 @@ impl WorktreeStore {
                 cx,
             )
             .await?;
+            if library_name.is_some() {
+                worktree.update(cx, |worktree, _| worktree.set_library_name(library_name));
+                // Files open right after this returns, and manifest lookups (e.g. the
+                // crate's `Cargo.toml`) must not see a half-scanned library.
+                let scan_complete =
+                    worktree.read_with(cx, |worktree, _| worktree.as_local().map(|worktree| worktree.scan_complete()));
+                if let Some(scan_complete) = scan_complete {
+                    scan_complete.await;
+                }
+            }
 
             this.update(cx, |this, cx| this.add(&worktree, cx))?;
 
@@ -871,7 +922,32 @@ impl WorktreeStore {
         .detach();
     }
 
+    pub fn is_library_shown(&self, worktree_id: WorktreeId) -> bool {
+        self.shown_libraries.contains(&worktree_id)
+    }
+
+    /// Lists the library worktree in the project panel and keeps it alive.
+    pub fn show_library(&mut self, worktree_id: WorktreeId, cx: &mut Context<Self>) {
+        if self.shown_libraries.contains(&worktree_id) {
+            return;
+        }
+        let Some(worktree) = self.worktree_for_id(worktree_id, cx) else {
+            return;
+        };
+        if worktree.read(cx).library_name().is_none() {
+            return;
+        }
+        self.shown_libraries.insert(worktree_id);
+        for handle in &mut self.worktrees {
+            if handle.upgrade().is_some_and(|handle| handle == worktree) {
+                *handle = WorktreeHandle::Strong(worktree.clone());
+            }
+        }
+        cx.emit(WorktreeStoreEvent::WorktreeOrderChanged);
+    }
+
     pub fn remove_worktree(&mut self, id_to_remove: WorktreeId, cx: &mut Context<Self>) {
+        self.shown_libraries.remove(&id_to_remove);
         let mut removed = false;
         self.worktrees.retain(|worktree| {
             if let Some(worktree) = worktree.upgrade() {
@@ -937,7 +1013,9 @@ impl WorktreeStore {
 
         for worktree in worktrees {
             if let Some(old_worktree) = old_worktrees_by_id.remove(&WorktreeId::from_proto(worktree.id)) {
-                let push_strong_handle = self.retain_worktrees || old_worktree.read(cx).is_visible();
+                let push_strong_handle = self.retain_worktrees
+                    || old_worktree.read(cx).is_visible()
+                    || self.shown_libraries.contains(&old_worktree.read(cx).id());
                 let handle = if push_strong_handle {
                     WorktreeHandle::Strong(old_worktree.clone())
                 } else {
@@ -1047,6 +1125,7 @@ impl WorktreeStore {
                     id: worktree.id().to_proto(),
                     root_name: worktree.root_name_str().to_owned(),
                     visible: worktree.is_visible(),
+                    library_name: worktree.library_name().map(ToString::to_string),
                     abs_path: worktree.abs_path().to_string_lossy().into_owned(),
                     root_repo_common_dir: worktree.root_repo_common_dir().map(|p| p.to_string_lossy().into_owned()),
                     root_repo_is_linked_worktree: worktree.root_repo_is_linked_worktree(),

@@ -3642,6 +3642,7 @@ dependencies = [
  "file_icons",
  "fs",
  "futures",
+ "fuzzy",
  "git",
  "git_ui_core",
  "gpui",
@@ -6336,7 +6337,7 @@ dependencies = [
 
 [[package]]
 name = "zed"
-version = "1.43.0"
+version = "1.44.0"
 dependencies = [
  "activity_indicator",
  "anyhow",

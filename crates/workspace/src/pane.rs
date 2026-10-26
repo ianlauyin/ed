@@ -2752,7 +2752,9 @@ impl Pane {
                         }
                         None => this,
                     })
-                    .when(capability == Capability::Read && has_file_icon, |this| this.child(read_only_toggle(true))),
+                    .when(!capability.editable() && has_file_icon, |this| {
+                        this.child(read_only_toggle(capability == Capability::Read))
+                    }),
             );
 
         let single_entry_to_resolve = (self.items[ix].buffer_kind(cx) == ItemBufferKind::Singleton)
