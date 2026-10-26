@@ -5898,7 +5898,7 @@ impl Element for EditorElement {
     type PrepaintState = EditorLayout;
 
     fn id(&self) -> Option<ElementId> {
-        None
+        Some("editor".into())
     }
 
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
@@ -7043,7 +7043,7 @@ impl Element for EditorElement {
 
     fn paint(
         &mut self,
-        _: Option<&GlobalElementId>,
+        global_id: Option<&GlobalElementId>,
         bounds: Bounds<gpui::Pixels>,
         _: &mut Self::RequestLayoutState,
         layout: &mut Self::PrepaintState,
@@ -7052,6 +7052,11 @@ impl Element for EditorElement {
     ) {
         if !layout.mode.is_minimap() {
             let focus_handle = self.editor.focus_handle(cx);
+            if cx.ui_snapshots_enabled()
+                && let Some(global_id) = global_id
+            {
+                window.record_ui_element(global_id, bounds, true, Some(&focus_handle));
+            }
             let key_context = self.editor.update(cx, |editor, cx| editor.key_context(window, cx));
 
             window.set_key_context(key_context);

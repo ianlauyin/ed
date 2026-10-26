@@ -23,6 +23,7 @@ use gpui::Scene;
 use gpui::Size;
 use gpui::point;
 use gpui::size;
+use image::RgbaImage;
 use objc2::Message as _;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -33,6 +34,7 @@ use objc2_foundation::NSRange;
 use objc2_foundation::NSString;
 use objc2_metal::MTLBlendFactor;
 use objc2_metal::MTLBlendOperation;
+use objc2_metal::MTLBlitCommandEncoder as _;
 use objc2_metal::MTLBuffer;
 use objc2_metal::MTLClearColor;
 use objc2_metal::MTLCommandBuffer;
@@ -45,6 +47,7 @@ use objc2_metal::MTLDrawable;
 use objc2_metal::MTLGPUFamily;
 use objc2_metal::MTLLibrary;
 use objc2_metal::MTLLoadAction;
+use objc2_metal::MTLOrigin;
 use objc2_metal::MTLPixelFormat;
 use objc2_metal::MTLPrimitiveType;
 use objc2_metal::MTLRenderCommandEncoder;
@@ -52,6 +55,7 @@ use objc2_metal::MTLRenderPassDescriptor;
 use objc2_metal::MTLRenderPipelineDescriptor;
 use objc2_metal::MTLRenderPipelineState;
 use objc2_metal::MTLResourceOptions;
+use objc2_metal::MTLSize;
 use objc2_metal::MTLStorageMode;
 use objc2_metal::MTLStoreAction;
 use objc2_metal::MTLTexture;
@@ -490,6 +494,59 @@ impl MetalRenderer {
             command_buffer.presentDrawable(ProtocolObject::from_ref(&*drawable));
             command_buffer.commit();
         }
+    }
+
+    /// Render `scene` offscreen at the layer's drawable size and read it back.
+    pub fn render_to_image(&self, scene: &Scene) -> Result<RgbaImage> {
+        let layer = self.layer.as_ref().context("headless renderer has no drawable size")?;
+        let drawable_size = layer.drawableSize();
+        let width = drawable_size.width.ceil() as usize;
+        let height = drawable_size.height.ceil() as usize;
+        anyhow::ensure!(width > 0 && height > 0, "window has no drawable area");
+        let viewport_size: Size<DevicePixels> = size(i32::try_from(width)?.into(), i32::try_from(height)?.into());
+
+        let texture_descriptor = MTLTextureDescriptor::new();
+        unsafe {
+            texture_descriptor.setWidth(width);
+            texture_descriptor.setHeight(height);
+        }
+        texture_descriptor.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+        texture_descriptor.setStorageMode(MTLStorageMode::Private);
+        texture_descriptor.setUsage(MTLTextureUsage::RenderTarget | MTLTextureUsage::ShaderRead);
+        let texture =
+            self.device.newTextureWithDescriptor(&texture_descriptor).context("failed to create capture texture")?;
+
+        let bytes_per_row = width * 4;
+        let buffer = self
+            .device
+            .newBufferWithLength_options(bytes_per_row * height, MTLResourceOptions::StorageModeShared)
+            .context("failed to create capture buffer")?;
+
+        let command_buffer = self.render_frame(scene, &texture, viewport_size)?;
+        let blit_encoder = command_buffer.blitCommandEncoder().context("failed to create blit encoder")?;
+        unsafe {
+            blit_encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
+                &texture,
+                0,
+                0,
+                MTLOrigin { x: 0, y: 0, z: 0 },
+                MTLSize { width, height, depth: 1 },
+                &buffer,
+                0,
+                bytes_per_row,
+                bytes_per_row * height,
+            );
+        }
+        blit_encoder.endEncoding();
+        command_buffer.commit();
+        command_buffer.waitUntilCompleted();
+
+        let bgra = unsafe { slice::from_raw_parts(buffer.contents().cast::<u8>().as_ptr(), bytes_per_row * height) };
+        let mut rgba = Vec::with_capacity(bgra.len());
+        for pixel in bgra.as_chunks::<4>().0 {
+            rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
+        }
+        RgbaImage::from_raw(width as u32, height as u32, rgba).context("capture buffer has the wrong size")
     }
 
     fn render_frame(

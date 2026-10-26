@@ -6,6 +6,8 @@
   features, and no `cfg(test)`-gated code. Test doubles and harnesses (fake
   filesystem, fake language servers, test platform/scheduler/clock,
   `TestAppContext`, visual test runner) are removed.
+- GUI testing goes through the opt-in automation socket and `edctl`
+  (see `automation.md`); it is a runtime switch, not a Cargo feature.
 - GPUI exposes no `test`, `bench`, or `property_test` macros, no
   `bench_group!`/`bench_main!`, and no `debug_selector` element hook.
 - The `perf` tooling, `util_macros`, and the dylint UI test fixtures are removed.

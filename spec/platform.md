@@ -28,7 +28,7 @@ remote detection, command execution, and proxy startup are removed.
   Dock); the last workspace stays in the session for restore. There is no
   `on_last_window_closed` setting.
 - The native menu bar has no Help menu.
-- No `ed` CLI binary. Files and folders open through macOS (Finder, `open -a
+- No `ed` CLI binary (`edctl` is only for automation, see `automation.md`). Files and folders open through macOS (Finder, `open -a
   ed`, Apple Events) or as arguments to the app binary itself. There is no
   `--wait`, environment/cwd forwarding, open-mode flags (`-a`/`-n`/`-e`), or
   `cli_default_open_behavior` setting; open requests follow

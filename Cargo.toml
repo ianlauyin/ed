@@ -10,6 +10,7 @@ members = [
     "crates/collections",
     "crates/command_palette",
     "crates/component",
+    "crates/control",
     "crates/db",
     "crates/diagnostics",
     "crates/editor",
@@ -121,6 +122,7 @@ clock = { path = "crates/clock" }
 collections = { path = "crates/collections" }
 command_palette = { path = "crates/command_palette" }
 component = { path = "crates/component" }
+control = { path = "crates/control" }
 db = { path = "crates/db" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 diagnostics = { path = "crates/diagnostics" }
@@ -481,6 +483,7 @@ filter_map_next = "warn"
 flat_map_option = "warn"
 format_collect = "warn"
 format_push_string = "warn"
+wildcard_imports = "warn"
 
 # old lint rules
 

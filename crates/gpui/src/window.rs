@@ -145,6 +145,8 @@ use crate::TextStyle;
 use crate::TextStyleRefinement;
 use crate::ThermalState;
 use crate::TransformationMatrix;
+use crate::UiElement;
+use crate::UiText;
 use crate::Underline;
 use crate::UnderlineStyle;
 use crate::WindowAppearance;
@@ -1036,6 +1038,8 @@ pub(crate) struct Frame {
     pub(crate) tooltip_requests: Vec<Option<TooltipRequest>>,
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
     pub(crate) tab_stops: TabStopMap,
+    pub(crate) ui_elements: Vec<UiElement>,
+    pub(crate) ui_texts: Vec<UiText>,
 }
 
 #[derive(Clone, Default)]
@@ -1056,6 +1060,8 @@ pub(crate) struct PaintIndex {
     cursor_styles_index: usize,
     accessed_element_states_index: usize,
     tab_handle_index: usize,
+    ui_elements_index: usize,
+    ui_texts_index: usize,
     line_layout_index: LineLayoutIndex,
 }
 
@@ -1077,6 +1083,8 @@ impl Frame {
             cursor_styles: Vec::new(),
 
             tab_stops: TabStopMap::default(),
+            ui_elements: Vec::new(),
+            ui_texts: Vec::new(),
         }
     }
 
@@ -1093,6 +1101,8 @@ impl Frame {
         self.window_control_hitboxes.clear();
         self.deferred_draws.clear();
         self.tab_stops.clear();
+        self.ui_elements.clear();
+        self.ui_texts.clear();
         self.focus = None;
     }
 
@@ -3367,6 +3377,8 @@ impl Window {
             cursor_styles_index: self.next_frame.cursor_styles.len(),
             accessed_element_states_index: self.next_frame.accessed_element_states.len(),
             tab_handle_index: self.next_frame.tab_stops.paint_index(),
+            ui_elements_index: self.next_frame.ui_elements.len(),
+            ui_texts_index: self.next_frame.ui_texts.len(),
             line_layout_index: self.text_system.layout_index(),
         }
     }
@@ -3396,6 +3408,13 @@ impl Window {
         self.next_frame.tab_stops.replay(
             &self.rendered_frame.tab_stops.insertion_history[range.start.tab_handle_index..range.end.tab_handle_index],
         );
+
+        self.next_frame.ui_elements.extend(
+            self.rendered_frame.ui_elements[range.start.ui_elements_index..range.end.ui_elements_index].iter().cloned(),
+        );
+        self.next_frame
+            .ui_texts
+            .extend(self.rendered_frame.ui_texts[range.start.ui_texts_index..range.end.ui_texts_index].iter().cloned());
 
         self.text_system.reuse_layouts(range.start.line_layout_index..range.end.line_layout_index);
         self.next_frame.scene.replay(range.start.scene_index..range.end.scene_index, &self.rendered_frame.scene);

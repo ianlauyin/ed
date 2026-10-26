@@ -24,6 +24,7 @@ collections.workspace = true
 derive_more.workspace = true
 dispatch2.workspace = true
 etagere.workspace = true
+image.workspace = true
 futures.workspace = true
 log.workspace = true
 objc2.workspace = true
@@ -35,6 +36,7 @@ objc2-metal = { workspace = true, features = [
     "block2",
     "dispatch2",
     "MTLAllocation",
+    "MTLBlitCommandEncoder",
     "MTLBuffer",
     "MTLCommandBuffer",
     "MTLCommandEncoder",

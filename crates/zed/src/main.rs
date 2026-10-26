@@ -348,6 +348,7 @@ fn main() {
         watch_languages(app_state.fs.clone(), app_state.languages.clone(), cx);
 
         initialize_workspace(app_state.clone(), cx);
+        zed::control_server::init(cx);
 
         cx.activate(true);
 

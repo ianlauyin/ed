@@ -150,6 +150,12 @@ impl ShapedLine {
         cx: &mut App,
         mut paint_underline: impl FnMut(Range<usize>, Point<Pixels>, Pixels, &UnderlineStyle, &mut Window),
     ) -> Result<()> {
+        if cx.ui_snapshots_enabled() {
+            window.record_ui_text(
+                &self.text,
+                line_paint_bounds(origin, &self.layout, line_height, align, align_width, &[]),
+            );
+        }
         paint_line(
             origin,
             &self.layout,
@@ -445,6 +451,17 @@ impl WrappedLine {
             None => self.layout.wrap_width,
         };
 
+        if cx.ui_snapshots_enabled() {
+            let bounds = line_paint_bounds(
+                origin,
+                &self.layout.unwrapped_layout,
+                line_height,
+                align,
+                align_width,
+                &self.wrap_boundaries,
+            );
+            window.record_ui_text(&self.text, bounds);
+        }
         paint_line(
             origin,
             &self.layout.unwrapped_layout,

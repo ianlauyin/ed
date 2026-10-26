@@ -1,4 +1,5 @@
 mod app_menus;
+pub(crate) mod control_server;
 
 pub(crate) mod mac_only_instance;
 

@@ -1960,6 +1960,18 @@ impl Interactivity {
                 return ((), element_state);
             }
 
+            if cx.ui_snapshots_enabled()
+                && let Some(global_id) = global_id
+                && (hitbox.is_some() || self.tracked_focus_handle.is_some())
+            {
+                window.record_ui_element(
+                    global_id,
+                    bounds,
+                    !self.click_listeners.is_empty(),
+                    self.tracked_focus_handle.as_ref(),
+                );
+            }
+
             let mut tab_group = None;
             if self.tab_group {
                 tab_group = self.tab_index;

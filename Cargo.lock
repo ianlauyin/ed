@@ -688,6 +688,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "control"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1707,6 +1717,7 @@ dependencies = [
  "etagere",
  "futures",
  "gpui",
+ "image",
  "log",
  "objc2",
  "objc2-core-foundation",
@@ -1733,6 +1744,7 @@ dependencies = [
  "gpui",
  "gpui_apple",
  "gpui_util",
+ "image",
  "itertools 0.15.0",
  "log",
  "objc2",
@@ -6347,6 +6359,7 @@ dependencies = [
  "clap",
  "collections",
  "command_palette",
+ "control",
  "db",
  "diagnostics",
  "editor",
@@ -6382,6 +6395,7 @@ dependencies = [
  "recent_projects",
  "remote",
  "search",
+ "serde_json",
  "session",
  "settings",
  "settings_content",

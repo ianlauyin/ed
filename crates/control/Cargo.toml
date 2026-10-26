@@ -1,0 +1,22 @@
+[package]
+name = "control"
+version = "0.1.0"
+edition.workspace = true
+
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/control.rs"
+doctest = false
+
+[[bin]]
+name = "edctl"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
