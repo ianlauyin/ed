@@ -75,6 +75,8 @@
   always sees the document version from the `didChange` sent before it.
 - `editor::RestartLanguageServer` restarts the servers relevant to the current
   buffer, including servers previously stopped with `editor::StopLanguageServer`.
+- JSON language-server schema-content requests resolve the last supplied URI;
+  an empty URI list returns an error.
 - There is no managed Node.js runtime and no `node` settings (`node.path`,
   `node.npm_path` are removed). Node-based tooling uses `node`/`npx` from the
   shell `PATH`, locally and on remote servers.

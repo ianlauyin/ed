@@ -40,7 +40,7 @@ pub fn register_requests(lsp_store: WeakEntity<LspStore>, language_server: &Lang
         .on_request::<SchemaContentRequest, _, _>(move |params, cx| {
             let handler = cx.try_read_global::<SchemaHandlingImpl, _>(|handler, _| handler.0);
             let mut cx = cx.clone();
-            let uri = params.clone().pop();
+            let uri = params.into_iter().next_back();
             let lsp_store = lsp_store.clone();
             let resolution = async move {
                 let lsp_store = lsp_store.upgrade().context("LSP store has been dropped")?;

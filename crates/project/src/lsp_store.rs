@@ -1947,7 +1947,7 @@ impl LocalLspStore {
                             let Ok(file_path) = op.text_document.uri.to_file_path() else {
                                 log::warn!(
                                     "Failed to convert URI '{:?}' to file path. Skipping {}",
-                                    &op.text_document.uri,
+                                    op.text_document.uri,
                                     describe_code_action(&action),
                                 );
                                 continue 'actions;
@@ -2022,7 +2022,7 @@ impl LocalLspStore {
 
                     log::warn!(
                         "Executing code action command '{}'. This may cause formatting to abort unnecessarily as well as splitting formatting into two entries in the undo history",
-                        &command.command,
+                        command.command,
                     );
 
                     let server_capabilities = server.capabilities();
@@ -2041,7 +2041,7 @@ impl LocalLspStore {
                     }
 
                     extend_formatting_transaction(buffer, formatting_transaction_id, cx, |_, _| {})?;
-                    log::info!("Executing command {}", &command.command);
+                    log::info!("Executing command {}", command.command);
 
                     lsp_store.update(cx, |this, _| {
                         this.as_local_mut()
@@ -2065,7 +2065,7 @@ impl LocalLspStore {
                     if execute_command_result.is_err() {
                         log::error!(
                             "Failed to execute command '{}' as part of {}",
-                            &command.command,
+                            command.command,
                             describe_code_action(&action),
                         );
                         continue 'actions;
@@ -2113,7 +2113,7 @@ impl LocalLspStore {
                     }
                     log::warn!(
                         "Unexpected edits to buffers other than the buffer actively being formatted due to command {}. Impacted buffers: [{}].",
-                        &command.command,
+                        command.command,
                         extra_buffers,
                     );
                     // NOTE: if this case is hit, the proper thing to do is to for each buffer, merge the extra transaction
