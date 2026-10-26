@@ -894,9 +894,7 @@ impl PathInclusionMatcher {
         // For example, `src/**/*.rs` becomes `src/` and `**/*.rs`. The glob part gets dropped.
         // Then, when checking whether a given directory should be scanned, we check whether it is a non-empty substring of any glob prefix.
         if query.filters_path() {
-            included.extend(
-                query.files_to_include().sources().filter_map(|glob| Some(wax::Glob::new(glob).ok()?.partition().0)),
-            );
+            included.extend(query.files_to_include().sources().map(glob_literal_prefix));
         }
         Self { included, query }
     }
@@ -972,6 +970,27 @@ impl PathInclusionMatcher {
             false
         }
     }
+}
+
+/// The leading path components of `glob` that contain no glob syntax, e.g. `src` for `src/**/*.rs`.
+fn glob_literal_prefix(glob: &str) -> PathBuf {
+    let mut prefix = PathBuf::new();
+    if glob.starts_with('/') {
+        prefix.push("/");
+    }
+    for component in glob.split('/').filter(|component| !component.is_empty()) {
+        let mut literal = String::new();
+        let mut chars = component.chars();
+        while let Some(character) = chars.next() {
+            match character {
+                '\\' => literal.extend(chars.next()),
+                '*' | '?' | '[' | '{' => return prefix,
+                _ => literal.push(character),
+            }
+        }
+        prefix.push(literal);
+    }
+    prefix
 }
 
 type IsTerminating = bool;
@@ -1065,5 +1084,21 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
     pub async fn flush(self) {
         _ = self.flush_batch.send(true).await;
         self._batch_task.await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn glob_literal_prefix_stops_at_first_glob_component() {
+        assert_eq!(glob_literal_prefix("src/**/*.rs"), PathBuf::from("src"));
+        assert_eq!(glob_literal_prefix("crates/editor/"), PathBuf::from("crates/editor"));
+        assert_eq!(glob_literal_prefix("crates/edi*/src"), PathBuf::from("crates"));
+        assert_eq!(glob_literal_prefix("crates/{a,b}"), PathBuf::from("crates"));
+        assert_eq!(glob_literal_prefix("*.rs"), PathBuf::new());
+        assert_eq!(glob_literal_prefix("/abs/path/*.rs"), PathBuf::from("/abs/path"));
+        assert_eq!(glob_literal_prefix("a\\*b/c"), PathBuf::from("a*b/c"));
     }
 }

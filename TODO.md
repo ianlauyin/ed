@@ -10,3 +10,4 @@
 
 - think about remote "download" vs local "open in default app", copy/paste file across local/remote
 - think about if we don't need external terminal, just do everything in ed?
+- append external crate file in project file tree, and make them readonly (not allow to edit)

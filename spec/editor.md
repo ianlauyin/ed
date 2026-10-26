@@ -102,6 +102,10 @@
   certificate files open, copy, rename and jump-to-symbol like any other file.
   Logs and error messages are not scrubbed for secret-looking environment
   variables; logs stay local.
+- Project search include/exclude fields take globs, not fuzzy queries like the
+  file finder: they are yes/no filters, and a glob's literal prefix limits which
+  gitignored directories are scanned. A pattern without glob syntax matches
+  that path at any depth (`editor` matches every `editor` directory or file).
 
 ## Markdown
 
