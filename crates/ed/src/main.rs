@@ -1,4 +1,5 @@
 mod ed;
+mod logger;
 
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
 // at runtime (data dir, config dir, etc.) match what the binary is called.
@@ -23,6 +24,14 @@ use assets::Assets;
 use clap::Parser;
 use collections::HashMap;
 use db::kvp::KeyValueStore;
+use ed::OpenListener;
+use ed::OpenRequest;
+use ed::RawOpenRequest;
+use ed::build_window_options;
+use ed::derive_paths_with_position;
+use ed::initialize_keymap;
+use ed::initialize_workspace;
+use ed::open_paths_with_positions;
 use editor::Editor;
 use fs::Fs;
 use fs::RealFs;
@@ -59,14 +68,6 @@ use workspace::WorkspaceSettings;
 use workspace::WorkspaceStore;
 use workspace::notifications::NotificationId;
 use workspace::restore_multiworkspace;
-use ed::OpenListener;
-use ed::OpenRequest;
-use ed::RawOpenRequest;
-use ed::build_window_options;
-use ed::derive_paths_with_position;
-use ed::initialize_keymap;
-use ed::initialize_workspace;
-use ed::open_paths_with_positions;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -129,7 +130,7 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &AsyncApp) {
 }
 
 fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
-    zlog::error!("Failed to open window: {e:?}");
+    log::error!("Failed to open window: {e:?}");
     eprintln!("ed failed to open a window: {e:?}.");
     process::exit(1);
 }
@@ -158,15 +159,15 @@ fn main() {
         return;
     }
 
-    zlog::init();
+    logger::init();
 
     if stdout_is_a_pty() {
-        zlog::init_output_stdout();
+        logger::init_output_stdout();
     } else {
-        let result = zlog::init_output_file(paths::log_file(), Some(paths::old_log_file()));
+        let result = logger::init_output_file(paths::log_file(), paths::old_log_file());
         if let Err(err) = result {
             eprintln!("Could not open log file: {}... Defaulting to stdout", err);
-            zlog::init_output_stdout();
+            logger::init_output_stdout();
         };
     }
     install_panic_hook();
@@ -244,7 +245,6 @@ fn main() {
         ed_actions::init();
 
         settings::init(cx);
-        zlog_settings::init(cx);
         initialize_keymap(cx);
 
         <dyn Fs>::set_global(fs.clone(), cx);
@@ -669,7 +669,7 @@ fn install_panic_hook() {
         let thread = std::thread::current();
         let thread_name = thread.name().unwrap_or("<unnamed>");
         log::error!("thread '{thread_name}' panicked at {location}:\n{message}\n{backtrace}");
-        zlog::flush();
+        logger::flush();
         old_hook(info);
         std::process::exit(1);
     }));

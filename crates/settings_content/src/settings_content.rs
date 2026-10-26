@@ -145,12 +145,6 @@ pub struct SettingsContent {
     /// Default: on_typing_and_action
     pub hide_mouse: Option<HideMouseMode>,
 
-    /// A map of log scopes to the desired log level.
-    /// Useful for filtering out noisy logs or enabling more verbose logging.
-    ///
-    /// Example: {"log": {"client": "warn"}}
-    pub log: Option<HashMap<String, String>>,
-
     pub line_indicator_format: Option<LineIndicatorFormat>,
 
     pub outline_panel: Option<OutlinePanelSettingsContent>,

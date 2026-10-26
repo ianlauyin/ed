@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "ed"
-version = "1.45.0"
+version = "1.46.0"
 default-run = "ed"
 
 [lints]
@@ -79,7 +79,6 @@ uuid.workspace = true
 which_key.workspace = true
 workspace.workspace = true
 ed_actions.workspace = true
-zlog.workspace = true
-zlog_settings.workspace = true
+time.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]

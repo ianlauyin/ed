@@ -113,7 +113,7 @@ remote detection, command execution, and proxy startup are removed.
 - Branding is `ed` everywhere (crates `ed`/`ed_actions`, UI text, proto
   package `ed.messages`, `TERM_PROGRAM=ed`, `ed://schemas/`, pasteboard types).
   Environment variables use the `ED_` prefix (task variables like `$ED_FILE`,
-  `ED_LOG`, `ED_WINDOW_SIZE`, ...) and the project folder is `.ed`; upstream
+  `ED_WINDOW_SIZE`, ...) and the project folder is `.ed`; upstream
   `ZED_*` variables and `.zed` folders are ignored.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.

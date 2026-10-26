@@ -10,8 +10,6 @@ use lsp::LanguageServer;
 
 use crate::LspStore;
 
-const LOGGER: zlog::Logger = zlog::scoped!("json-schema");
-
 /// https://github.com/Microsoft/vscode/blob/main/extensions/json-language-features/server/README.md#schema-content-request
 ///
 /// Represents a "JSON language server-specific, non-standardized, extension to the LSP" with which the vscode-json-language-server
@@ -51,15 +49,9 @@ pub fn register_requests(lsp_store: WeakEntity<LspStore>, language_server: &Lang
                 handle_schema_request(lsp_store, uri, &mut cx).await
             };
             async move {
-                zlog::trace!(LOGGER => "Handling schema request for {:?}", &params);
                 let result = resolution.await;
-                match &result {
-                    Ok(content) => {
-                        zlog::trace!(LOGGER => "Schema request resolved with {}B schema", content.len());
-                    }
-                    Err(err) => {
-                        zlog::warn!(LOGGER => "Schema request failed: {}", err);
-                    }
+                if let Err(err) = &result {
+                    log::warn!("Schema request failed: {}", err);
                 }
                 result
             }

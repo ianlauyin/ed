@@ -32,6 +32,12 @@ and manually requested performance reports remain available. There is no crash
 handler or minidump support: a panic logs its message and backtrace to the log
 (stdout when attached to a terminal) and exits the process.
 
+The local log is for error review only; interactive debugging goes through edctl
+automation (`automation.md`). The `log` backend is a small module in the `ed`
+binary, not a separate crate. The editor logs at a fixed `info` level (errors only
+for `usvg`/`simplecss`). There is no `log` setting and no `ED_LOG`/`RUST_LOG`
+filtering, and `RUST_LOG` is not forwarded to the remote server.
+
 SSH editing remains supported, including transport and buffer synchronization.
 WSL transport, UI, settings, CLI requests, and saved connection restoration are removed.
 Reconnection uses separate timeouts for the new connection's handshake and

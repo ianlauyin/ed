@@ -982,7 +982,7 @@ dependencies = [
 
 [[package]]
 name = "ed"
-version = "1.45.0"
+version = "1.46.0"
 dependencies = [
  "activity_indicator",
  "anyhow",
@@ -1041,6 +1041,7 @@ dependencies = [
  "theme",
  "theme_selector",
  "theme_settings",
+ "time",
  "title_bar",
  "ui",
  "url",
@@ -1049,8 +1050,6 @@ dependencies = [
  "uuid",
  "which_key",
  "workspace",
- "zlog",
- "zlog_settings",
 ]
 
 [[package]]
@@ -2417,7 +2416,6 @@ dependencies = [
  "unicase",
  "util",
  "watch",
- "zlog",
 ]
 
 [[package]]
@@ -3723,7 +3721,6 @@ dependencies = [
  "watch",
  "which",
  "worktree",
- "zlog",
 ]
 
 [[package]]
@@ -6481,26 +6478,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.3",
-]
-
-[[package]]
-name = "zlog"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collections",
- "log",
- "time",
-]
-
-[[package]]
-name = "zlog_settings"
-version = "0.1.0"
-dependencies = [
- "collections",
- "gpui",
- "settings",
- "zlog",
 ]
 
 [[package]]

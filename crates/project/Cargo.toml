@@ -57,4 +57,3 @@ util.workspace = true
 watch.workspace = true
 which.workspace = true
 worktree.workspace = true
-zlog.workspace = true

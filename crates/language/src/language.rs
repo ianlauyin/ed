@@ -1170,12 +1170,7 @@ pub fn range_from_lsp(range: lsp::Range) -> Range<Unclipped<PointUtf16>> {
     let mut start = point_from_lsp(range.start);
     let mut end = point_from_lsp(range.end);
     if start > end {
-        // We debug instead of warn so that this is not logged by default unless explicitly requested.
-        // Using warn would write to the log file, and since we receive an enormous amount of
-        // range_from_lsp calls (especially during completions), that can hang the main thread.
-        //
-        // See issue #36223.
-        zlog::debug!("range_from_lsp called with inverted range {start:?}-{end:?}");
+        // Not logged: completions produce enough of these to hang the main thread on log writes (#36223).
         mem::swap(&mut start, &mut end);
     }
     start..end

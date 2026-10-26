@@ -104,8 +104,6 @@ members = [
     "crates/worktree",
     "crates/ed",
     "crates/ed_actions",
-    "crates/zlog",
-    "crates/zlog_settings",
 ]
 default-members = ["crates/ed"]
 
@@ -215,8 +213,6 @@ which_key = { path = "crates/which_key" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 ed_actions = { path = "crates/ed_actions" }
-zlog = { path = "crates/zlog" }
-zlog_settings = { path = "crates/zlog_settings" }
 
 # External crates
 aho-corasick = "1.1"

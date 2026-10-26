@@ -285,7 +285,6 @@ pub fn settings() -> SettingsContent {
             ..Default::default()
         }),
         hide_mouse: Some(HideMouseMode::OnTypingAndAction),
-        log: Some(HashMap::default()),
         line_indicator_format: Some(LineIndicatorFormat::Long),
         outline_panel: Some(OutlinePanelSettingsContent {
             button: Some(true),

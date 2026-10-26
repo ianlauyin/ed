@@ -325,7 +325,6 @@ impl RemoteConnection for SshRemoteConnection {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
-        const VARS: [&str; 2] = ["RUST_LOG", "RUST_BACKTRACE"];
         delegate.set_status(Some("Starting proxy"), cx);
 
         let Some(remote_binary_path) = self.remote_binary_path.clone() else {
@@ -333,10 +332,8 @@ impl RemoteConnection for SshRemoteConnection {
         };
 
         let mut proxy_args = vec![];
-        for env_var in VARS {
-            if let Ok(value) = std::env::var(env_var) {
-                proxy_args.push(format!("{env_var}={value}"));
-            }
+        if let Ok(value) = std::env::var("RUST_BACKTRACE") {
+            proxy_args.push(format!("RUST_BACKTRACE={value}"));
         }
         proxy_args.push(remote_binary_path.display(self.path_style()).into_owned());
         proxy_args.push("proxy".to_owned());
