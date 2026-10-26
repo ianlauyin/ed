@@ -41,6 +41,10 @@ remote detection, command execution, and proxy startup are removed.
   git rev), not Zed's fork. PTYs are spawned off the main thread; the spawning
   thread temporarily takes the main thread's signal mask so the shell doesn't
   inherit blocked signals (Ctrl-C).
+- Subprocesses (`util::command::Command`) wrap `smol::process` with std
+  semantics (unset stdio is inherited). There is no custom `posix_spawn` path:
+  it existed upstream only to reset Mach exception ports inherited from Zed's
+  crash handler, and there is no crash handler.
 - Git operations (including clones and commit signing) and SSH connections require
   authentication that works without user input, such as an SSH agent or cached
   credentials. Password/passphrase requests fail instead of opening a prompt.

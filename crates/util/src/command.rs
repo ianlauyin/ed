@@ -1,33 +1,19 @@
 use std::ffi::OsStr;
-#[cfg(target_os = "linux")]
 use std::path::Path;
 
-#[cfg(target_os = "macos")]
-mod darwin;
-
-#[cfg(target_os = "macos")]
-pub use darwin::Child;
-#[cfg(target_os = "macos")]
-pub use darwin::Command;
-#[cfg(target_os = "macos")]
-pub use darwin::Stdio;
 pub use gpui_util::new_std_command;
 
 pub fn new_command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
 }
 
-#[cfg(target_os = "linux")]
 pub type Child = smol::process::Child;
 
-#[cfg(target_os = "linux")]
 pub use std::process::Stdio;
 
-#[cfg(target_os = "linux")]
 #[derive(Debug)]
 pub struct Command(smol::process::Command);
 
-#[cfg(target_os = "linux")]
 impl Command {
     #[inline]
     pub fn new(program: impl AsRef<OsStr>) -> Self {
