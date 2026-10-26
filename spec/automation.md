@@ -47,6 +47,11 @@ Metal, so the OS sees no UI structure; the app reports what it painted itself.
   ambiguous matches fail and list candidates for `--nth`.
 - `wait` polls `tree` for an element or text to appear or disappear, or for
   focus to move to an id.
+- `state` also lists the project's language servers with the progress work
+  each reports in flight (local or forwarded from a remote host). `wait-lsp`
+  polls it until a (named) server exists and has reported no work for 1s,
+  since servers go briefly quiet between phases (e.g. rust-analyzer's fetch
+  then index). Use it instead of fixed sleeps before LSP-driven steps.
 
 ## GPUI support
 

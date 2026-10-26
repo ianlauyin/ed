@@ -443,6 +443,26 @@ fn state(window: &Window, cx: &mut App) -> control::State {
         .collect();
 
     let roots = workspace.root_paths(cx).iter().map(|path| path.to_path_buf()).collect();
+    let language_servers = workspace
+        .project()
+        .read(cx)
+        .language_server_statuses(cx)
+        .map(|(_, status)| control::LanguageServerState {
+            name: status.name.to_string(),
+            work: status
+                .pending_work
+                .values()
+                .map(|progress| {
+                    [progress.title.as_deref(), progress.message.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(": ")
+                })
+                .collect(),
+        })
+        .collect();
+
     let active_item = workspace.active_item(cx);
     let active_path = active_item.as_ref().and_then(|item| item_path(item.as_ref()));
     let active_editor = active_item.and_then(|item| item.act_as::<Editor>(cx));
@@ -464,5 +484,8 @@ fn state(window: &Window, cx: &mut App) -> control::State {
         })
     });
 
-    control::State { window: window_id, workspace: Some(control::WorkspaceState { roots, panes, active_editor }) }
+    control::State {
+        window: window_id,
+        workspace: Some(control::WorkspaceState { roots, panes, active_editor, language_servers }),
+    }
 }

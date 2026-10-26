@@ -12,12 +12,14 @@ use clap::Parser;
 use clap::Subcommand;
 use control::Command;
 use control::Element;
+use control::LanguageServerState;
 use control::Modifiers;
 use control::MouseButton;
 use control::MouseCommand;
 use control::MouseKind;
 use control::Rect;
 use control::Request;
+use control::State;
 use control::Text;
 use control::Tree;
 use control::WindowInfo;
@@ -142,6 +144,15 @@ enum CliCommand {
         gone: bool,
         /// Seconds.
         #[arg(long, default_value_t = 10.)]
+        timeout: f32,
+    },
+    /// Wait until language servers have started and finished their work (e.g. indexing).
+    WaitLsp {
+        /// Only wait for servers with this name, e.g. `rust-analyzer`.
+        #[arg(long)]
+        server: Option<String>,
+        /// Seconds.
+        #[arg(long, default_value_t = 120.)]
         timeout: f32,
     },
     /// Wait until the window stops redrawing.
@@ -278,6 +289,7 @@ fn run(cli: Cli) -> Result<()> {
             println!("{}", path.display());
         }
         CliCommand::Wait { target, focused, gone, timeout } => client.wait(&target, focused, gone, timeout)?,
+        CliCommand::WaitLsp { server, timeout } => client.wait_lsp(server.as_deref(), timeout)?,
         CliCommand::Settle => {
             client.request::<Value>(Command::Settle)?;
         }
@@ -340,6 +352,38 @@ impl Client {
                 if gone { " to disappear" } else { "" }
             );
             std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    /// Servers report work only once they get to it, so idle has to hold for a
+    /// while before it counts.
+    fn wait_lsp(&self, server: Option<&str>, timeout: f32) -> Result<()> {
+        const QUIET: Duration = Duration::from_secs(1);
+        let deadline = Instant::now() + Duration::from_secs_f32(timeout);
+        let mut idle_since = None;
+        loop {
+            let state: State = self.request(Command::State)?;
+            let servers: Vec<LanguageServerState> = state
+                .workspace
+                .map(|workspace| workspace.language_servers)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|status| server.is_none_or(|name| status.name == name))
+                .collect();
+            let idle = !servers.is_empty() && servers.iter().all(|status| status.work.is_empty());
+            if !idle {
+                idle_since = None;
+            } else if idle_since.get_or_insert_with(Instant::now).elapsed() >= QUIET {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                let mut message = format!("timed out waiting for {}", server.unwrap_or("language servers"));
+                for status in &servers {
+                    write!(message, "\n  {}: {}", status.name, status.work.join(", "))?;
+                }
+                anyhow::bail!(message)
+            }
+            std::thread::sleep(Duration::from_millis(200));
         }
     }
 }

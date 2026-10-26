@@ -220,6 +220,14 @@ pub struct WorkspaceState {
     pub panes: Vec<PaneState>,
     /// The active item, when it is an editor.
     pub active_editor: Option<EditorState>,
+    pub language_servers: Vec<LanguageServerState>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LanguageServerState {
+    pub name: String,
+    /// Progress the server reports as in flight (e.g. rust-analyzer's indexing).
+    pub work: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
