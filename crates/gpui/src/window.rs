@@ -822,7 +822,7 @@ impl HitboxId {
         window.mouse_hit_test.ids.contains(&self)
     }
 
-    const fn next(mut self) -> HitboxId {
+    const fn next(self) -> HitboxId {
         HitboxId(self.0.wrapping_add(1))
     }
 }
@@ -2323,7 +2323,7 @@ impl Window {
         &self,
         entity: &Entity<T>,
         cx: &mut App,
-        mut on_release: impl FnOnce(&mut T, &mut Window, &mut App) + 'static,
+        on_release: impl FnOnce(&mut T, &mut Window, &mut App) + 'static,
     ) -> Subscription
     where
         T: 'static,
@@ -3061,7 +3061,7 @@ impl Window {
     }
 
     fn record_entities_accessed(&self, cx: &mut App) {
-        let mut entities_ref = cx.entities.accessed_entities.get_mut();
+        let entities_ref = cx.entities.accessed_entities.get_mut();
         let mut entities = mem::take(entities_ref);
         let handle = self.handle;
         cx.record_entities_accessed(
@@ -3070,7 +3070,7 @@ impl Window {
             self.invalidator.clone(),
             &entities,
         );
-        let mut entities_ref = cx.entities.accessed_entities.get_mut();
+        let entities_ref = cx.entities.accessed_entities.get_mut();
         mem::swap(&mut entities, entities_ref);
     }
 
@@ -3281,7 +3281,7 @@ impl Window {
         let traversal_order = self.deferred_draw_traversal_order();
         let mut deferred_draws = mem::take(&mut self.next_frame.deferred_draws);
         for deferred_draw_ix in traversal_order {
-            let mut deferred_draw = &mut deferred_draws[deferred_draw_ix];
+            let deferred_draw = &mut deferred_draws[deferred_draw_ix];
             self.element_id_stack.clone_from(&deferred_draw.element_id_stack);
             self.next_frame.dispatch_tree.set_active_node(deferred_draw.parent_node);
 
@@ -4204,7 +4204,7 @@ impl Window {
         &mut self,
         bounds: Bounds<Pixels>,
         path: SharedString,
-        mut data: Option<&[u8]>,
+        data: Option<&[u8]>,
         transformation: TransformationMatrix,
         color: Hsla,
         cx: &App,
@@ -4436,7 +4436,7 @@ impl Window {
         self.invalidator.debug_assert_prepaint();
 
         let content_mask = self.content_mask();
-        let mut id = self.next_hitbox_id;
+        let id = self.next_hitbox_id;
         self.next_hitbox_id = self.next_hitbox_id.next();
         let hitbox = Hitbox { id, bounds, content_mask, behavior };
         self.next_frame.hitboxes.push(hitbox.clone());

@@ -348,7 +348,7 @@ impl<E: Element> Drawable<E> {
 
                 let bounds = window.layout_bounds(layout_id);
                 let node_id = window.next_frame.dispatch_tree.push_node();
-                let mut prepaint = self.element.prepaint(global_id.as_ref(), bounds, &mut request_layout, window, cx);
+                let prepaint = self.element.prepaint(global_id.as_ref(), bounds, &mut request_layout, window, cx);
                 window.next_frame.dispatch_tree.pop_node();
 
                 if global_id.is_some() {

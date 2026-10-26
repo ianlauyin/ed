@@ -936,7 +936,7 @@ impl StateInner {
             }
         }
 
-        let mut cursor = self.items.cursor::<Count>(());
+        let cursor = self.items.cursor::<Count>(());
         let available_item_space = size(AvailableSpace::Definite(available_width), AvailableSpace::MinContent);
 
         let mut measured_items = Vec::default();

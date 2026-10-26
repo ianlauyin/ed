@@ -230,11 +230,9 @@ impl LineLayout {
                     last_candidate_ix = Some(boundary);
                     last_candidate_x = x;
                 }
-            } else {
-                if ch != ' ' && first_non_whitespace_ix.is_some() {
-                    last_candidate_ix = Some(boundary);
-                    last_candidate_x = x;
-                }
+            } else if ch != ' ' && first_non_whitespace_ix.is_some() {
+                last_candidate_ix = Some(boundary);
+                last_candidate_x = x;
             }
 
             if ch != ' ' && first_non_whitespace_ix.is_none() {
@@ -349,12 +347,7 @@ impl WrappedLineLayout {
         self._index_for_position(position, line_height, true)
     }
 
-    fn _index_for_position(
-        &self,
-        mut position: Point<Pixels>,
-        line_height: Pixels,
-        closest: bool,
-    ) -> Result<usize, usize> {
+    fn _index_for_position(&self, position: Point<Pixels>, line_height: Pixels, closest: bool) -> Result<usize, usize> {
         let wrapped_line_ix = (position.y / line_height) as usize;
 
         let (wrapped_line_start_index, wrapped_line_start_x) = if wrapped_line_ix > 0 {
@@ -384,21 +377,19 @@ impl WrappedLineLayout {
             Err(wrapped_line_start_index)
         } else if position_in_unwrapped_line.x >= wrapped_line_end_x {
             Err(wrapped_line_end_index)
+        } else if closest {
+            Ok(self.unwrapped_layout.closest_index_for_x(position_in_unwrapped_line.x))
         } else {
-            if closest {
-                Ok(self.unwrapped_layout.closest_index_for_x(position_in_unwrapped_line.x))
-            } else {
-                // The shaper can place a trailing zero-width wrap boundary glyph slightly past
-                // the line's width, so the row can extend past where `index_for_x` has glyphs.
-                self.unwrapped_layout.index_for_x(position_in_unwrapped_line.x).ok_or(wrapped_line_end_index)
-            }
+            // The shaper can place a trailing zero-width wrap boundary glyph slightly past
+            // the line's width, so the row can extend past where `index_for_x` has glyphs.
+            self.unwrapped_layout.index_for_x(position_in_unwrapped_line.x).ok_or(wrapped_line_end_index)
         }
     }
 
     /// Returns the pixel position for the given byte index.
     pub fn position_for_index(&self, index: usize, line_height: Pixels) -> Option<Point<Pixels>> {
         let mut line_start_ix = 0;
-        let mut line_end_indices = self
+        let line_end_indices = self
             .wrap_boundaries
             .iter()
             .map(|wrap_boundary| {
@@ -493,8 +484,8 @@ impl LineLayoutCache {
         if range.start.font_generation != font_generation || range.end.font_generation != font_generation {
             return;
         }
-        let mut current_frame = &mut *self.current_frame.write();
-        let mut previous_frame = &mut *self.previous_frame.lock();
+        let current_frame = &mut *self.current_frame.write();
+        let previous_frame = &mut *self.previous_frame.lock();
 
         for key in &previous_frame.used_lines[range.start.lines_index..range.end.lines_index] {
             if let Some((key, line)) = previous_frame.lines.remove_entry(key) {
@@ -532,7 +523,7 @@ impl LineLayoutCache {
         if index.font_generation != font_generation {
             return;
         }
-        let mut current_frame = &mut *self.current_frame.write();
+        let current_frame = &mut *self.current_frame.write();
         current_frame.used_lines.truncate(index.lines_index);
         current_frame.used_wrapped_lines.truncate(index.wrapped_lines_index);
         current_frame.used_lines_by_hash.truncate(index.lines_by_hash_index);

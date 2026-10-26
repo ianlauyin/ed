@@ -1888,7 +1888,7 @@ impl Interactivity {
         if let Some(scroll_offset) = self.scroll_offset.as_ref() {
             let mut scroll_to_bottom = false;
             let mut tracked_scroll_handle = self.tracked_scroll_handle.as_ref().map(|handle| handle.0.borrow_mut());
-            if let Some(mut scroll_handle_state) = tracked_scroll_handle.as_deref_mut() {
+            if let Some(scroll_handle_state) = tracked_scroll_handle.as_deref_mut() {
                 scroll_handle_state.overflow = style.overflow;
                 scroll_to_bottom = mem::take(&mut scroll_handle_state.scroll_to_bottom);
             }
@@ -2001,10 +2001,8 @@ impl Interactivity {
                                         if let Some(mouse_cursor) = drag.cursor_style {
                                             window.set_window_cursor_style(mouse_cursor);
                                         }
-                                    } else {
-                                        if let Some(mouse_cursor) = style.mouse_cursor {
-                                            window.set_cursor_style(mouse_cursor, hitbox);
-                                        }
+                                    } else if let Some(mouse_cursor) = style.mouse_cursor {
+                                        window.set_cursor_style(mouse_cursor, hitbox);
                                     }
 
                                     if let Some(group) = self.group.clone() {
@@ -3163,8 +3161,10 @@ fn handle_tooltip_check_visible_and_update(
         Some(ActiveTooltip::Visible { tooltip, .. }) => {
             if is_hovered {
                 Action::None
+            } else if tooltip_is_hoverable {
+                Action::ScheduleHide(tooltip.clone())
             } else {
-                if tooltip_is_hoverable { Action::ScheduleHide(tooltip.clone()) } else { Action::Hide }
+                Action::Hide
             }
         }
         Some(ActiveTooltip::WaitingForHide { tooltip, .. }) => {
@@ -3516,7 +3516,7 @@ impl ScrollHandle {
     /// Set the offset explicitly. The offset is the distance from the top left of the
     /// parent container to the top left of the first child.
     /// As you scroll further down the offset becomes more negative.
-    pub fn set_offset(&self, mut position: Point<Pixels>) {
+    pub fn set_offset(&self, position: Point<Pixels>) {
         let state = self.0.borrow();
         *state.offset.borrow_mut() = position;
     }

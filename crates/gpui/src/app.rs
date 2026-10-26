@@ -302,7 +302,7 @@ impl Application {
 
     /// Register a handler to be invoked when the platform instructs the application
     /// to open one or more URLs.
-    pub fn on_open_urls<F>(&self, mut callback: F) -> &Self
+    pub fn on_open_urls<F>(&self, callback: F) -> &Self
     where
         F: 'static + FnMut(Vec<String>),
     {
@@ -1472,20 +1472,18 @@ impl App {
                         self.apply_entity_created_effect(entity, tid, window);
                     }
                 }
-            } else {
-                if self.pending_effects.is_empty() {
-                    for window in self.windows.values().filter_map(|window| window.as_deref()) {
-                        if window.invalidator.is_dirty()
-                            || window.needs_present.get()
-                            || !window.next_frame_callbacks.borrow().is_empty()
-                        {
-                            window.platform_window.schedule_frame();
-                        }
+            } else if self.pending_effects.is_empty() {
+                for window in self.windows.values().filter_map(|window| window.as_deref()) {
+                    if window.invalidator.is_dirty()
+                        || window.needs_present.get()
+                        || !window.next_frame_callbacks.borrow().is_empty()
+                    {
+                        window.platform_window.schedule_frame();
                     }
-
-                    self.event_arena.clear();
-                    break;
                 }
+
+                self.event_arena.clear();
+                break;
             }
         }
     }
@@ -2050,7 +2048,7 @@ impl App {
 
     /// Register a callback to be invoked when a window is closed
     /// The window is no longer accessible at the point this callback is invoked.
-    pub fn on_window_closed(&self, mut on_closed: impl FnMut(&mut App, WindowId) + 'static) -> Subscription {
+    pub fn on_window_closed(&self, on_closed: impl FnMut(&mut App, WindowId) + 'static) -> Subscription {
         let (subscription, activate) = self.window_closed_observers.insert((), Box::new(on_closed));
         activate();
         subscription
@@ -2553,7 +2551,7 @@ impl AppContext for App {
     where
         G: Global,
     {
-        let mut g = self.global::<G>();
+        let g = self.global::<G>();
         callback(g, self)
     }
 }

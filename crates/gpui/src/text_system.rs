@@ -652,7 +652,7 @@ impl WindowTextSystem {
             });
         }
 
-        let mut used_force_width = force_width;
+        let used_force_width = force_width;
         let layout = self.layout_line_by_hash(text_hash, text_len, font_size, runs, used_force_width, || {
             let text = materialize_text();
             debug_assert!(text.find('\n').is_none(), "text argument should not contain newlines");
@@ -682,7 +682,7 @@ impl WindowTextSystem {
         let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
 
         let mut lines = SmallVec::new();
-        let mut max_wrap_lines = line_clamp;
+        let max_wrap_lines = line_clamp;
         let mut wrapped_lines = 0;
 
         let mut process_line = |line_text: SharedString, line_start, line_end| {
