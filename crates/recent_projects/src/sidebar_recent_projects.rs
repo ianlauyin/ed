@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ed_actions::OpenRemote;
 use fuzzy_nucleo::StringMatch;
 use fuzzy_nucleo::StringMatchCandidate;
 use fuzzy_nucleo::match_strings;
@@ -40,7 +41,6 @@ use workspace::SerializedWorkspaceLocation;
 use workspace::Workspace;
 use workspace::WorkspaceDb;
 use workspace::notifications::DetachAndPromptErr;
-use ed_actions::OpenRemote;
 
 use crate::highlights_for_path;
 use crate::icon_for_remote_connection;
@@ -249,7 +249,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                     cx.spawn_in(window, async move |_, cx| {
                         open_remote_project(connection.clone(), paths, app_state, open_options, cx).await
                     })
-                    .detach_and_prompt_err("Failed to open project", window, cx, |_, _, _| None);
+                    .detach_and_prompt_err("Failed to open project", window, cx, |_| None);
                 });
             }
         }

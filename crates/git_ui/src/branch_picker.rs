@@ -895,7 +895,7 @@ impl BranchListDelegate {
 
             Ok(())
         })
-        .detach_and_prompt_err("Failed to create branch", window, cx, |e, _, _| Some(e.to_string()));
+        .detach_and_prompt_err("Failed to create branch", window, cx, |e| Some(e.to_string()));
         cx.emit(DismissEvent);
     }
 
@@ -910,7 +910,7 @@ impl BranchListDelegate {
             "Failed to create remote",
             window,
             cx,
-            |e, _, _cx| Some(e.to_string()),
+            |e| Some(e.to_string()),
         );
         cx.emit(DismissEvent);
     }
@@ -1281,7 +1281,7 @@ impl PickerDelegate for BranchListDelegate {
 
                     anyhow::Ok(())
                 })
-                .detach_and_prompt_err("Failed to change branch", window, cx, |_, _, _| None);
+                .detach_and_prompt_err("Failed to change branch", window, cx, |_| None);
             }
             Entry::NewUrl { url } => {
                 self.state = PickerState::CreateRemote(url.clone().into());

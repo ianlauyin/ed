@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use ed_actions::toast;
 use gpui::DismissEvent;
 use gpui::Entity;
 use gpui::EventEmitter;
@@ -10,7 +11,6 @@ use ui::Tooltip;
 use ui::prelude::*;
 use workspace::ToastAction;
 use workspace::ToastView;
-use ed_actions::toast;
 
 #[derive(RegisterComponent)]
 pub struct StatusToast {

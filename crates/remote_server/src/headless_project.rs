@@ -398,10 +398,7 @@ impl HeadlessProject {
                     parent = util::paths::home_dir();
                 }
                 let parent = fs.canonicalize(parent).await.map_err(|_| {
-                    anyhow!(
-                        proto::ErrorCode::DevServerProjectPathDoesNotExist
-                            .with_tag("path", path.to_string_lossy().as_ref())
-                    )
+                    anyhow!(proto::ErrorCode::PathDoesNotExist.with_tag("path", path.to_string_lossy().as_ref()))
                 })?;
                 if let Some(file_name) = path.file_name() { parent.join(file_name) } else { parent }
             }

@@ -4,6 +4,10 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use collections::HashSet;
+use ed_actions::CreateWorktree;
+use ed_actions::NewWorktreeBranchTarget;
+use ed_actions::OpenWorktreeInNewWindow;
+use ed_actions::SwitchWorktree;
 use fuzzy::StringMatchCandidate;
 use git::repository::Worktree as GitWorktree;
 use gpui::Action;
@@ -55,10 +59,6 @@ use workspace::RemovalIntent;
 use workspace::Workspace;
 use workspace::dock::DockPosition;
 use workspace::notifications::DetachAndPromptErr;
-use ed_actions::CreateWorktree;
-use ed_actions::NewWorktreeBranchTarget;
-use ed_actions::OpenWorktreeInNewWindow;
-use ed_actions::SwitchWorktree;
 
 use crate::notifications::show_error_toast;
 use crate::worktree_service::RemoteBranchName;
@@ -1317,7 +1317,7 @@ pub async fn open_remote_worktree(
             window,
             cx,
         )
-        .prompt_err("Failed to connect", window, cx, |_, _, _| None)
+        .prompt_err("Failed to connect", window, cx, |_| None)
     })?;
 
     let session = connect_task.await;

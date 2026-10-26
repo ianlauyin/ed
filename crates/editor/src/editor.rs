@@ -387,6 +387,9 @@ use display_map::StickyHeaderExcerpt;
 use display_map::ToDisplayPoint;
 use document_colors::LspColorData;
 use document_links::LspDocumentLinks;
+use ed_actions::editor::MoveDown;
+use ed_actions::editor::MoveUp;
+pub use ed_actions::editor::RevealInFileManager;
 pub use editor_settings::CompletionDetailAlignment;
 pub use editor_settings::CompletionMenuItemKind;
 pub use editor_settings::CurrentLineHighlight;
@@ -594,8 +597,6 @@ use project::project_settings::GoToDiagnosticSeverityFilter;
 use project::project_settings::ProjectSettings;
 use rand::seq::SliceRandom;
 use regex::Regex;
-use rpc::ErrorCode;
-use rpc::ErrorExt;
 use scroll::Autoscroll;
 use scroll::ScrollAnchor;
 use scroll::ScrollManager;
@@ -667,9 +668,6 @@ use workspace::notifications::NotifyTaskExt;
 pub use workspace::searchable::Direction;
 use workspace::searchable::SearchEvent;
 use workspace::searchable::SelectSearchOptions;
-use ed_actions::editor::MoveDown;
-use ed_actions::editor::MoveUp;
-pub use ed_actions::editor::RevealInFileManager;
 
 use crate::code_context_menus::CompletionsMenuSource;
 use crate::editor_settings::MultiCursorModifier;
@@ -2621,13 +2619,7 @@ impl Editor {
             "Failed to create buffer",
             window,
             cx,
-            |e, _, _| match e.error_code() {
-                ErrorCode::RemoteUpgradeRequired => Some(format!(
-                    "The remote instance of ed does not support this yet. It must be upgraded to {}",
-                    e.error_tag("required").unwrap_or("the latest version")
-                )),
-                _ => None,
-            },
+            |_| None,
         );
     }
 
@@ -2697,13 +2689,7 @@ impl Editor {
             })?;
             anyhow::Ok(())
         })
-        .detach_and_prompt_err("Failed to create buffer", window, cx, |e, _, _| match e.error_code() {
-            ErrorCode::RemoteUpgradeRequired => Some(format!(
-                "The remote instance of ed does not support this yet. It must be upgraded to {}",
-                e.error_tag("required").unwrap_or("the latest version")
-            )),
-            _ => None,
-        });
+        .detach_and_prompt_err("Failed to create buffer", window, cx, |_| None);
     }
 
     pub const fn buffer(&self) -> &Entity<MultiBuffer> {

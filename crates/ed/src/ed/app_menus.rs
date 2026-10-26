@@ -1,11 +1,11 @@
+use ed_actions::Quit;
+use ed_actions::git_panel;
+use ed_actions::project_panel;
 use gpui::App;
 use gpui::Menu;
 use gpui::MenuItem;
 use gpui::OsAction;
 use terminal_view::terminal_panel;
-use ed_actions::Quit;
-use ed_actions::git_panel;
-use ed_actions::project_panel;
 
 pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
     let mut view_items = vec![

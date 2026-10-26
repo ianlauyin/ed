@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use ed_actions::OpenBrowser;
 use gpui::Action;
 use gpui::SharedString;
 use ui::IconName;
 use ui::IconPosition;
-use ed_actions::OpenBrowser;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {

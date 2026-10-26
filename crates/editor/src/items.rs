@@ -14,6 +14,8 @@ use anyhow::Result;
 use anyhow::anyhow;
 use collections::HashMap;
 use collections::HashSet;
+use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
+use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 use file_icons::FileIcons;
 use fs::MTime;
 use futures::channel::oneshot;
@@ -98,8 +100,6 @@ use workspace::searchable::SearchToken;
 use workspace::searchable::SearchableItem;
 use workspace::searchable::SearchableItemHandle;
 use workspace::searchable::SelectSearchOptions;
-use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
-use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 
 use crate::Anchor;
 use crate::Autoscroll;

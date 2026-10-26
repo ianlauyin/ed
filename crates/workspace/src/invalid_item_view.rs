@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use ed_actions::workspace::OpenWithSystem;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
@@ -23,7 +24,6 @@ use ui::Styled as _;
 use ui::Window;
 use ui::h_flex;
 use ui::v_flex;
-use ed_actions::workspace::OpenWithSystem;
 
 use crate::Item;
 

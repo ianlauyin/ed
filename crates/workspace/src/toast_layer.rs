@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::time::Duration;
 use std::time::Instant;
 
+use ed_actions::toast;
 use gpui::AnyView;
 use gpui::DismissEvent;
 use gpui::Entity;
@@ -13,7 +14,6 @@ use gpui::Subscription;
 use gpui::Task;
 use ui::animation::DefaultAnimations;
 use ui::prelude::*;
-use ed_actions::toast;
 
 use crate::Workspace;
 

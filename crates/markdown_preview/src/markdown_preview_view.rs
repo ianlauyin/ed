@@ -10,6 +10,9 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use ed_actions::DecreaseBufferFontSize;
+use ed_actions::IncreaseBufferFontSize;
+use ed_actions::ResetBufferFontSize;
 use editor::Editor;
 use editor::EditorEvent;
 use editor::EditorSettings;
@@ -98,9 +101,6 @@ use workspace::searchable::SearchOptions;
 use workspace::searchable::SearchToken;
 use workspace::searchable::SearchableItem;
 use workspace::searchable::SearchableItemHandle;
-use ed_actions::DecreaseBufferFontSize;
-use ed_actions::IncreaseBufferFontSize;
-use ed_actions::ResetBufferFontSize;
 
 use crate::CloseAndReturnToEditor;
 use crate::OpenFollowingPreview;

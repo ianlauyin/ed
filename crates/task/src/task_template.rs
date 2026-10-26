@@ -12,6 +12,7 @@ use util::ResultExt;
 use util::serde::default_true;
 use util::truncate_and_remove_front;
 
+use crate::ED_VARIABLE_NAME_PREFIX;
 use crate::ResolvedTask;
 use crate::RevealTarget;
 use crate::Shell;
@@ -19,7 +20,6 @@ use crate::SpawnInTerminal;
 use crate::TaskContext;
 use crate::TaskId;
 use crate::VariableName;
-use crate::ED_VARIABLE_NAME_PREFIX;
 use crate::serde_helpers::non_empty_string_vec;
 
 /// A template definition of an ed task to run.

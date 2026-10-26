@@ -11,6 +11,12 @@ use collections::BTreeMap;
 use collections::HashMap;
 use collections::HashSet;
 use db::kvp::KeyValueStore;
+use ed_actions::DecreaseBufferFontSize;
+use ed_actions::IncreaseBufferFontSize;
+use ed_actions::ResetBufferFontSize;
+use ed_actions::git_panel::ToggleFocus;
+use ed_actions::workspace::CopyPath;
+use ed_actions::workspace::CopyRelativePath;
 use editor::Editor;
 use editor::EditorElement;
 use editor::EditorMode;
@@ -157,12 +163,6 @@ use workspace::dock::Panel;
 use workspace::dock::PanelEvent;
 use workspace::notifications::DetachAndPromptErr;
 use workspace::notifications::NotifyTaskExt;
-use ed_actions::DecreaseBufferFontSize;
-use ed_actions::IncreaseBufferFontSize;
-use ed_actions::ResetBufferFontSize;
-use ed_actions::git_panel::ToggleFocus;
-use ed_actions::workspace::CopyPath;
-use ed_actions::workspace::CopyRelativePath;
 
 use crate::branch_picker;
 use crate::commit_tooltip::CommitTooltip;
@@ -2601,7 +2601,7 @@ impl GitPanel {
 
                 Ok(())
             })
-            .detach_and_prompt_err("Failed to revert changes", window, cx, |e, _, _| Some(format!("{e}")));
+            .detach_and_prompt_err("Failed to revert changes", window, cx, |e| Some(format!("{e}")));
 
             Some(())
         });
@@ -2766,7 +2766,7 @@ impl GitPanel {
             }
             Ok(())
         })
-        .detach_and_prompt_err("Failed to trash files", window, cx, |e, _, _| Some(format!("{e}")));
+        .detach_and_prompt_err("Failed to trash files", window, cx, |e| Some(format!("{e}")));
     }
 
     fn change_all_files_stage(&self, stage: bool, cx: &Context<Self>) {

@@ -58,6 +58,7 @@ use dock::PanelButtons;
 use dock::PanelHandle;
 pub use dock::PanelSecondaryButton;
 use dock::RESIZE_HANDLE_SIZE;
+use ed_actions::theme::ToggleMode;
 use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -248,7 +249,6 @@ pub use workspace_settings::RestoreOnStartupBehavior;
 pub use workspace_settings::StatusBarSettings;
 pub use workspace_settings::TabBarSettings;
 pub use workspace_settings::WorkspaceSettings;
-use ed_actions::theme::ToggleMode;
 
 use crate::item::ItemBufferKind;
 use crate::notifications::NotificationId;
@@ -5572,14 +5572,14 @@ impl Workspace {
                 this.on_action(cx.listener(|workspace, action: &Save, window, cx| {
                     workspace
                         .save_active_item(action.save_intent.unwrap_or(SaveIntent::Save), window, cx)
-                        .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                        .detach_and_prompt_err("Failed to save", window, cx, |_| None);
                 }))
                 .on_action(cx.listener(|workspace, _: &FormatAndSave, window, cx| {
                     workspace.save_active_item(SaveIntent::FormatAndSave, window, cx).detach_and_prompt_err(
                         "Failed to save",
                         window,
                         cx,
-                        |_, _, _| None,
+                        |_| None,
                     );
                 }))
                 .on_action(cx.listener(|workspace, _: &SaveWithoutFormat, window, cx| {
@@ -5587,7 +5587,7 @@ impl Workspace {
                         "Failed to save",
                         window,
                         cx,
-                        |_, _, _| None,
+                        |_| None,
                     );
                 }))
             })
@@ -5596,7 +5596,7 @@ impl Workspace {
                     "Failed to save",
                     window,
                     cx,
-                    |_, _, _| None,
+                    |_| None,
                 );
             }))
             .on_action(cx.listener(|workspace, _: &ActivatePreviousPane, window, cx| {
@@ -7694,7 +7694,7 @@ async fn open_remote_project_inner(
 
     workspace.update(cx, |workspace, cx| {
         for error in project_path_errors {
-            if error.error_code() == proto::ErrorCode::DevServerProjectPathDoesNotExist {
+            if error.error_code() == proto::ErrorCode::PathDoesNotExist {
                 if let Some(path) = error.error_tag("path") {
                     workspace.show_error(format!("'{path}' does not exist"), cx)
                 }

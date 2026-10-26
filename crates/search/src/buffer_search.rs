@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use any_vec::AnyVec;
 use collections::HashMap;
+use ed_actions::outline::ToggleOutline;
+use ed_actions::workspace::CopyPath;
+use ed_actions::workspace::CopyRelativePath;
 use editor::DiffStyleControls;
 use editor::Editor;
 use editor::EditorSettings;
@@ -67,9 +70,6 @@ use workspace::searchable::SearchToken;
 use workspace::searchable::SearchableItemHandle;
 use workspace::searchable::SelectSearchOptions;
 use workspace::searchable::WeakSearchableItemHandle;
-use ed_actions::outline::ToggleOutline;
-use ed_actions::workspace::CopyPath;
-use ed_actions::workspace::CopyRelativePath;
 
 use crate::FocusSearch;
 use crate::NextHistoryQuery;

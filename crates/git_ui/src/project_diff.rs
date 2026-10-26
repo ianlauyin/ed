@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use anyhow::Result;
 use buffer_diff::DiffHunkSecondaryStatus;
+use ed_actions::git as git_actions;
 use editor::DefaultDiffHunkRenderer;
 use editor::Editor;
 use editor::EditorEvent;
@@ -52,7 +53,6 @@ use workspace::item::ItemEvent;
 use workspace::item::ItemHandle;
 use workspace::item::SaveOptions;
 use workspace::searchable::SearchableItemHandle;
-use ed_actions::git as git_actions;
 
 use crate::diff_multibuffer::DiffMultibuffer;
 use crate::git_panel::GitPanel;

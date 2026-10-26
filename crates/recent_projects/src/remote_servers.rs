@@ -903,7 +903,7 @@ impl RemoteServerProjects {
             window,
             cx,
         )
-        .prompt_err("Failed to connect", window, cx, |_, _, _| None);
+        .prompt_err("Failed to connect", window, cx, |_| None);
 
         let address_editor = editor.clone();
         let creating = cx.spawn_in(window, async move |this, cx| {
@@ -990,7 +990,7 @@ impl RemoteServerProjects {
                 let prompt = modal.read(cx).prompt.clone();
 
                 let connect = connect(ConnectionIdentifier::setup(), connection_options.clone(), prompt, window, cx)
-                    .prompt_err("Failed to connect", window, cx, |_, _, _| None);
+                    .prompt_err("Failed to connect", window, cx, |_| None);
 
                 cx.spawn_in(window, async move |workspace, cx| {
                     let session = connect.await;

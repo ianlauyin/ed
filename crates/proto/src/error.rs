@@ -6,18 +6,18 @@
 ///
 /// When returning an error, it can be as simple as:
 ///
-/// `return Err(Error::Forbidden.into())`
+/// `return Err(ErrorCode::AlreadyExists.into())`
 ///
 /// If you'd like to log more context, you can set a message. These messages
 /// show up in our logs, but are not shown visibly to users.
 ///
-/// `return Err(Error::Forbidden.message("not an admin").into())`
+/// `return Err(ErrorCode::AlreadyExists.message("file exists".into()).into())`
 ///
 /// If you'd like to provide enough context that the UI can render a good error
 /// message (or would be helpful to see in a structured format in the logs), you
 /// can use .with_tag():
 ///
-/// `return Err(ErrorCode::NoSuchProject.with_tag("project_id", "42").into())`
+/// `return Err(ErrorCode::PathDoesNotExist.with_tag("path", "/tmp").into())`
 ///
 /// When handling an error you can use .error_code() to match which error it was
 /// and .error_tag() to read any tags.
@@ -26,9 +26,9 @@
 /// use proto::{ErrorCode, ErrorExt};
 ///
 /// match err.error_code() {
-///   ErrorCode::Forbidden => alert("I'm sorry I can't do that."),
-///   ErrorCode::NoSuchProject =>
-///     alert(format!("Project {} does not exist.", err.error_tag("project_id").unwrap())),
+///   ErrorCode::AlreadyExists => alert("That file already exists."),
+///   ErrorCode::PathDoesNotExist =>
+///     alert(format!("Path {} does not exist.", err.error_tag("path").unwrap())),
 ///   ErrorCode::Internal => alert("Sorry, something went wrong"),
 /// }
 /// ```

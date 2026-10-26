@@ -1,5 +1,6 @@
 mod preview;
 
+use ed_actions::outline::ToggleOutline;
 use editor::Editor;
 use editor::EditorSettings;
 use editor::actions::AddSelectionAbove;
@@ -64,7 +65,6 @@ use workspace::ToolbarItemView;
 use workspace::Workspace;
 use workspace::item::ItemBufferKind;
 use workspace::item::ItemHandle;
-use ed_actions::outline::ToggleOutline;
 
 const MAX_CODE_ACTION_MENU_LINES: u32 = 16;
 

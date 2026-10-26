@@ -18,6 +18,9 @@ use anyhow::Result;
 use collections::BTreeSet;
 use collections::HashMap;
 use collections::hash_map;
+use ed_actions::project_panel::Toggle;
+use ed_actions::project_panel::ToggleFocus;
+use ed_actions::workspace::OpenWithSystem;
 use editor::Editor;
 use editor::EditorEvent;
 use editor::MultiBufferOffset;
@@ -170,9 +173,6 @@ use workspace::notifications::DetachAndPromptErr;
 use workspace::notifications::NotifyResultExt;
 use workspace::notifications::NotifyTaskExt;
 use worktree::CreatedEntry;
-use ed_actions::project_panel::Toggle;
-use ed_actions::project_panel::ToggleFocus;
-use ed_actions::workspace::OpenWithSystem;
 
 use crate::undo::Change;
 use crate::undo::UndoManager;
@@ -977,7 +977,7 @@ impl ProjectPanel {
                                 window,
                                 cx,
                             )
-                            .detach_and_prompt_err("Failed to open file", window, cx, move |e, _, _| {
+                            .detach_and_prompt_err("Failed to open file", window, cx, move |e| {
                                 match e.error_code() {
                                     ErrorCode::Disconnected => {
                                         if is_via_ssh {

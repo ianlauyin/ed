@@ -108,7 +108,7 @@ impl DisconnectedOverlay {
             .await?;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to reconnect", window, cx, |_, _, _| None);
+        .detach_and_prompt_err("Failed to reconnect", window, cx, |_| None);
     }
 
     fn cancel(&mut self, _: &menu::Cancel, _: &mut Window, cx: &mut Context<Self>) {

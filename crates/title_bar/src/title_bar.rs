@@ -5,6 +5,7 @@ mod title_bar_settings;
 use std::path::Path;
 
 use arrayvec::ArrayVec;
+use ed_actions::OpenRemote;
 use git_ui_core::worktree_picker::WorktreePicker;
 use gpui::AnyElement;
 use gpui::App;
@@ -45,7 +46,6 @@ use util::ResultExt;
 use workspace::MultiWorkspace;
 use workspace::ToggleWorktreeSecurity;
 use workspace::Workspace;
-use ed_actions::OpenRemote;
 
 use crate::application_menu::ApplicationMenu;
 

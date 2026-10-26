@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+pub use ed_actions::ShowIncomingCalls;
+pub use ed_actions::ShowOutgoingCalls;
+pub use ed_actions::ToggleDirection;
 use editor::Editor;
 use editor::RowHighlightOptions;
 use editor::SelectionEffects;
@@ -58,9 +61,6 @@ use util::paths::PathExt;
 use workspace::DismissDecision;
 use workspace::ModalView;
 use workspace::Workspace;
-pub use ed_actions::ShowIncomingCalls;
-pub use ed_actions::ShowOutgoingCalls;
-pub use ed_actions::ToggleDirection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CallHierarchyMode {

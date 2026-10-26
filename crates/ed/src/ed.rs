@@ -17,6 +17,9 @@ use anyhow::Context as _;
 pub use app_menus::*;
 use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
+use ed_actions::About;
+use ed_actions::OpenBrowser;
+use ed_actions::Quit;
 use editor::Editor;
 use editor::MultiBuffer;
 use git_ui::branch_diff::BranchDiffToolbar;
@@ -99,9 +102,6 @@ use workspace::workspace_error::ErrorAction;
 use workspace::workspace_error::ErrorSeverity;
 #[cfg(debug_assertions)]
 use workspace::workspace_error::WorkspaceError;
-use ed_actions::About;
-use ed_actions::OpenBrowser;
-use ed_actions::Quit;
 
 actions!(
     ed,

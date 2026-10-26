@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use collections::HashMap;
 use collections::HashSet;
+use ed_actions::search::ToggleIncludeIgnored;
 use editor::Editor;
 use file_icons::FileIcons;
 use futures::future::join_all;
@@ -75,7 +76,6 @@ use workspace::Workspace;
 use workspace::item::PreviewTabsSettings;
 use workspace::notifications::NotifyResultExt;
 use workspace::pane;
-use ed_actions::search::ToggleIncludeIgnored;
 
 actions!(
     file_finder,

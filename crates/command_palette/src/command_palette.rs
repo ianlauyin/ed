@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use command_palette_settings::CommandPaletteSettings;
+use ed_actions::command_palette::Toggle;
 use fuzzy_nucleo::StringMatch;
 use fuzzy_nucleo::StringMatchCandidate;
 use gpui::Action;
@@ -45,7 +46,6 @@ use util::ResultExt;
 use workspace::ModalView;
 use workspace::Workspace;
 use workspace::WorkspaceSettings;
-use ed_actions::command_palette::Toggle;
 
 actions!(command_palette, [RemoveSelected]);
 

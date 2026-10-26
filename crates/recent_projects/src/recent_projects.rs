@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use disconnected_overlay::DisconnectedOverlay;
+use ed_actions::OpenRecent;
+use ed_actions::OpenRemote;
 use fs::Fs;
 use fuzzy_nucleo::StringMatch;
 use fuzzy_nucleo::StringMatchCandidate;
@@ -77,8 +79,6 @@ use workspace::WorkspaceDb;
 use workspace::WorkspaceId;
 use workspace::notifications::DetachAndPromptErr;
 use workspace::with_active_or_new_workspace;
-use ed_actions::OpenRecent;
-use ed_actions::OpenRemote;
 
 actions!(recent_projects, [ToggleActionsMenu, RemoveSelected, AddToWorkspace,]);
 
@@ -1641,7 +1641,7 @@ impl RecentProjectsDelegate {
                     } else {
                         workspace
                             .open_workspace_for_paths(OpenMode::NewWindow, paths, window, cx)
-                            .detach_and_prompt_err("Failed to open project", window, cx, |_, _, _| None);
+                            .detach_and_prompt_err("Failed to open project", window, cx, |_| None);
                     }
                 }
                 SerializedWorkspaceLocation::Remote(mut connection) => {
@@ -1655,7 +1655,7 @@ impl RecentProjectsDelegate {
                     cx.spawn_in(window, async move |_, cx| {
                         open_remote_project(connection.clone(), paths, app_state, open_options, cx).await
                     })
-                    .detach_and_prompt_err("Failed to open project", window, cx, |_, _, _| None);
+                    .detach_and_prompt_err("Failed to open project", window, cx, |_| None);
                 }
             }
         });

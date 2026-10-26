@@ -1509,13 +1509,13 @@ where
     }
 }
 
-pub trait DetachAndPromptErr<R> {
+pub trait DetachAndPromptErr<R>: Sized {
     fn prompt_err(
         self,
         msg: &str,
         window: &Window,
         cx: &App,
-        f: impl FnOnce(&anyhow::Error, &mut Window, &mut App) -> Option<String> + 'static,
+        f: impl FnOnce(&anyhow::Error) -> Option<String> + 'static,
     ) -> Task<Option<R>>;
 
     fn detach_and_prompt_err(
@@ -1523,8 +1523,10 @@ pub trait DetachAndPromptErr<R> {
         msg: &str,
         window: &Window,
         cx: &App,
-        f: impl FnOnce(&anyhow::Error, &mut Window, &mut App) -> Option<String> + 'static,
-    );
+        f: impl FnOnce(&anyhow::Error) -> Option<String> + 'static,
+    ) {
+        self.prompt_err(msg, window, cx, f).detach();
+    }
 }
 
 impl<R> DetachAndPromptErr<R> for Task<anyhow::Result<R>>
@@ -1536,36 +1538,28 @@ where
         msg: &str,
         window: &Window,
         cx: &App,
-        f: impl FnOnce(&anyhow::Error, &mut Window, &mut App) -> Option<String> + 'static,
+        f: impl FnOnce(&anyhow::Error) -> Option<String> + 'static,
     ) -> Task<Option<R>> {
         let msg = msg.to_owned();
         window.spawn(cx, async move |cx| {
-            let result = self.await;
-            if let Err(err) = result.as_ref() {
-                log::error!("{err:#}");
-                if let Ok(prompt) = cx.update(|window, cx| {
-                    let mut display = format!("{err:#}");
-                    if !display.ends_with('\n') {
-                        display.push('.');
-                    }
-                    let detail = f(err, window, cx).unwrap_or(display);
-                    window.prompt(PromptLevel::Critical, &msg, Some(&detail), &["OK"], cx)
-                }) {
-                    prompt.await.ok();
+            let err = match self.await {
+                Ok(value) => return Some(value),
+                Err(err) => err,
+            };
+            log::error!("{err:#}");
+            let detail = f(&err).unwrap_or_else(|| {
+                let mut display = format!("{err:#}");
+                if !display.ends_with('\n') {
+                    display.push('.');
                 }
-                return None;
+                display
+            });
+            if let Ok(prompt) =
+                cx.update(|window, cx| window.prompt(PromptLevel::Critical, &msg, Some(&detail), &["OK"], cx))
+            {
+                prompt.await.ok();
             }
-            Some(result.unwrap())
+            None
         })
-    }
-
-    fn detach_and_prompt_err(
-        self,
-        msg: &str,
-        window: &Window,
-        cx: &App,
-        f: impl FnOnce(&anyhow::Error, &mut Window, &mut App) -> Option<String> + 'static,
-    ) {
-        self.prompt_err(msg, window, cx, f).detach();
     }
 }

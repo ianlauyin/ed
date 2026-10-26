@@ -1,3 +1,4 @@
+use ed_actions::buffer_search;
 use gpui::Context;
 use gpui::EventEmitter;
 use gpui::ParentElement;
@@ -12,7 +13,6 @@ use workspace::ToolbarItemEvent;
 use workspace::ToolbarItemLocation;
 use workspace::ToolbarItemView;
 use workspace::item::ItemHandle;
-use ed_actions::buffer_search;
 
 use crate::BufferDiagnosticsEditor;
 use crate::ProjectDiagnosticsEditor;

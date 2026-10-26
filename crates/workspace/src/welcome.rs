@@ -1,3 +1,4 @@
+use ed_actions::command_palette;
 use git::Clone as GitClone;
 use gpui::Action;
 use gpui::App;
@@ -27,7 +28,6 @@ use ui::DividerColor;
 use ui::KeyBinding;
 use ui::prelude::*;
 use util::ResultExt;
-use ed_actions::command_palette;
 
 use crate::NewFile;
 use crate::Open;

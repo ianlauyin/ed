@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use ed_actions::editor::MoveDown;
+use ed_actions::editor::MoveUp;
 use gpui::Action;
 use gpui::AnyElement;
 use gpui::App;
@@ -45,8 +47,6 @@ use ui::prelude::*;
 use ui_input::ErasedEditorEvent;
 use util::ResultExt;
 use workspace::ModalView;
-use ed_actions::editor::MoveDown;
-use ed_actions::editor::MoveUp;
 
 mod footer;
 mod head;

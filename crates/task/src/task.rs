@@ -12,6 +12,7 @@ use anyhow::Context as _;
 use collections::HashMap;
 use collections::HashSet;
 use collections::hash_map;
+pub use ed_actions::RevealTarget;
 use gpui::SharedString;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,7 +26,6 @@ pub use task_template::substitute_variables_in_str;
 pub use util::shell::Shell;
 pub use util::shell::ShellKind;
 pub use util::shell_builder::ShellBuilder;
-pub use ed_actions::RevealTarget;
 
 /// Task identifier, unique within the application.
 /// Based on it, task reruns and terminal tabs are managed.

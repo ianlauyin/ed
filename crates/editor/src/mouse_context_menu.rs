@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
+use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 use gpui::Context;
 use gpui::DismissEvent;
 use gpui::Entity;
@@ -10,8 +12,6 @@ use gpui::Subscription;
 use gpui::Window;
 use gpui::prelude::FluentBuilder;
 use workspace::OpenInTerminal;
-use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
-use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 
 use crate::Copy;
 use crate::CopyAndTrim;

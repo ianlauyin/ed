@@ -296,7 +296,7 @@ impl StashListDelegate {
             repo.update(cx, |repo, cx| repo.stash_drop(Some(stash_index), cx)).await??;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to drop stash", window, cx, |e, _, _| Some(e.to_string()));
+        .detach_and_prompt_err("Failed to drop stash", window, cx, |e| Some(e.to_string()));
     }
 
     fn show_stash_at(&self, ix: usize, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -320,7 +320,7 @@ impl StashListDelegate {
             repo.update(cx, |repo, cx| repo.stash_pop(Some(stash_index), cx)).await?;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to pop stash", window, cx, |e, _, _| Some(e.to_string()));
+        .detach_and_prompt_err("Failed to pop stash", window, cx, |e| Some(e.to_string()));
         cx.emit(DismissEvent);
     }
 
@@ -333,7 +333,7 @@ impl StashListDelegate {
             repo.update(cx, |repo, cx| repo.stash_apply(Some(stash_index), cx)).await?;
             Ok(())
         })
-        .detach_and_prompt_err("Failed to apply stash", window, cx, |e, _, _| Some(e.to_string()));
+        .detach_and_prompt_err("Failed to apply stash", window, cx, |e| Some(e.to_string()));
         cx.emit(DismissEvent);
     }
 }

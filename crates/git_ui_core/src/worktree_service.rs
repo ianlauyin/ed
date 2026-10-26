@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use collections::HashSet;
+use ed_actions::NewWorktreeBranchTarget;
 use fs::Fs;
 use git::repository::FetchOptions;
 use git::repository::Remote;
@@ -33,7 +34,6 @@ use workspace::PreviousWorkspaceState;
 use workspace::ToastView;
 use workspace::Workspace;
 use workspace::dock::DockPosition;
-use ed_actions::NewWorktreeBranchTarget;
 
 use crate::notifications::open_output;
 use crate::notifications::show_error_toast;
