@@ -99,7 +99,6 @@ members = [
     "crates/ui_macros",
     "crates/util",
     "crates/watch",
-    "crates/which_key",
     "crates/workspace",
     "crates/worktree",
     "crates/ed",
@@ -209,7 +208,6 @@ ui_input = { path = "crates/ui_input" }
 ui_macros = { path = "crates/ui_macros" }
 util = { path = "crates/util" }
 watch = { path = "crates/watch" }
-which_key = { path = "crates/which_key" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 ed_actions = { path = "crates/ed_actions" }

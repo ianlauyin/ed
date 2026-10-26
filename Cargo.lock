@@ -1048,7 +1048,6 @@ dependencies = [
  "urlencoding",
  "util",
  "uuid",
- "which_key",
  "workspace",
 ]
 
@@ -5846,19 +5845,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f3ef584124b911bcc3875c2f1472e80f24361ceb789bd1c62b3e9a3df9ff43c"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "which_key"
-version = "0.1.0"
-dependencies = [
- "command_palette",
- "ed_actions",
- "gpui",
- "settings",
- "ui",
- "util",
- "workspace",
 ]
 
 [[package]]

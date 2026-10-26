@@ -254,7 +254,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         let activity_indicator = activity_indicator::ActivityIndicator::new(workspace, window, cx);
         let active_buffer_encoding = cx.new(|_| encoding_selector::ActiveBufferEncoding::new(workspace));
         let active_buffer_language = cx.new(|_| language_selector::ActiveBufferLanguage::new(workspace));
-        let pending_keystrokes_indicator = cx.new(|cx| which_key::PendingKeystrokesIndicator::new(window, cx));
         let image_info = cx.new(|_cx| ImageInfo::new(workspace));
 
         let lsp_button_menu_handle = PopoverMenuHandle::default();
@@ -275,8 +274,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_right_item(active_buffer_language, window, cx);
             status_bar.add_right_item(cursor_position, window, cx);
             status_bar.add_right_item(image_info, window, cx);
-            // Keep this last so it stays leftmost and can change without moving the other items.
-            status_bar.add_right_item(pending_keystrokes_indicator, window, cx);
         });
 
         let panels_task = initialize_panels(window, cx);

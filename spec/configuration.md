@@ -63,9 +63,8 @@ migrator, or Vim/Helix mode.
   equivalents. The keymap, menu bar, and dock menu are built once at startup
   against the keyboard layout active at launch; switching layouts mid-session
   takes effect after a restart.
-- Pending multi-stroke input is shown only by the status bar indicator; hovering
-  it or pressing `alt-/` mid-chord previews completing bindings. The which-key
-  popup and its `which_key` settings are removed.
+- Keybindings should be simple single keystrokes. There is no UI for pending
+  multi-stroke input (no which-key popup or status bar indicator).
 - Personal bindings are applied last: global `cmd-[`/`cmd-]` navigate backward/
   forward, Editor `f1` opens documentation and `cmd-shift-u` toggles case, and
   Terminal `shift-enter` sends Escape followed by carriage return.

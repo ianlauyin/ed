@@ -145,7 +145,6 @@ pub struct StatusBarSettings {
     pub active_language_button: bool,
     pub cursor_position_button: bool,
     pub active_encoding_button: EncodingDisplayOptions,
-    pub pending_keystrokes_indicator: bool,
 }
 
 settings::register_setting!(StatusBarSettings);
@@ -158,7 +157,6 @@ impl Settings for StatusBarSettings {
             active_language_button: status_bar.active_language_button.unwrap(),
             cursor_position_button: status_bar.cursor_position_button.unwrap(),
             active_encoding_button: status_bar.active_encoding_button.unwrap(),
-            pending_keystrokes_indicator: status_bar.pending_keystrokes_indicator.unwrap(),
         }
     }
 }

@@ -76,7 +76,6 @@ url.workspace = true
 urlencoding.workspace = true
 util.workspace = true
 uuid.workspace = true
-which_key.workspace = true
 workspace.workspace = true
 ed_actions.workspace = true
 time.workspace = true

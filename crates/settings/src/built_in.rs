@@ -212,7 +212,6 @@ pub fn settings() -> SettingsContent {
             active_language_button: Some(true),
             cursor_position_button: Some(true),
             active_encoding_button: Some(EncodingDisplayOptions::NonUtf8),
-            pending_keystrokes_indicator: Some(true),
         }),
         preview_tabs: Some(PreviewTabsSettingsContent {
             enabled: Some(true),

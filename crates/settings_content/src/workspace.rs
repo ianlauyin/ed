@@ -390,11 +390,6 @@ pub struct StatusBarSettingsContent {
     ///
     /// Default: non_utf8
     pub active_encoding_button: Option<EncodingDisplayOptions>,
-    /// Whether to show an indicator while multi-stroke input is pending.
-    /// If the input has a timeout, a countdown is shown and hovering the indicator pauses it.
-    ///
-    /// Default: true
-    pub pending_keystrokes_indicator: Option<bool>,
 }
 
 #[derive(
