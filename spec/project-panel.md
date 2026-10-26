@@ -42,6 +42,9 @@
   `Cargo.toml`) never see a half-scanned library. On a remote project the
   client's copy fills in asynchronously, so an active path whose entry isn't
   listed yet becomes the active entry (and is revealed) once it arrives.
+  The host creates remote library worktrees itself (e.g. for a go-to-definition
+  target), so they and the worktrees the client adds share one entry-id
+  counter; the panel finds an entry's worktree by id alone.
 - A library is listed in the panel, and held strongly, once one of its files
   becomes the active item. Until then it lives only as long as something
   references it, so crates that only appear in inlay hints or hovers don't

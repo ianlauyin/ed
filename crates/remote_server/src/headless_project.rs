@@ -4,7 +4,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use anyhow::Context as _;
@@ -72,7 +71,6 @@ pub struct HeadlessProject {
     pub lsp_store: Entity<LspStore>,
     pub task_store: Entity<TaskStore>,
 
-    pub next_entry_id: Arc<AtomicUsize>,
     pub languages: Arc<LanguageRegistry>,
     pub git_store: Entity<GitStore>,
     pub environment: Entity<ProjectEnvironment>,
@@ -254,7 +252,6 @@ impl HeadlessProject {
         });
 
         HeadlessProject {
-            next_entry_id: Arc::default(),
             session,
             fs,
             worktree_store,
@@ -409,18 +406,20 @@ impl HeadlessProject {
                 if let Some(file_name) = path.file_name() { parent.join(file_name) } else { parent }
             }
         };
-        let next_worktree_id = this
-            .update(&mut cx, |this, cx| {
-                this.worktree_store.update(cx, |worktree_store, _| worktree_store.next_worktree_id())
-            })
-            .await?;
+        // Share the store's entry id counter with worktrees the host creates itself
+        // (e.g. a library opened by go-to-definition), so entry ids stay unique.
+        let (next_worktree_id, next_entry_id) = this.update(&mut cx, |this, cx| {
+            let worktree_store = this.worktree_store.read(cx);
+            (worktree_store.next_worktree_id(), worktree_store.next_entry_id())
+        });
+        let next_worktree_id = next_worktree_id.await?;
         let worktree = this
             .read_with(&cx.clone(), |this, _| {
                 Worktree::local(
                     Arc::from(canonicalized.as_path()),
                     message.payload.visible,
                     this.fs.clone(),
-                    this.next_entry_id.clone(),
+                    next_entry_id,
                     true,
                     next_worktree_id,
                     &mut cx,

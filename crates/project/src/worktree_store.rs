@@ -279,6 +279,10 @@ impl WorktreeStore {
         }
     }
 
+    pub fn next_entry_id(&self) -> Arc<AtomicUsize> {
+        self.next_entry_id.clone()
+    }
+
     pub fn next_worktree_id(&self) -> impl Future<Output = Result<WorktreeId>> + use<> {
         let strategy = match (&self.state, &self.downstream_client) {
             // we are a remote server, the client is in charge of assigning worktree ids
