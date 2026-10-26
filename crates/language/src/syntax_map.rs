@@ -19,7 +19,6 @@ use futures::FutureExt;
 use gpui::SharedString;
 use language_core::highlight_map::HighlightCaptureRef;
 use smallvec::SmallVec;
-use streaming_iterator::StreamingIterator;
 use sum_tree::Bias;
 use sum_tree::Dimensions;
 use sum_tree::SeekTarget;
@@ -40,6 +39,7 @@ use tree_sitter::QueryCursor;
 use tree_sitter::QueryMatch;
 use tree_sitter::QueryMatches;
 use tree_sitter::QueryPredicateArg;
+use tree_sitter::StreamingIterator;
 
 use crate::CaptureId;
 use crate::File;
