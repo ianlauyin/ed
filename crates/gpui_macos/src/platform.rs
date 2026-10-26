@@ -16,9 +16,6 @@ use std::sync::atomic::Ordering;
 use anyhow::Context as _;
 use anyhow::anyhow;
 use block2::RcBlock;
-use core_foundation::base::CFRelease;
-use core_foundation::runloop::CFRunLoopRun;
-use core_foundation::string::CFStringRef;
 use dispatch2::DispatchQueue;
 use futures::channel::oneshot;
 use gpui::Action;
@@ -80,6 +77,8 @@ use objc2_app_kit::NSSavePanel;
 use objc2_app_kit::NSWorkspace;
 use objc2_app_kit::NSWorkspaceDidWakeNotification;
 use objc2_app_kit::NSWorkspaceWillSleepNotification;
+use objc2_core_foundation::CFRunLoop;
+use objc2_core_foundation::CFString;
 use objc2_foundation::NSActivityOptions;
 use parking_lot::Mutex;
 
@@ -572,7 +571,7 @@ impl Platform for MacPlatform {
         if state.headless {
             drop(state);
             on_finish_launching();
-            unsafe { CFRunLoopRun() };
+            CFRunLoop::run();
         } else {
             state.finish_launching = Some(on_finish_launching);
             drop(state);
@@ -1050,7 +1049,7 @@ impl Platform for MacPlatform {
             let actions = &mut state.menu_actions;
             let new = self.create_dock_menu(menu, msg_send![app, delegate], actions, keymap);
             if let Some(old) = state.dock_menu.replace(new) {
-                CFRelease(old as _)
+                let _: () = msg_send![old, release];
             }
         }
     }
@@ -1452,10 +1451,10 @@ unsafe extern "C" {
         unicodeString: *mut u16,
     ) -> u32;
     pub(super) fn LMGetKbdType() -> u16;
-    pub(super) static kTISPropertyUnicodeKeyLayoutData: CFStringRef;
-    pub(super) static kTISPropertyInputSourceID: CFStringRef;
-    pub(super) static kTISPropertyLocalizedName: CFStringRef;
-    pub(super) static kTISPropertyInputSourceIsASCIICapable: CFStringRef;
-    pub(super) static kTISPropertyInputSourceType: CFStringRef;
-    pub(super) static kTISTypeKeyboardInputMode: CFStringRef;
+    pub(super) static kTISPropertyUnicodeKeyLayoutData: *const CFString;
+    pub(super) static kTISPropertyInputSourceID: *const CFString;
+    pub(super) static kTISPropertyLocalizedName: *const CFString;
+    pub(super) static kTISPropertyInputSourceIsASCIICapable: *const CFString;
+    pub(super) static kTISPropertyInputSourceType: *const CFString;
+    pub(super) static kTISTypeKeyboardInputMode: *const CFString;
 }

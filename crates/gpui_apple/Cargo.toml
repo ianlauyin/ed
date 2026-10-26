@@ -21,19 +21,15 @@ anyhow.workspace = true
 async-task.workspace = true
 block2.workspace = true
 collections.workspace = true
-core-foundation.workspace = true
-core-foundation-sys.workspace = true
-core-graphics.workspace = true
-core-text.workspace = true
 derive_more.workspace = true
 dispatch2.workspace = true
 etagere.workspace = true
 futures.workspace = true
 log.workspace = true
 objc2.workspace = true
-objc2-core-foundation = { workspace = true, features = ["std", "CFCGTypes", "CFData", "CFDictionary", "CFString", "CFNumber", "CFBase"] }
-objc2-core-graphics.workspace = true
-objc2-core-text.workspace = true
+objc2-core-foundation = { workspace = true, features = ["std", "CFArray", "CFAttributedString", "CFBase", "CFCGTypes", "CFData", "CFDictionary", "CFLocale", "CFNumber", "CFPreferences", "CFString"] }
+objc2-core-graphics = { workspace = true, features = ["CGBitmapContext", "CGColorSpace", "CGContext", "CGDataProvider", "CGFont", "CGImage"] }
+objc2-core-text = { workspace = true, features = ["objc2-core-graphics", "CTFont", "CTFontCollection", "CTFontDescriptor", "CTFontTraits", "CTLine", "CTRun", "CTStringAttributes"] }
 objc2-metal = { workspace = true, features = [
     "std",
     "block2",

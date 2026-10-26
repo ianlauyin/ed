@@ -17,12 +17,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use block2::RcBlock;
-use core_foundation::base::CFRelease;
-use core_foundation::base::CFTypeRef;
-use core_foundation_sys::base::CFEqual;
-use core_foundation_sys::number::CFBooleanGetValue;
-use core_foundation_sys::number::CFBooleanRef;
-use core_graphics::display::CGDirectDisplayID;
 use futures::channel::oneshot;
 use gpui::AnyWindowHandle;
 use gpui::BackgroundExecutor;
@@ -62,7 +56,6 @@ use gpui::WindowVisibility;
 use gpui::point;
 use gpui::px;
 use gpui::size;
-use gpui_util::ResultExt;
 use objc2::AnyThread;
 use objc2::ClassType;
 use objc2::DefinedClass;
@@ -95,7 +88,6 @@ use objc2_app_kit::NSPanel;
 use objc2_app_kit::NSPasteboardWriting;
 use objc2_app_kit::NSRequestUserAttentionType;
 use objc2_app_kit::NSResponder;
-use objc2_app_kit::NSScreen;
 use objc2_app_kit::NSTextInputClient;
 use objc2_app_kit::NSTrackingArea;
 use objc2_app_kit::NSTrackingAreaOptions;
@@ -112,9 +104,15 @@ use objc2_app_kit::NSWindowOrderingMode;
 use objc2_app_kit::NSWindowStyleMask;
 use objc2_app_kit::NSWindowTitleVisibility;
 use objc2_app_kit::NSWorkspace;
+use objc2_core_foundation::CFBoolean;
+use objc2_core_foundation::CFType;
+use objc2_core_graphics::CGDirectDisplayID;
 use objc2_foundation::NSCoder;
 use objc2_foundation::NSKeyedUnarchiver;
+use objc2_foundation::NSRunLoop;
+use objc2_foundation::NSRunLoopCommonModes;
 use objc2_foundation::NSURL;
+use objc2_quartz_core::CADisplayLink;
 use objc2_quartz_core::CALayerDelegate;
 use parking_lot::Mutex;
 use raw_window_handle as rwh;
@@ -125,7 +123,6 @@ use crate::NSRange;
 use crate::NSStringExt;
 use crate::TISCopyCurrentKeyboardInputSource;
 use crate::TISGetInputSourceProperty;
-use crate::WindowFrameSource;
 use crate::events::platform_input_from_native;
 use crate::kTISPropertyInputSourceIsASCIICapable;
 use crate::kTISPropertyInputSourceType;
@@ -149,10 +146,6 @@ use crate::renderer;
 /// Borrows a raw `NSWindow` pointer as its typed objc2 counterpart.
 unsafe fn ns_window<'a>(window: id) -> &'a Objc2NSWindow {
     unsafe { &*window.cast::<Objc2NSWindow>() }
-}
-
-fn screen_ptr(screen: &Option<Retained<NSScreen>>) -> id {
-    screen.as_deref().map_or(nil, |screen| screen as *const NSScreen as id)
 }
 
 /// Returns an `NSColor` in the sRGB color space.
@@ -513,6 +506,13 @@ define_class!(
         }
     }
 
+    impl GPUIView {
+        #[unsafe(method(displayLinkDidFire:))]
+        fn display_link_did_fire(&self, _: &CADisplayLink) {
+            step(self);
+        }
+    }
+
     unsafe impl NSTextInputClient for GPUIView {
         #[unsafe(method(validAttributesForMarkedText))]
         fn valid_attributes_for_marked_text_(&self) -> id {
@@ -818,7 +818,7 @@ struct MacWindowState {
     background_appearance: WindowBackgroundAppearance,
     cursor_style: CursorStyle,
     cursor_visible: Arc<AtomicBool>,
-    frame_source: Option<WindowFrameSource>,
+    display_link: Option<Retained<CADisplayLink>>,
     renderer: renderer::Renderer,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
     event_callback: Option<Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>>,
@@ -973,24 +973,26 @@ impl MacWindowState {
     }
 
     fn start_display_link(&mut self) {
-        self.stop_display_link();
         unsafe {
             if !ns_window(self.native_window).occlusionState().contains(NSWindowOcclusionState::Visible) {
+                self.stop_display_link();
                 return;
             }
         }
-        let Some(display_id) = display_id_for_screen(screen_ptr(&unsafe { ns_window(self.native_window) }.screen()))
-        else {
-            // AppKit can temporarily report no screen while displays are being reconfigured.
-            return;
-        };
-        let data = self.native_view.as_ptr() as *mut c_void;
-        self.frame_source.get_or_insert_with(|| WindowFrameSource::new(data, step)).start(display_id).log_err();
+        // A view's display link follows the view across screens on its own.
+        let display_link = self.display_link.get_or_insert_with(|| unsafe {
+            let view = &*self.native_view.as_ptr().cast::<Objc2NSView>();
+            let display_link = view.displayLinkWithTarget_selector(view, sel!(displayLinkDidFire:));
+            // Common modes keep frames coming during live resize and other tracking loops.
+            display_link.addToRunLoop_forMode(&NSRunLoop::mainRunLoop(), NSRunLoopCommonModes);
+            display_link
+        });
+        display_link.setPaused(false);
     }
 
-    fn stop_display_link(&mut self) {
-        if let Some(frame_source) = self.frame_source.as_mut() {
-            frame_source.stop();
+    fn stop_display_link(&self) {
+        if let Some(display_link) = self.display_link.as_ref() {
+            display_link.setPaused(true);
         }
     }
 
@@ -1221,7 +1223,7 @@ impl MacWindow {
                 background_appearance: WindowBackgroundAppearance::Opaque,
                 cursor_style: CursorStyle::Arrow,
                 cursor_visible,
-                frame_source: None,
+                display_link: None,
                 renderer: renderer::new_renderer(
                     renderer_context,
                     native_window as *mut _,
@@ -1413,7 +1415,10 @@ impl Drop for MacWindow {
         this.renderer.destroy();
         let window = this.native_window;
         let sheet_parent = this.sheet_parent.take();
-        this.frame_source.take();
+        if let Some(display_link) = this.display_link.take() {
+            // The link retains the view as its target until invalidated.
+            display_link.invalidate();
+        }
         unsafe {
             let _: () = msg_send![this.native_window, setDelegate: nil];
         }
@@ -2387,12 +2392,12 @@ unsafe fn is_ime_input_source_active() -> bool {
 
         let source_type = TISGetInputSourceProperty(source, kTISPropertyInputSourceType as *const c_void);
         let is_input_mode =
-            !source_type.is_null() && CFEqual(source_type as CFTypeRef, kTISTypeKeyboardInputMode as CFTypeRef) != 0;
+            !source_type.is_null() && *source_type.cast::<CFType>() == *kTISTypeKeyboardInputMode.cast::<CFType>();
 
         let is_ascii = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsASCIICapable as *const c_void);
-        let is_ascii_capable = !is_ascii.is_null() && CFBooleanGetValue(is_ascii as CFBooleanRef);
+        let is_ascii_capable = !is_ascii.is_null() && (*is_ascii.cast::<CFBoolean>()).value();
 
-        CFRelease(source as CFTypeRef);
+        let _: () = msg_send![source, release];
 
         is_input_mode && !is_ascii_capable
     }
@@ -3001,9 +3006,8 @@ fn display_layer(this: &AnyObject, _: id) {
     }
 }
 
-extern "C" fn step(view: *mut c_void) {
-    let view = view as id;
-    let window_state = unsafe { get_window_state(&*view) };
+fn step(view: &AnyObject) {
+    let window_state = unsafe { get_window_state(view) };
     let mut lock = window_state.lock();
 
     if let Some(mut callback) = lock.request_frame_callback.take() {

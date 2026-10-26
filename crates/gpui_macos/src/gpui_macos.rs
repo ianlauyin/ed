@@ -5,7 +5,6 @@
 //! an origin at the bottom left of the main display.
 
 mod display;
-mod display_link;
 mod events;
 mod keyboard;
 mod ns;
@@ -28,7 +27,6 @@ use std::ffi::c_void;
 use std::ops::Range;
 
 pub(crate) use display::*;
-pub(crate) use display_link::*;
 pub(crate) use gpui_apple::AppleActivity;
 pub(crate) use gpui_apple::AppleDispatcher;
 pub(crate) use keyboard::*;

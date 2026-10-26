@@ -1,34 +1,13 @@
 use std::borrow::Cow;
 use std::char;
 use std::convert::TryFrom;
-use std::sync::Arc;
+use std::ffi::c_void;
+use std::ptr::NonNull;
 use std::sync::OnceLock;
 
 use anyhow::anyhow;
 use collections::HashMap;
 use collections::HashSet;
-use core_foundation::attributed_string::CFMutableAttributedString;
-use core_foundation::base::CFRange;
-use core_foundation::base::CFType;
-use core_foundation::base::TCFType;
-use core_foundation::number::CFNumber;
-use core_foundation::string::CFString;
-use core_graphics::base::CGFloat;
-use core_graphics::base::CGGlyph;
-use core_graphics::base::kCGImageAlphaPremultipliedLast;
-use core_graphics::color_space::CGColorSpace;
-use core_graphics::context::CGContext;
-use core_graphics::context::CGTextDrawingMode;
-use core_graphics::data_provider::CGDataProvider;
-use core_graphics::font::CGFont;
-use core_graphics::geometry::CGPoint;
-use core_text::font::CTFont;
-use core_text::font_descriptor::kCTFontSlantTrait;
-use core_text::font_descriptor::kCTFontSymbolicTrait;
-use core_text::font_descriptor::kCTFontWeightTrait;
-use core_text::font_descriptor::kCTFontWidthTrait;
-use core_text::line::CTLine;
-use core_text::string_attributes::kCTFontAttributeName;
 use gpui::Bounds;
 use gpui::DevicePixels;
 use gpui::Font;
@@ -54,15 +33,41 @@ use gpui::TextRenderingMode;
 use gpui::point;
 use gpui::px;
 use gpui::swap_rgba_pa_to_bgra;
+use objc2_core_foundation::CFArray;
+use objc2_core_foundation::CFData;
+use objc2_core_foundation::CFDictionary;
+use objc2_core_foundation::CFMutableAttributedString;
+use objc2_core_foundation::CFNumber;
+use objc2_core_foundation::CFPreferencesCopyAppValue;
+use objc2_core_foundation::CFRange;
+use objc2_core_foundation::CFRetained;
+use objc2_core_foundation::CFString;
+use objc2_core_foundation::CFType;
+use objc2_core_foundation::CGFloat;
+use objc2_core_foundation::CGPoint;
+use objc2_core_foundation::kCFPreferencesCurrentApplication;
+use objc2_core_graphics::CGBitmapContextCreate;
+use objc2_core_graphics::CGColorSpace;
+use objc2_core_graphics::CGContext;
+use objc2_core_graphics::CGDataProvider;
+use objc2_core_graphics::CGFont;
+use objc2_core_graphics::CGGlyph;
+use objc2_core_graphics::CGImageAlphaInfo;
+use objc2_core_graphics::CGTextDrawingMode;
+use objc2_core_text::CTFont;
+use objc2_core_text::CTFontCollection;
+use objc2_core_text::CTFontDescriptor;
+use objc2_core_text::CTLine;
+use objc2_core_text::CTRun;
+use objc2_core_text::kCTFontAttributeName;
+use objc2_core_text::kCTFontFamilyNameAttribute;
 use parking_lot::RwLock;
 use parking_lot::RwLockUpgradableReadGuard;
 use smallvec::SmallVec;
 
 use crate::font;
+use crate::font::SyncFont;
 use crate::open_type::apply_features_and_fallbacks;
-
-#[allow(non_upper_case_globals)]
-const kCGImageAlphaOnly: u32 = 7;
 
 /// Apple text system using CoreText for font shaping.
 pub struct AppleTextSystem(RwLock<AppleTextSystemState>);
@@ -75,8 +80,8 @@ struct FontKey {
 }
 
 struct AppleTextSystemState {
-    memory_fonts: Vec<CTFont>,
-    fonts: Vec<CTFont>,
+    memory_fonts: Vec<SyncFont>,
+    fonts: Vec<SyncFont>,
     font_selections: HashMap<Font, FontId>,
     font_ids_by_postscript_name: HashMap<String, FontId>,
     font_ids_by_font_key: HashMap<FontKey, SmallVec<[FontId; 4]>>,
@@ -110,15 +115,11 @@ impl PlatformTextSystem for AppleTextSystem {
 
     fn all_font_names(&self) -> Vec<String> {
         let mut names = Vec::new();
-        let collection = core_text::font_collection::create_for_all_families();
-        let descriptors = font::matching_descriptors(&collection);
-        let Some(descriptors) = descriptors else {
-            return names;
-        };
-        for descriptor in &descriptors {
-            names.extend(lenient_font_attributes::family_name(&descriptor));
+        let collection = unsafe { CTFontCollection::from_available_fonts(None) };
+        if let Some(descriptors) = font::matching_descriptors(&collection) {
+            names.extend(descriptors.iter().filter_map(|descriptor| family_name(&descriptor)));
         }
-        names.extend(self.0.read().memory_fonts.iter().map(CTFont::family_name));
+        names.extend(self.0.read().memory_fonts.iter().map(|font| unsafe { font.family_name() }.to_string()));
         names
     }
 
@@ -141,8 +142,12 @@ impl PlatformTextSystem for AppleTextSystem {
                 lock.font_ids_by_font_key[&font_key].as_ref()
             };
 
-            let candidate_properties =
-                candidates.iter().map(|font_id| font::properties(&lock.fonts[font_id.0])).collect::<SmallVec<[_; 4]>>();
+            // `load_family` only registers fonts that have properties.
+            let candidate_properties = candidates
+                .iter()
+                .map(|font_id| font::properties(&lock.fonts[font_id.0]))
+                .collect::<Option<SmallVec<[_; 4]>>>()
+                .ok_or_else(|| anyhow!("font in family {:?} has no traits", font.family))?;
 
             let ix = font::find_best_match(&candidate_properties, font.style, font.weight)
                 .ok_or_else(|| anyhow!("no font in family {:?}", font.family))?;
@@ -206,33 +211,29 @@ impl PlatformTextSystem for AppleTextSystem {
 fn font_smoothing_allowed_by_user() -> bool {
     static ALLOWED: OnceLock<bool> = OnceLock::new();
     *ALLOWED.get_or_init(|| {
-        use core_foundation_sys::preferences::CFPreferencesCopyAppValue;
-        use core_foundation_sys::preferences::kCFPreferencesCurrentApplication;
-
-        let key = CFString::new("AppleFontSmoothing");
-        let value_ref =
-            unsafe { CFPreferencesCopyAppValue(key.as_concrete_TypeRef(), kCFPreferencesCurrentApplication) };
-        if value_ref.is_null() {
+        let key = CFString::from_static_str("AppleFontSmoothing");
+        let Some(value) = CFPreferencesCopyAppValue(&key, unsafe { kCFPreferencesCurrentApplication }) else {
             return true;
-        }
-        let value = unsafe { CFType::wrap_under_create_rule(value_ref) };
-        let Some(number) = value.downcast_into::<CFNumber>() else {
+        };
+        let Ok(number) = value.downcast::<CFNumber>() else {
             return true;
         };
         // Only an explicit value of `0` means that font smoothing is disabled.
-        number.to_i64() != Some(0)
+        number.as_i64() != Some(0)
     })
 }
 
 impl AppleTextSystemState {
     fn add_fonts(&mut self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()> {
         for bytes in fonts {
-            let data_provider = match bytes {
-                Cow::Borrowed(embedded_font) => unsafe { CGDataProvider::from_slice(embedded_font) },
-                Cow::Owned(bytes) => CGDataProvider::from_buffer(Arc::new(bytes)),
+            let data = match bytes {
+                Cow::Borrowed(embedded_font) => CFData::from_static_bytes(embedded_font),
+                Cow::Owned(bytes) => CFData::from_bytes(&bytes),
             };
-            let font = CGFont::from_data_provider(data_provider).map_err(|()| anyhow!("Could not load a font."))?;
-            self.memory_fonts.push(font::from_core_graphics_font(&font));
+            let font = CGDataProvider::with_cf_data(Some(&data))
+                .and_then(|data_provider| CGFont::with_data_provider(&data_provider))
+                .ok_or_else(|| anyhow!("Could not load a font."))?;
+            self.memory_fonts.push(SyncFont(font::from_core_graphics_font(&font)));
         }
         Ok(())
     }
@@ -247,36 +248,28 @@ impl AppleTextSystemState {
 
         let mut font_ids = SmallVec::new();
         let mut postscript_names_seen = HashSet::default();
-        let memory_fonts: Vec<CTFont> =
-            self.memory_fonts.iter().filter(|font| font.family_name() == name).cloned().collect();
+        let memory_fonts: Vec<CFRetained<CTFont>> = self
+            .memory_fonts
+            .iter()
+            .filter(|font| unsafe { font.family_name() }.to_string() == name)
+            .map(|font| font.0.clone())
+            .collect();
         let family = if memory_fonts.is_empty() { font::family_fonts(name)? } else { memory_fonts };
         for mut font in family {
             apply_features_and_fallbacks(&mut font, features, fallbacks)?;
             // Text measurement in the editor relies on the 'm' glyph.
+            let display_name = unsafe { font.display_name() }.to_string();
+            let postscript_name = unsafe { font.post_script_name() }.to_string();
             if font::glyph_for_char(&font, 'm').is_none() {
-                log::warn!("font '{}' has no 'm' character and was not loaded", font.display_name());
+                log::warn!("font '{display_name}' has no 'm' character and was not loaded");
                 continue;
             }
 
-            // We've seen a number of panics in production caused by calling font.properties()
-            // which unwraps a downcast to CFNumber. This is an attempt to avoid the panic,
-            // and to try and identify the incalcitrant font.
-            let traits = font.all_traits();
-            if unsafe {
-                !(traits.get(kCTFontSymbolicTrait).downcast::<CFNumber>().is_some()
-                    && traits.get(kCTFontWidthTrait).downcast::<CFNumber>().is_some()
-                    && traits.get(kCTFontWeightTrait).downcast::<CFNumber>().is_some()
-                    && traits.get(kCTFontSlantTrait).downcast::<CFNumber>().is_some())
-            } {
-                log::error!(
-                    "Failed to read traits for font {:?} (PostScript name {:?})",
-                    font.display_name(),
-                    font.postscript_name(),
-                );
+            if font::properties(&font).is_none() {
+                log::error!("Failed to read traits for font {display_name:?} (PostScript name {postscript_name:?})");
                 continue;
             }
 
-            let postscript_name = font.postscript_name();
             // Dedup is scoped to this single `load_family` call (issue #55472).
             // The same family can be reloaded later under a different `FontKey`
             // (different features/fallbacks); a global check against
@@ -286,7 +279,7 @@ impl AppleTextSystemState {
                 log::warn!(
                     "skipping duplicate font {:?} with PostScript name {:?} \
                      in family {:?}",
-                    font.display_name(),
+                    display_name,
                     postscript_name,
                     name,
                 );
@@ -296,7 +289,7 @@ impl AppleTextSystemState {
             font_ids.push(font_id);
             self.font_ids_by_postscript_name.insert(postscript_name.clone(), font_id);
             self.postscript_names_by_font_id.insert(font_id, postscript_name);
-            self.fonts.push(font);
+            self.fonts.push(SyncFont(font));
         }
         Ok(font_ids)
     }
@@ -309,15 +302,16 @@ impl AppleTextSystemState {
         font::glyph_for_char(&self.fonts[font_id.0], ch).map(GlyphId)
     }
 
-    fn id_for_native_font(&mut self, requested_font: CTFont) -> FontId {
-        let postscript_name = requested_font.postscript_name();
+    fn id_for_native_font(&mut self, requested_font: &CTFont) -> FontId {
+        let postscript_name = unsafe { requested_font.post_script_name() }.to_string();
         if let Some(font_id) = self.font_ids_by_postscript_name.get(&postscript_name) {
             *font_id
         } else {
             let font_id = FontId(self.fonts.len());
             self.font_ids_by_postscript_name.insert(postscript_name.clone(), font_id);
             self.postscript_names_by_font_id.insert(font_id, postscript_name);
-            self.fonts.push(font::from_core_graphics_font(&requested_font.copy_to_CGFont()));
+            let graphics_font = unsafe { requested_font.graphics_font(std::ptr::null_mut()) };
+            self.fonts.push(SyncFont(font::from_core_graphics_font(&graphics_font)));
             font_id
         }
     }
@@ -360,62 +354,65 @@ impl AppleTextSystemState {
 
             let mut bytes;
 
-            let cx = if params.is_emoji {
-                bytes = vec![0; bitmap_size.width.0 as usize * 4 * bitmap_size.height.0 as usize];
-                CGContext::create_bitmap_context(
-                    Some(bytes.as_mut_ptr() as *mut _),
-                    bitmap_size.width.0 as usize,
-                    bitmap_size.height.0 as usize,
-                    8,
-                    bitmap_size.width.0 as usize * 4,
-                    &CGColorSpace::create_device_rgb(),
-                    kCGImageAlphaPremultipliedLast,
-                )
+            let (bytes_per_pixel, color_space, alpha_info) = if params.is_emoji {
+                (4, CGColorSpace::new_device_rgb(), CGImageAlphaInfo::PremultipliedLast)
             } else {
-                bytes = vec![0; bitmap_size.width.0 as usize * bitmap_size.height.0 as usize];
-                CGContext::create_bitmap_context(
-                    Some(bytes.as_mut_ptr() as *mut _),
-                    bitmap_size.width.0 as usize,
-                    bitmap_size.height.0 as usize,
-                    8,
-                    bitmap_size.width.0 as usize,
-                    &CGColorSpace::create_device_gray(),
-                    kCGImageAlphaOnly,
-                )
+                (1, CGColorSpace::new_device_gray(), CGImageAlphaInfo::Only)
             };
+            let width = bitmap_size.width.0 as usize;
+            let height = bitmap_size.height.0 as usize;
+            bytes = vec![0; width * bytes_per_pixel * height];
+            let cx = unsafe {
+                CGBitmapContextCreate(
+                    bytes.as_mut_ptr().cast::<c_void>(),
+                    width,
+                    height,
+                    8,
+                    width * bytes_per_pixel,
+                    color_space.as_deref(),
+                    alpha_info.0,
+                )
+            }
+            .ok_or_else(|| anyhow!("failed to create a glyph bitmap context"))?;
 
             // Move the origin to bottom left and account for scaling, this
             // makes drawing text consistent with `font::raster_bounds`.
-            cx.translate(
+            CGContext::translate_ctm(
+                Some(&cx),
                 -glyph_bounds.origin.x.0 as CGFloat,
                 (glyph_bounds.origin.y.0 + glyph_bounds.size.height.0) as CGFloat,
             );
-            cx.scale(params.scale_factor as CGFloat, params.scale_factor as CGFloat);
+            CGContext::scale_ctm(Some(&cx), params.scale_factor as CGFloat, params.scale_factor as CGFloat);
 
             let subpixel_shift = params.subpixel_variant.map(|v| v as f32 / SUBPIXEL_VARIANTS_X as f32);
-            cx.set_text_drawing_mode(CGTextDrawingMode::CGTextFill);
-            cx.set_allows_antialiasing(true);
-            cx.set_should_antialias(true);
-            cx.set_allows_font_subpixel_positioning(true);
-            cx.set_should_subpixel_position_fonts(true);
-            cx.set_allows_font_subpixel_quantization(false);
-            cx.set_should_subpixel_quantize_fonts(false);
+            CGContext::set_text_drawing_mode(Some(&cx), CGTextDrawingMode::Fill);
+            CGContext::set_allows_antialiasing(Some(&cx), true);
+            CGContext::set_should_antialias(Some(&cx), true);
+            CGContext::set_allows_font_subpixel_positioning(Some(&cx), true);
+            CGContext::set_should_subpixel_position_fonts(Some(&cx), true);
+            CGContext::set_allows_font_subpixel_quantization(Some(&cx), false);
+            CGContext::set_should_subpixel_quantize_fonts(Some(&cx), false);
 
-            if true && params.dilation > 0 {
+            if params.dilation > 0 {
                 let luminance = params.dilation as f64 * 0.25;
-                cx.set_should_smooth_fonts(true);
-                cx.set_gray_fill_color(luminance, 1.0);
+                CGContext::set_should_smooth_fonts(Some(&cx), true);
+                CGContext::set_gray_fill_color(Some(&cx), luminance, 1.0);
             } else {
-                cx.set_gray_fill_color(0.0, 1.0);
+                CGContext::set_gray_fill_color(Some(&cx), 0.0, 1.0);
             }
-            self.fonts[params.font_id.0].clone_with_font_size(f32::from(params.font_size) as CGFloat).draw_glyphs(
-                &[params.glyph_id.0 as CGGlyph],
-                &[CGPoint::new(
-                    (subpixel_shift.x / params.scale_factor) as CGFloat,
-                    (subpixel_shift.y / params.scale_factor) as CGFloat,
-                )],
-                cx,
+            let mut glyph = params.glyph_id.0 as CGGlyph;
+            let mut position = CGPoint::new(
+                (subpixel_shift.x / params.scale_factor) as CGFloat,
+                (subpixel_shift.y / params.scale_factor) as CGFloat,
             );
+            unsafe {
+                let font = self.fonts[params.font_id.0].copy_with_attributes(
+                    f32::from(params.font_size) as CGFloat,
+                    std::ptr::null(),
+                    None,
+                );
+                font.draw_glyphs(NonNull::from(&mut glyph), NonNull::from(&mut position), 1, &cx);
+            }
 
             if params.is_emoji {
                 // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
@@ -430,7 +427,7 @@ impl AppleTextSystemState {
 
     fn layout_line(&mut self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {
         // Construct the attributed string, converting UTF8 ranges to UTF16 ranges.
-        let mut string = CFMutableAttributedString::new();
+        let string = CFMutableAttributedString::new(None, 0).expect("failed to create an attributed string");
         let mut max_ascent = 0.0f32;
         let mut max_descent = 0.0f32;
 
@@ -441,13 +438,19 @@ impl AppleTextSystemState {
                 let text_run;
                 (text_run, text) = text.split_at(run.len);
 
-                let utf16_start = string.char_len(); // insert at end of string
-                // note: replace_str may silently ignore codepoints it dislikes (e.g., BOM at start of string)
-                string.replace_str(&CFString::new(text_run), CFRange::init(utf16_start, 0));
-                let utf16_end = string.char_len();
+                let utf16_start = string.length(); // insert at end of string
+                // note: replace_string may silently ignore codepoints it dislikes (e.g., BOM at start of string)
+                unsafe {
+                    CFMutableAttributedString::replace_string(
+                        Some(&string),
+                        CFRange::new(utf16_start, 0),
+                        Some(&CFString::from_str(text_run)),
+                    );
+                }
+                let utf16_end = string.length();
 
                 let length = utf16_end - utf16_start;
-                let cf_range = CFRange::init(utf16_start, length);
+                let cf_range = CFRange::new(utf16_start, length);
                 let font = &self.fonts[run.font_id.0];
 
                 let font_metrics = font::metrics(font);
@@ -457,33 +460,47 @@ impl AppleTextSystemState {
 
                 let font_size = if break_ligature { px(f32::from(font_size).next_up()) } else { font_size };
                 unsafe {
-                    string.set_attribute(cf_range, kCTFontAttributeName, &font.clone_with_font_size(font_size.into()));
+                    let font = font.copy_with_attributes(f32::from(font_size).into(), std::ptr::null(), None);
+                    CFMutableAttributedString::set_attribute(
+                        Some(&string),
+                        cf_range,
+                        Some(kCTFontAttributeName),
+                        Some(&font),
+                    );
                 }
                 break_ligature = !break_ligature;
             }
         }
         // Retrieve the glyphs from the shaped line, converting UTF16 offsets to UTF8 offsets.
-        let line = CTLine::new_with_attributed_string(string.as_concrete_TypeRef());
-        let glyph_runs = line.glyph_runs();
-        let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
+        let line = unsafe { CTLine::with_attributed_string(string.as_ref()) };
+        // SAFETY: Core Text documents the glyph runs as an array of `CTRun`s.
+        let glyph_runs: CFRetained<CFArray<CTRun>> = unsafe { CFRetained::cast_unchecked(line.glyph_runs()) };
+        let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len());
         let mut ix_converter = StringIndexConverter::new(text);
-        for run in &glyph_runs {
-            let attributes = run.attributes().unwrap();
-            let font = unsafe { attributes.get(kCTFontAttributeName).downcast::<CTFont>().unwrap() };
-            let font_id = self.id_for_native_font(font);
+        for run in glyph_runs.iter() {
+            // SAFETY: Run attributes are keyed by attribute name strings.
+            let attributes: CFRetained<CFDictionary<CFString, CFType>> =
+                unsafe { CFRetained::cast_unchecked(run.attributes()) };
+            let font = attributes
+                .get(unsafe { kCTFontAttributeName })
+                .and_then(|font| font.downcast::<CTFont>().ok())
+                .expect("Core Text runs always carry a font");
+            let font_id = self.id_for_native_font(&font);
 
+            let glyph_count = usize::try_from(unsafe { run.glyph_count() }).unwrap_or(0);
             let glyphs = match runs.last_mut() {
                 Some(run) if run.font_id == font_id => &mut run.glyphs,
                 _ => {
-                    runs.push(ShapedRun {
-                        font_id,
-                        glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
-                    });
+                    runs.push(ShapedRun { font_id, glyphs: Vec::with_capacity(glyph_count) });
                     &mut runs.last_mut().unwrap().glyphs
                 }
             };
+            let run_glyphs = unsafe { run_values(&run, glyph_count, CTRun::glyphs_ptr, CTRun::glyphs) };
+            let run_positions = unsafe { run_values(&run, glyph_count, CTRun::positions_ptr, CTRun::positions) };
+            let run_string_indices =
+                unsafe { run_values(&run, glyph_count, CTRun::string_indices_ptr, CTRun::string_indices) };
             for ((&glyph_id, position), &glyph_utf16_ix) in
-                run.glyphs().iter().zip(run.positions().iter()).zip(run.string_indices().iter())
+                run_glyphs.iter().zip(run_positions.iter()).zip(run_string_indices.iter())
             {
                 let glyph_utf16_ix = usize::try_from(glyph_utf16_ix).unwrap();
                 if ix_converter.utf16_ix > glyph_utf16_ix {
@@ -499,11 +516,12 @@ impl AppleTextSystemState {
                 });
             }
         }
-        let typographic_bounds = line.get_typographic_bounds();
+        let width =
+            unsafe { line.typographic_bounds(std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) };
         LineLayout {
             runs,
             font_size,
-            width: typographic_bounds.width.into(),
+            width: (width as f32).into(),
             ascent: max_ascent.into(),
             descent: max_descent.into(),
             len: text.len(),
@@ -537,41 +555,32 @@ impl<'a> StringIndexConverter<'a> {
     }
 }
 
-// Some fonts may have no attributes despite `core_text` requiring them (and panicking).
-// This is the same version as `core_text` has without `expect` calls.
-mod lenient_font_attributes {
-    use core_foundation::base::CFRetain;
-    use core_foundation::base::CFType;
-    use core_foundation::base::TCFType;
-    use core_foundation::string::CFString;
-    use core_foundation::string::CFStringRef;
-    use core_text::font_descriptor::CTFontDescriptor;
-    use core_text::font_descriptor::CTFontDescriptorCopyAttribute;
-    use core_text::font_descriptor::kCTFontFamilyNameAttribute;
-
-    pub fn family_name(descriptor: &CTFontDescriptor) -> Option<String> {
-        unsafe { get_string_attribute(descriptor, kCTFontFamilyNameAttribute) }
+/// A run's values, borrowed when Core Text exposes its internal buffer and copied otherwise.
+///
+/// # Safety
+///
+/// `count` must be the run's glyph count, and `ptr` and `copy` must be a matching pair of `CTRun`
+/// accessors.
+unsafe fn run_values<T: Copy + Default>(
+    run: &CTRun,
+    count: usize,
+    ptr: unsafe fn(&CTRun) -> *const T,
+    copy: unsafe fn(&CTRun, CFRange, NonNull<T>),
+) -> Cow<'_, [T]> {
+    let values = unsafe { ptr(run) };
+    if !values.is_null() {
+        // SAFETY: A non-null buffer holds all `count` values and lives as long as the run.
+        return Cow::Borrowed(unsafe { std::slice::from_raw_parts(values, count) });
     }
-
-    fn get_string_attribute(descriptor: &CTFontDescriptor, attribute: CFStringRef) -> Option<String> {
-        unsafe {
-            let value = CTFontDescriptorCopyAttribute(descriptor.as_concrete_TypeRef(), attribute);
-            if value.is_null() {
-                return None;
-            }
-
-            let value = CFType::wrap_under_create_rule(value);
-            assert!(value.instance_of::<CFString>());
-            let s = wrap_under_get_rule(value.as_CFTypeRef() as CFStringRef);
-            Some(s.to_string())
-        }
+    let mut values = vec![T::default(); count];
+    if let Some(buffer) = NonNull::new(values.as_mut_ptr()) {
+        // A zero-length range copies the whole run.
+        unsafe { copy(run, CFRange::new(0, 0), buffer) };
     }
+    Cow::Owned(values)
+}
 
-    unsafe fn wrap_under_get_rule(reference: CFStringRef) -> CFString {
-        unsafe {
-            assert!(!reference.is_null(), "Attempted to create a NULL object.");
-            let reference = CFRetain(reference as *const ::std::os::raw::c_void) as CFStringRef;
-            TCFType::wrap_under_create_rule(reference)
-        }
-    }
+fn family_name(descriptor: &CTFontDescriptor) -> Option<String> {
+    let value = unsafe { descriptor.attribute(kCTFontFamilyNameAttribute) }?;
+    Some(value.downcast::<CFString>().ok()?.to_string())
 }

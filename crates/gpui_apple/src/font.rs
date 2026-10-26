@@ -1,23 +1,8 @@
 //! Font queries on `CTFont`, in font units, plus CSS-style face matching.
 
+use std::ptr::NonNull;
+
 use anyhow::anyhow;
-use core_foundation::array::CFArray;
-use core_foundation::array::CFArrayRef;
-use core_foundation::base::CFType;
-use core_foundation::base::TCFType;
-use core_foundation::dictionary::CFDictionary;
-use core_foundation::string::CFString;
-use core_graphics::base::CGGlyph;
-use core_graphics::geometry::CGRect;
-use core_graphics::geometry::CGSize;
-use core_text::font::CTFont;
-use core_text::font_collection::CTFontCollection;
-use core_text::font_collection::CTFontCollectionRef;
-use core_text::font_descriptor::CTFontDescriptor;
-use core_text::font_descriptor::SymbolicTraitAccessors;
-use core_text::font_descriptor::TraitAccessors;
-use core_text::font_descriptor::kCTFontFamilyNameAttribute;
-use core_text::font_descriptor::kCTFontOrientationDefault;
 use gpui::Bounds;
 use gpui::DevicePixels;
 use gpui::FontMetrics;
@@ -27,6 +12,41 @@ use gpui::Result;
 use gpui::Size;
 use gpui::point;
 use gpui::size;
+use objc2_core_foundation::CFArray;
+use objc2_core_foundation::CFDictionary;
+use objc2_core_foundation::CFNumber;
+use objc2_core_foundation::CFRetained;
+use objc2_core_foundation::CFString;
+use objc2_core_foundation::CFType;
+use objc2_core_foundation::CGRect;
+use objc2_core_foundation::CGSize;
+use objc2_core_graphics::CGFont;
+use objc2_core_graphics::CGGlyph;
+use objc2_core_text::CTFont;
+use objc2_core_text::CTFontCollection;
+use objc2_core_text::CTFontDescriptor;
+use objc2_core_text::CTFontOrientation;
+use objc2_core_text::CTFontSymbolicTraits;
+use objc2_core_text::kCTFontFamilyNameAttribute;
+use objc2_core_text::kCTFontSlantTrait;
+use objc2_core_text::kCTFontWeightTrait;
+use objc2_core_text::kCTFontWidthTrait;
+
+/// A `CTFont` shared across threads; Core Text fonts are immutable and thread-safe.
+#[derive(Clone)]
+pub struct SyncFont(pub CFRetained<CTFont>);
+
+// SAFETY: Apple documents `CTFont` as safe to use from multiple threads.
+unsafe impl Send for SyncFont {}
+unsafe impl Sync for SyncFont {}
+
+impl std::ops::Deref for SyncFont {
+    type Target = CTFont;
+
+    fn deref(&self) -> &CTFont {
+        &self.0
+    }
+}
 
 /// Point size used for fonts loaded by family; metrics are scaled to font units anyway.
 const LOAD_POINT_SIZE: f64 = 16.0;
@@ -45,42 +65,38 @@ pub struct FontProperties {
     pub stretch: f32,
 }
 
-pub fn family_fonts(family_name: &str) -> Result<Vec<CTFont>> {
-    let attributes: CFDictionary<CFString, CFType> = CFDictionary::from_CFType_pairs(&[(
-        unsafe { CFString::wrap_under_get_rule(kCTFontFamilyNameAttribute) },
-        CFString::new(family_name).as_CFType(),
-    )]);
-    let descriptor = core_text::font_descriptor::new_from_attributes(&attributes);
-    let collection = core_text::font_collection::new_from_descriptors(&CFArray::from_CFTypes(&[descriptor]));
-    let fonts: Vec<CTFont> = matching_descriptors(&collection)
+pub fn family_fonts(family_name: &str) -> Result<Vec<CFRetained<CTFont>>> {
+    let family_name = CFString::from_str(family_name);
+    let attributes: CFRetained<CFDictionary<CFString, CFType>> =
+        CFDictionary::from_slices(&[unsafe { kCTFontFamilyNameAttribute }], &[family_name.as_ref()]);
+    let descriptor = unsafe { CTFontDescriptor::with_attributes(attributes.as_opaque()) };
+    let descriptors = CFArray::from_objects(&[&*descriptor]);
+    let collection = unsafe { CTFontCollection::with_font_descriptors(Some(descriptors.as_opaque()), None) };
+    let fonts: Vec<CFRetained<CTFont>> = matching_descriptors(&collection)
         .map(|descriptors| {
             descriptors
                 .iter()
-                .map(|descriptor| core_text::font::new_from_descriptor(&descriptor, LOAD_POINT_SIZE))
+                .map(|descriptor| unsafe {
+                    CTFont::with_font_descriptor(&descriptor, LOAD_POINT_SIZE, std::ptr::null())
+                })
                 .collect()
         })
         .unwrap_or_default();
     if fonts.is_empty() { Err(anyhow!("no font family named {family_name:?}")) } else { Ok(fonts) }
 }
 
-/// `CTFontCollection::get_descriptors` in core-text 21 leaks the array, since
-/// `CTFontCollectionCreateMatchingFontDescriptors` follows the Create Rule.
-pub fn matching_descriptors(collection: &CTFontCollection) -> Option<CFArray<CTFontDescriptor>> {
-    unsafe extern "C" {
-        fn CTFontCollectionCreateMatchingFontDescriptors(collection: CTFontCollectionRef) -> CFArrayRef;
-    }
-    unsafe {
-        let array_ref = CTFontCollectionCreateMatchingFontDescriptors(collection.as_concrete_TypeRef());
-        if array_ref.is_null() { None } else { Some(CFArray::wrap_under_create_rule(array_ref)) }
-    }
+pub fn matching_descriptors(collection: &CTFontCollection) -> Option<CFRetained<CFArray<CTFontDescriptor>>> {
+    let descriptors = unsafe { collection.matching_font_descriptors() }?;
+    // SAFETY: Core Text documents the array as holding font descriptors.
+    Some(unsafe { CFRetained::cast_unchecked(descriptors) })
 }
 
-pub fn from_core_graphics_font(font: &core_graphics::font::CGFont) -> CTFont {
-    core_text::font::new_from_CGFont(font, LOAD_POINT_SIZE)
+pub fn from_core_graphics_font(font: &CGFont) -> CFRetained<CTFont> {
+    unsafe { CTFont::with_graphics_font(font, LOAD_POINT_SIZE, std::ptr::null(), None) }
 }
 
 fn units_per_point(font: &CTFont) -> f64 {
-    f64::from(font.units_per_em()) / font.pt_size()
+    f64::from(unsafe { font.units_per_em() }) / unsafe { font.size() }
 }
 
 /// A rect as `[min_x, min_y, max_x, max_y]`, scaled from points to font units.
@@ -95,22 +111,27 @@ fn bounds_from_rect([min_x, min_y, max_x, max_y]: [f32; 4]) -> Bounds<f32> {
 }
 
 fn glyph_rect_in_units(font: &CTFont, glyph_id: u32) -> [f32; 4] {
-    let rect = font.get_bounding_rects_for_glyphs(kCTFontOrientationDefault, &[glyph_id as CGGlyph]);
+    let mut glyph = glyph_id as CGGlyph;
+    let rect = unsafe {
+        font.bounding_rects_for_glyphs(CTFontOrientation::Default, NonNull::from(&mut glyph), std::ptr::null_mut(), 1)
+    };
     rect_in_units(rect, units_per_point(font) as f32)
 }
 
 pub fn metrics(font: &CTFont) -> FontMetrics {
     let units_per_point = units_per_point(font);
-    FontMetrics {
-        units_per_em: font.units_per_em(),
-        ascent: (font.ascent() * units_per_point) as f32,
-        descent: (-font.descent() * units_per_point) as f32,
-        line_gap: (font.leading() * units_per_point) as f32,
-        underline_position: (font.underline_position() * units_per_point) as f32,
-        underline_thickness: (font.underline_thickness() * units_per_point) as f32,
-        cap_height: (font.cap_height() * units_per_point) as f32,
-        x_height: (font.x_height() * units_per_point) as f32,
-        bounding_box: bounds_from_rect(rect_in_units(font.bounding_box(), units_per_point as f32)),
+    unsafe {
+        FontMetrics {
+            units_per_em: font.units_per_em(),
+            ascent: (font.ascent() * units_per_point) as f32,
+            descent: (-font.descent() * units_per_point) as f32,
+            line_gap: (font.leading() * units_per_point) as f32,
+            underline_position: (font.underline_position() * units_per_point) as f32,
+            underline_thickness: (font.underline_thickness() * units_per_point) as f32,
+            cap_height: (font.cap_height() * units_per_point) as f32,
+            x_height: (font.x_height() * units_per_point) as f32,
+            bounding_box: bounds_from_rect(rect_in_units(font.bounding_box(), units_per_point as f32)),
+        }
     }
 }
 
@@ -119,9 +140,9 @@ pub fn typographic_bounds(font: &CTFont, glyph_id: u32) -> Bounds<f32> {
 }
 
 pub fn advance(font: &CTFont, glyph_id: u32) -> Size<f32> {
-    let glyph = glyph_id as CGGlyph;
+    let mut glyph = glyph_id as CGGlyph;
     let mut advance = CGSize::new(0.0, 0.0);
-    unsafe { font.get_advances_for_glyphs(kCTFontOrientationDefault, &raw const glyph, &raw mut advance, 1) };
+    unsafe { font.advances_for_glyphs(CTFontOrientation::Default, NonNull::from(&mut glyph), &raw mut advance, 1) };
     let units_per_point = units_per_point(font) as f32;
     size(advance.width as f32 * units_per_point, advance.height as f32 * units_per_point)
 }
@@ -130,13 +151,19 @@ pub fn glyph_for_char(font: &CTFont, ch: char) -> Option<u32> {
     let mut utf16 = [0; 2];
     let utf16 = ch.encode_utf16(&mut utf16);
     let mut glyphs: [CGGlyph; 2] = [0; 2];
-    unsafe { font.get_glyphs_for_characters(utf16.as_ptr(), glyphs.as_mut_ptr(), utf16.len().cast_signed()) };
+    unsafe {
+        font.glyphs_for_characters(
+            NonNull::from(&mut utf16[0]),
+            NonNull::from(&mut glyphs[0]),
+            utf16.len().cast_signed(),
+        )
+    };
     (glyphs[0] != 0).then_some(u32::from(glyphs[0]))
 }
 
 /// Pixel bounds of a glyph rasterized at `point_size * scale_factor`, with the origin at the top left.
 pub fn raster_bounds(font: &CTFont, glyph_id: u32, point_size: f32, scale_factor: f32) -> Bounds<DevicePixels> {
-    let units_to_points = point_size / font.units_per_em() as f32;
+    let units_to_points = point_size / unsafe { font.units_per_em() } as f32;
     let [min_x, min_y, max_x, max_y] = glyph_rect_in_units(font, glyph_id).map(|value| value * units_to_points);
     let (width, height) = (max_x - min_x, max_y - min_y);
     let top = -min_y - height;
@@ -151,19 +178,31 @@ pub fn raster_bounds(font: &CTFont, glyph_id: u32, point_size: f32, scale_factor
     }
 }
 
-/// Callers must ensure the font has weight, width, and slant traits; core-text panics otherwise.
-pub fn properties(font: &CTFont) -> FontProperties {
-    let traits = font.all_traits();
-    let style = if font.symbolic_traits().is_italic() {
+/// `None` when the font lacks a weight, width, or slant trait, which some fonts do.
+pub fn properties(font: &CTFont) -> Option<FontProperties> {
+    let traits = traits(font);
+    let slant = trait_value(&traits, unsafe { kCTFontSlantTrait })?;
+    let weight = trait_value(&traits, unsafe { kCTFontWeightTrait })?;
+    let width = trait_value(&traits, unsafe { kCTFontWidthTrait })?;
+    let style = if unsafe { font.symbolic_traits() }.contains(CTFontSymbolicTraits::TraitItalic) {
         FontStyle::Italic
-    } else if traits.normalized_slant() > 0.0 {
+    } else if slant > 0.0 {
         FontStyle::Oblique
     } else {
         FontStyle::Normal
     };
-    let weight = piecewise_linear_find_index(traits.normalized_weight() as f32, &WEIGHT_MAPPING) * 100.0 + 100.0;
-    let stretch = piecewise_linear_lookup((traits.normalized_width() as f32 + 1.0) * 4.0, &STRETCH_MAPPING);
-    FontProperties { style, weight, stretch }
+    let weight = piecewise_linear_find_index(weight as f32, &WEIGHT_MAPPING) * 100.0 + 100.0;
+    let stretch = piecewise_linear_lookup((width as f32 + 1.0) * 4.0, &STRETCH_MAPPING);
+    Some(FontProperties { style, weight, stretch })
+}
+
+pub fn traits(font: &CTFont) -> CFRetained<CFDictionary<CFString, CFType>> {
+    // SAFETY: Core Text documents the traits dictionary as keyed by strings.
+    unsafe { CFRetained::cast_unchecked(font.traits()) }
+}
+
+pub fn trait_value(traits: &CFDictionary<CFString, CFType>, key: &CFString) -> Option<f64> {
+    traits.get(key)?.downcast::<CFNumber>().ok()?.as_f64()
 }
 
 fn piecewise_linear_lookup(index: f32, mapping: &[f32]) -> f32 {

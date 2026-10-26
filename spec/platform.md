@@ -163,8 +163,18 @@ backtraces still work through sync CFI.
 
 ## macOS bindings
 
-- AppKit/Foundation access uses the `objc2` crate family only; neither the
-  deprecated `cocoa` crate nor the legacy `objc` 0.2 crate is a dependency.
+- Apple framework access (AppKit, Foundation, Core Foundation, Core Graphics,
+  Core Text, Quartz Core) uses the `objc2` crate family only; the deprecated
+  `cocoa` crate, the legacy `objc` 0.2 crate, and the servo bindings
+  (`core-foundation`, `core-graphics`, `core-text`, `foreign-types`) are not
+  dependencies. Carbon text-input-source calls (`TIS*`, `UCKeyTranslate`) have
+  no objc2 bindings and are declared locally.
+- Frames are paced by a per-window `CADisplayLink` from
+  `NSView.displayLinkWithTarget:selector:`, scheduled in the main run loop's
+  common modes so it keeps firing during live resize. It follows the view across
+  screens on its own, is paused while the window is occluded, and is
+  invalidated when the window is dropped (it retains the view until then).
+  The deprecated `CVDisplayLink` is not used.
 - The Metal renderer and sprite atlas (`gpui_apple`) use `objc2-metal` and
   `objc2-quartz-core`'s `CAMetalLayer`; the `metal` (metal-rs) crate is not a
   dependency.

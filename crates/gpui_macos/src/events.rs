@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 use std::ffi::c_void;
 
-use core_foundation::data::CFDataGetBytePtr;
-use core_foundation::data::CFDataRef;
-use core_graphics::event::CGKeyCode;
 use gpui::Capslock;
 use gpui::KeyDownEvent;
 use gpui::KeyUpEvent;
@@ -31,6 +28,8 @@ use objc2_app_kit::NSEvent;
 use objc2_app_kit::NSEventModifierFlags;
 use objc2_app_kit::NSEventPhase;
 use objc2_app_kit::NSEventType;
+use objc2_core_foundation::CFData;
+use objc2_core_graphics::CGKeyCode;
 
 use crate::LMGetKbdType;
 use crate::TISCopyCurrentKeyboardLayoutInputSource;
@@ -559,15 +558,16 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
     if keyboard.is_null() {
         return "".to_string();
     }
-    let layout_data =
-        unsafe { TISGetInputSourceProperty(keyboard, kTISPropertyUnicodeKeyLayoutData as *const c_void) as CFDataRef };
+    let layout_data = unsafe {
+        TISGetInputSourceProperty(keyboard, kTISPropertyUnicodeKeyLayoutData as *const c_void) as *const CFData
+    };
     if layout_data.is_null() {
         unsafe {
             let _: () = msg_send![keyboard, release];
         }
         return "".to_string();
     }
-    let keyboard_layout = unsafe { CFDataGetBytePtr(layout_data) };
+    let keyboard_layout = unsafe { (*layout_data).byte_ptr() };
 
     unsafe {
         UCKeyTranslate(

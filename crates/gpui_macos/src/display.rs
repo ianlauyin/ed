@@ -1,13 +1,6 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use core_foundation::base::CFRelease;
-use core_foundation::uuid::CFUUIDGetUUIDBytes;
-use core_foundation::uuid::CFUUIDRef;
-use core_graphics::display::CGDirectDisplayID;
-use core_graphics::display::CGDisplay;
-use core_graphics::display::CGDisplayBounds;
-use core_graphics::display::CGGetActiveDisplayList;
 use gpui::Bounds;
 use gpui::DisplayId;
 use gpui::Pixels;
@@ -19,6 +12,14 @@ use gpui::size;
 use objc2::class;
 use objc2::msg_send;
 use objc2::sel;
+use objc2_core_foundation::CFRetained;
+use objc2_core_foundation::CFUUID;
+use objc2_core_graphics::CGDirectDisplayID;
+use objc2_core_graphics::CGDisplayBounds;
+use objc2_core_graphics::CGDisplayCopyDisplayMode;
+use objc2_core_graphics::CGDisplayMode;
+use objc2_core_graphics::CGError;
+use objc2_core_graphics::CGGetActiveDisplayList;
 use uuid::Uuid;
 
 use crate::ns::NSRect;
@@ -74,12 +75,12 @@ impl MacDisplay {
         let result = unsafe {
             CGGetActiveDisplayList(displays.capacity() as u32, displays.as_mut_ptr(), &raw mut display_count)
         };
-        if result == 0 {
+        if result == CGError::Success {
             // SAFETY: `CGGetActiveDisplayList` initialized `display_count`
             // entries, at most the capacity it was given.
             unsafe { displays.set_len(display_count as usize) };
         } else {
-            log::error!("Failed to get active display list. Result: {result}");
+            log::error!("Failed to get active display list. Result: {}", result.0);
         }
         displays.into_iter().map(MacDisplay)
     }
@@ -87,7 +88,7 @@ impl MacDisplay {
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
-    fn CGDisplayCreateUUIDFromDisplayID(display: CGDirectDisplayID) -> CFUUIDRef;
+    fn CGDisplayCreateUUIDFromDisplayID(display: CGDirectDisplayID) -> *mut CFUUID;
 }
 
 impl PlatformDisplay for MacDisplay {
@@ -96,11 +97,11 @@ impl PlatformDisplay for MacDisplay {
     }
 
     fn uuid(&self) -> Result<Uuid> {
-        let cfuuid = unsafe { CGDisplayCreateUUIDFromDisplayID(self.0 as CGDirectDisplayID) };
-        anyhow::ensure!(!cfuuid.is_null(), "AppKit returned a null from CGDisplayCreateUUIDFromDisplayID");
-
-        let bytes = unsafe { CFUUIDGetUUIDBytes(cfuuid) };
-        unsafe { CFRelease(cfuuid as _) };
+        let cfuuid = std::ptr::NonNull::new(unsafe { CGDisplayCreateUUIDFromDisplayID(self.0) })
+            .ok_or_else(|| anyhow::anyhow!("AppKit returned a null from CGDisplayCreateUUIDFromDisplayID"))?;
+        // SAFETY: the function follows the Create rule, so we own this reference.
+        let cfuuid = unsafe { CFRetained::from_raw(cfuuid) };
+        let bytes = cfuuid.uuid_bytes();
         Ok(Uuid::from_bytes([
             bytes.byte0,
             bytes.byte1,
@@ -122,15 +123,13 @@ impl PlatformDisplay for MacDisplay {
     }
 
     fn bounds(&self) -> Bounds<Pixels> {
-        unsafe {
-            // CGDisplayBounds is in "global display" coordinates, where 0 is
-            // the top left of the primary display.
-            let bounds = CGDisplayBounds(self.0);
+        // CGDisplayBounds is in "global display" coordinates, where 0 is
+        // the top left of the primary display.
+        let bounds = CGDisplayBounds(self.0);
 
-            Bounds {
-                origin: gpui::Point::default(),
-                size: size(px(bounds.size.width as f32), px(bounds.size.height as f32)),
-            }
+        Bounds {
+            origin: gpui::Point::default(),
+            size: size(px(bounds.size.width as f32), px(bounds.size.height as f32)),
         }
     }
 
@@ -171,7 +170,8 @@ impl PlatformDisplay for MacDisplay {
             }
         };
         refresh_interval_from_hz(screen_hertz).or_else(|| {
-            CGDisplay::new(self.0).display_mode().and_then(|mode| refresh_interval_from_hz(mode.refresh_rate()))
+            CGDisplayCopyDisplayMode(self.0)
+                .and_then(|mode| refresh_interval_from_hz(CGDisplayMode::refresh_rate(Some(&mode))))
         })
     }
 }

@@ -289,68 +289,51 @@ pub fn format_timestamp_naive(
 }
 
 mod macos {
-    use core_foundation::base::TCFType;
-    use core_foundation::date::CFAbsoluteTime;
-    use core_foundation::string::CFString;
-    use core_foundation_sys::base::kCFAllocatorDefault;
-    use core_foundation_sys::date_formatter::CFDateFormatterCreate;
-    use core_foundation_sys::date_formatter::CFDateFormatterCreateStringWithAbsoluteTime;
-    use core_foundation_sys::date_formatter::CFDateFormatterRef;
-    use core_foundation_sys::date_formatter::kCFDateFormatterMediumStyle;
-    use core_foundation_sys::date_formatter::kCFDateFormatterNoStyle;
-    use core_foundation_sys::date_formatter::kCFDateFormatterShortStyle;
-    use core_foundation_sys::locale::CFLocaleCopyCurrent;
-    use core_foundation_sys::locale::CFLocaleRef;
+    use objc2_core_foundation::CFAbsoluteTime;
+    use objc2_core_foundation::CFDateFormatter;
+    use objc2_core_foundation::CFDateFormatterStyle;
+    use objc2_core_foundation::CFLocale;
+    use objc2_core_foundation::CFRetained;
 
     pub fn format_time(timestamp: &time::OffsetDateTime) -> String {
-        format_with_date_formatter(timestamp, TIME_FORMATTER.with(|f| *f))
+        TIME_FORMATTER.with(|f| format_with_date_formatter(timestamp, f))
     }
 
     pub fn format_date(timestamp: &time::OffsetDateTime) -> String {
-        format_with_date_formatter(timestamp, DATE_FORMATTER.with(|f| *f))
+        DATE_FORMATTER.with(|f| format_with_date_formatter(timestamp, f))
     }
 
     pub fn format_date_medium(timestamp: &time::OffsetDateTime) -> String {
-        format_with_date_formatter(timestamp, MEDIUM_DATE_FORMATTER.with(|f| *f))
+        MEDIUM_DATE_FORMATTER.with(|f| format_with_date_formatter(timestamp, f))
     }
 
-    fn format_with_date_formatter(timestamp: &time::OffsetDateTime, fmt: CFDateFormatterRef) -> String {
+    fn format_with_date_formatter(
+        timestamp: &time::OffsetDateTime,
+        fmt: &Option<CFRetained<CFDateFormatter>>,
+    ) -> String {
         const UNIX_TO_CF_ABSOLUTE_TIME_OFFSET: i64 = 978307200;
         // Convert timestamp to macOS absolute time
         let timestamp_macos = timestamp.unix_timestamp() - UNIX_TO_CF_ABSOLUTE_TIME_OFFSET;
         let cf_absolute_time = timestamp_macos as CFAbsoluteTime;
-        unsafe {
-            let s = CFDateFormatterCreateStringWithAbsoluteTime(kCFAllocatorDefault, fmt, cf_absolute_time);
-            CFString::wrap_under_create_rule(s).to_string()
-        }
+        unsafe { CFDateFormatter::new_string_with_absolute_time(None, fmt.as_deref(), cf_absolute_time) }
+            .map(|s| s.to_string())
+            .unwrap_or_default()
+    }
+
+    fn new_formatter(
+        date_style: CFDateFormatterStyle,
+        time_style: CFDateFormatterStyle,
+    ) -> Option<CFRetained<CFDateFormatter>> {
+        let locale = CFLocale::current();
+        unsafe { CFDateFormatter::new(None, locale.as_deref(), date_style, time_style) }
     }
 
     thread_local! {
-        static CURRENT_LOCALE: CFLocaleRef = unsafe { CFLocaleCopyCurrent() };
-        static TIME_FORMATTER: CFDateFormatterRef = unsafe {
-            CFDateFormatterCreate(
-                kCFAllocatorDefault,
-                CURRENT_LOCALE.with(|locale| *locale),
-                kCFDateFormatterNoStyle,
-                kCFDateFormatterShortStyle,
-            )
-        };
-        static DATE_FORMATTER: CFDateFormatterRef = unsafe {
-            CFDateFormatterCreate(
-                kCFAllocatorDefault,
-                CURRENT_LOCALE.with(|locale| *locale),
-                kCFDateFormatterShortStyle,
-                kCFDateFormatterNoStyle,
-            )
-        };
-
-        static MEDIUM_DATE_FORMATTER: CFDateFormatterRef = unsafe {
-            CFDateFormatterCreate(
-                kCFAllocatorDefault,
-                CURRENT_LOCALE.with(|locale| *locale),
-                kCFDateFormatterMediumStyle,
-                kCFDateFormatterNoStyle,
-            )
-        };
+        static TIME_FORMATTER: Option<CFRetained<CFDateFormatter>> =
+            new_formatter(CFDateFormatterStyle::NoStyle, CFDateFormatterStyle::ShortStyle);
+        static DATE_FORMATTER: Option<CFRetained<CFDateFormatter>> =
+            new_formatter(CFDateFormatterStyle::ShortStyle, CFDateFormatterStyle::NoStyle);
+        static MEDIUM_DATE_FORMATTER: Option<CFRetained<CFDateFormatter>> =
+            new_formatter(CFDateFormatterStyle::MediumStyle, CFDateFormatterStyle::NoStyle);
     }
 }

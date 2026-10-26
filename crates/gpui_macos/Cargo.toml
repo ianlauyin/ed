@@ -19,20 +19,18 @@ gpui.workspace = true
 anyhow.workspace = true
 block2.workspace = true
 collections.workspace = true
-core-foundation.workspace = true
-core-foundation-sys.workspace = true
-core-graphics.workspace = true
 dispatch2 = { workspace = true, features = ["block2", "objc2"] }
-foreign-types.workspace = true
 futures.workspace = true
 gpui_apple.workspace = true
 gpui_util.workspace = true
 itertools.workspace = true
 log.workspace = true
 objc2.workspace = true
-objc2-app-kit = { workspace = true, features = ["NSDragging", "NSEvent", "NSTextInputClient", "NSVisualEffectView"] }
-objc2-foundation = { workspace = true, features = ["NSKeyedArchiver"] }
-objc2-quartz-core.workspace = true
+objc2-app-kit = { workspace = true, features = ["objc2-quartz-core", "NSDragging", "NSEvent", "NSTextInputClient", "NSVisualEffectView"] }
+objc2-core-foundation = { workspace = true, features = ["std", "CFBase", "CFData", "CFNumber", "CFRunLoop", "CFString", "CFUUID"] }
+objc2-core-graphics = { workspace = true, features = ["CGDirectDisplay", "CGError", "CGRemoteOperation"] }
+objc2-foundation = { workspace = true, features = ["NSKeyedArchiver", "NSRunLoop"] }
+objc2-quartz-core = { workspace = true, features = ["CADisplayLink"] }
 parking_lot.workspace = true
 raw-window-handle.workspace = true
 smallvec.workspace = true
