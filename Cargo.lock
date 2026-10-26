@@ -2334,7 +2334,6 @@ dependencies = [
  "serde_json",
  "settings",
  "smallvec",
- "strsim",
  "sum_tree",
  "syntect",
  "task",

@@ -41,9 +41,6 @@ pub struct OutlineItem<T> {
     pub annotation_range: Option<Range<T>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SymbolPath(pub SharedString);
-
 /// Result of [`Outline::search`]. Real fuzzy matches are `Match`; `Ancestor`
 /// rows are synthetic entries pointing at parent items, included so callers can
 /// show the full path of each match (Even when the ancestor has been filtered
@@ -168,30 +165,6 @@ impl<T> Outline<T> {
         }
 
         Self { items, candidates, leaf_offsets }
-    }
-
-    /// Find the most similar symbol to the provided query using normalized Levenshtein distance.
-    pub fn find_most_similar(&self, query: &str) -> Option<(SymbolPath, &OutlineItem<T>)> {
-        const SIMILARITY_THRESHOLD: f64 = 0.6;
-
-        let (position, similarity) = self
-            .candidates
-            .iter()
-            .enumerate()
-            .map(|(index, candidate)| {
-                let similarity = strsim::normalized_levenshtein(&candidate.string, query);
-                (index, similarity)
-            })
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())?;
-
-        if similarity >= SIMILARITY_THRESHOLD {
-            self.candidates
-                .get(position)
-                .map(|candidate| SymbolPath(candidate.string.clone()))
-                .zip(self.items.get(position))
-        } else {
-            None
-        }
     }
 
     /// Find all outline symbols that match with the nucleo fuzzy matcher, ordered by tree position.

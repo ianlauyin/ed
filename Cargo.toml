@@ -350,7 +350,6 @@ slotmap = "1.0.6"
 smallvec = { version = "1.6", features = ["union", "const_new"] }
 smol = "2.0"
 spellbook = "0.4"
-strsim = "0.11"
 strum = { version = "0.28", features = ["derive"] }
 syn = { version = "2.0", default-features = false, features = ["proc-macro"] }
 sys-locale = "0.3.1"
