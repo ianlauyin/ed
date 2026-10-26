@@ -16,7 +16,6 @@ pub use gpui;
 use gpui::App;
 use gpui::AppContext;
 use gpui::Global;
-pub use indoc::indoc;
 pub use inventory;
 pub use paths::database_dir;
 pub use sqlez;

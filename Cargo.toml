@@ -258,7 +258,6 @@ ignore = "0.4.22"
 image = { version = "0.25.1", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 imara-diff = { version = "0.2", default-features = false }
 indexmap = { version = "2.7.0", features = ["serde"] }
-indoc = "2"
 inventory = "0.3.19"
 itertools = "0.15"
 libc = "0.2"
