@@ -86,12 +86,6 @@ macro_rules! actions {
 /// - `no_register` skips registering the action. This is useful for implementing the `Action` trait
 ///   while not supporting invocation by name or JSON deserialization.
 ///
-/// - `deprecated_aliases = ["editor::SomeAction"]` specifies deprecated old names for the action.
-///   These action names should *not* correspond to any actions that are registered. These old names
-///   can then still be used to refer to invoke this action.
-///
-/// - `deprecated = "Message about why this action is deprecation"` specifies a deprecation message.
-///
 /// # Manual Implementation
 ///
 /// If you want to control the behavior of the action trait manually, you can use the lower-level
@@ -137,23 +131,6 @@ pub trait Action: Any + Send {
     fn build(value: serde_json::Value) -> Result<Box<dyn Action>>
     where
         Self: Sized;
-
-    /// A list of alternate, deprecated names for this action. These names can still be used to
-    /// invoke the action.
-    fn deprecated_aliases() -> &'static [&'static str]
-    where
-        Self: Sized,
-    {
-        &[]
-    }
-
-    /// Returns the deprecation message for this action, if any.
-    fn deprecation_message() -> Option<&'static str>
-    where
-        Self: Sized,
-    {
-        None
-    }
 
     /// The documentation for this action, if any. When using the derive macro for actions
     /// this will be automatically generated from the doc comments on the action struct.
@@ -224,9 +201,7 @@ type ActionBuilder = fn(json: serde_json::Value) -> anyhow::Result<Box<dyn Actio
 pub(crate) struct ActionRegistry {
     by_name: HashMap<&'static str, ActionData>,
     names_by_type_id: TypeIdHashMap<&'static str>,
-    all_names: Vec<&'static str>, // So we can return a static slice.
-    deprecated_aliases: HashMap<&'static str, &'static str>, // deprecated name -> preferred name
-    deprecation_messages: HashMap<&'static str, &'static str>, // action name -> deprecation message
+    all_names: Vec<&'static str>,                       // So we can return a static slice.
     documentation: HashMap<&'static str, &'static str>, // action name -> documentation
 }
 
@@ -237,8 +212,6 @@ impl Default for ActionRegistry {
             names_by_type_id: TypeIdHashMap::default(),
             documentation: HashMap::default(),
             all_names: Vec::default(),
-            deprecated_aliases: HashMap::default(),
-            deprecation_messages: HashMap::default(),
         };
 
         this.load_actions();
@@ -263,8 +236,6 @@ pub struct MacroActionData {
     pub name: &'static str,
     pub type_id: TypeId,
     pub build: ActionBuilder,
-    pub deprecated_aliases: &'static [&'static str],
-    pub deprecation_message: Option<&'static str>,
     pub documentation: Option<&'static str>,
 }
 
@@ -282,28 +253,11 @@ impl ActionRegistry {
     fn insert_action(&mut self, action: MacroActionData) {
         let name = action.name;
         if self.by_name.contains_key(name) {
-            panic!(
-                "Action with name `{name}` already registered \
-                (might be registered in `#[action(deprecated_aliases = [...])]`."
-            );
+            panic!("Action with name `{name}` already registered");
         }
         self.by_name.insert(name, ActionData { build: action.build });
-        for &alias in action.deprecated_aliases {
-            if self.by_name.contains_key(alias) {
-                panic!(
-                    "Action with name `{alias}` already registered. \
-                    `{alias}` is specified in `#[action(deprecated_aliases = [...])]` for action `{name}`."
-                );
-            }
-            self.by_name.insert(alias, ActionData { build: action.build });
-            self.deprecated_aliases.insert(alias, name);
-            self.all_names.push(alias);
-        }
         self.names_by_type_id.insert(action.type_id, name);
         self.all_names.push(name);
-        if let Some(deprecation_msg) = action.deprecation_message {
-            self.deprecation_messages.insert(name, deprecation_msg);
-        }
         if let Some(documentation) = action.documentation {
             self.documentation.insert(name, documentation);
         }
@@ -331,14 +285,6 @@ impl ActionRegistry {
 
     pub const fn all_action_names(&self) -> &[&'static str] {
         self.all_names.as_slice()
-    }
-
-    pub const fn deprecated_aliases(&self) -> &HashMap<&'static str, &'static str> {
-        &self.deprecated_aliases
-    }
-
-    pub const fn deprecation_messages(&self) -> &HashMap<&'static str, &'static str> {
-        &self.deprecation_messages
     }
 
     pub const fn documentation(&self) -> &HashMap<&'static str, &'static str> {

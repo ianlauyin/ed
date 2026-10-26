@@ -77,7 +77,7 @@ actions!(
 /// Shows the diff between the working directory and your default
 /// branch (typically main or master).
 #[derive(PartialEq, Clone, Deserialize, Default, Action)]
-#[action(namespace = git, name = "DiffBranch", deprecated_aliases = ["git::BranchDiff"])]
+#[action(namespace = git, name = "DiffBranch")]
 pub(crate) struct DeployBranchDiff;
 
 pub struct ProjectDiff {

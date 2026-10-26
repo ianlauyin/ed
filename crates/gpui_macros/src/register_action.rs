@@ -30,8 +30,6 @@ pub(crate) fn generate_register_action(type_name: &Ident) -> TokenStream2 {
                         name: <#type_name as gpui::Action>::name_for_type(),
                         type_id: ::std::any::TypeId::of::<#type_name>(),
                         build: <#type_name as gpui::Action>::build,
-                        deprecated_aliases: <#type_name as gpui::Action>::deprecated_aliases(),
-                        deprecation_message: <#type_name as gpui::Action>::deprecation_message(),
                         documentation: <#type_name as gpui::Action>::documentation(),
                     }
                 }

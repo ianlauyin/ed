@@ -129,12 +129,9 @@ pub mod workspace {
     actions!(
         workspace,
         [
-            #[action(deprecated_aliases = ["editor::CopyPath", "outline_panel::CopyPath", "project_panel::CopyPath"])]
             CopyPath,
-            #[action(deprecated_aliases = ["editor::CopyRelativePath", "outline_panel::CopyRelativePath", "project_panel::CopyRelativePath"])]
             CopyRelativePath,
             /// Opens the selected file with the system's default application.
-            #[action(deprecated_aliases = ["project_panel::OpenWithSystem"])]
             OpenWithSystem,
         ]
     );
@@ -198,7 +195,6 @@ pub mod git {
             /// Selects a different repository.
             SelectRepo,
             /// Opens the git branch selector.
-            #[action(deprecated_aliases = ["branches::OpenRecent"])]
             Branch,
             /// Shows uncommitted changes across the project.
             ViewUncommittedChanges,

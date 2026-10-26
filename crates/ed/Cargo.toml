@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "ed"
-version = "1.46.0"
+version = "1.47.0"
 default-run = "ed"
 
 [lints]

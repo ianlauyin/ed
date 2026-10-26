@@ -34,14 +34,6 @@ impl Action for ActionSequence {
         Err(anyhow::anyhow!("{} cannot be built directly", Self::name_for_type()))
     }
 
-    fn deprecated_aliases() -> &'static [&'static str] {
-        &[]
-    }
-
-    fn deprecation_message() -> Option<&'static str> {
-        None
-    }
-
     fn documentation() -> Option<&'static str> {
         Some(
             "Runs a sequence of actions.\n\n\

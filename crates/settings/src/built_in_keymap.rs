@@ -407,7 +407,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("ctrl-shift-space", "editor::ShowWordCompletions"),
             KeyBindingSpec::new("cmd-.", "editor::ToggleCodeActions"),
             // KeyBindingSpec::new("cmd-k r", "editor::RevealInFileManager"),
-            // KeyBindingSpec::new("cmd-k p", "editor::CopyPath"),
+            // KeyBindingSpec::new("cmd-k p", "workspace::CopyPath"),
             KeyBindingSpec::new("cmd-\\", "pane::SplitRight"),
         ],
     );
@@ -487,7 +487,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
                 .with_input(json!({"from_existing_connection": false})),
             KeyBindingSpec::new("ctrl-cmd-shift-o", "projects::OpenRemote")
                 .with_input(json!({"from_existing_connection": true})),
-            KeyBindingSpec::new("cmd-ctrl-b", "branches::OpenRecent"),
+            KeyBindingSpec::new("cmd-ctrl-b", "git::Branch"),
             KeyBindingSpec::new("cmd-ctrl-w", "git::Worktree"),
             KeyBindingSpec::new("ctrl-~", "workspace::NewTerminal"),
             KeyBindingSpec::new("cmd-s", "workspace::Save"),

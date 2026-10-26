@@ -502,7 +502,6 @@ actions!(
         /// Duplicates the current selection.
         DuplicateSelection,
         /// Expands all diff hunks in the editor.
-        #[action(deprecated_aliases = ["editor::ExpandAllHunkDiffs"])]
         ExpandAllDiffHunks,
         /// Collapses all diff hunks in the editor.
         CollapseAllDiffHunks,
@@ -697,7 +696,6 @@ actions!(
         /// Opens documentation for the symbol at cursor.
         OpenDocs,
         /// Opens the file whose name is selected in the editor.
-        #[action(deprecated_aliases = ["editor::OpenFile"])]
         OpenSelectedFilename,
         /// Opens all selections in a multibuffer.
         OpenSelectionsInMultibuffer,
@@ -846,7 +844,6 @@ actions!(
         /// Sets a mark at the current position.
         SetMark,
         /// Toggles diff display for selected hunks.
-        #[action(deprecated_aliases = ["editor::ToggleHunkDiff"])]
         ToggleSelectedDiffHunks,
         /// Toggles soft wrap mode.
         ToggleSoftWrap,

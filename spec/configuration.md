@@ -88,6 +88,8 @@ migrator, or Vim/Helix mode.
 - App-level actions (quit, about, font size, welcome, `NoAction`/`Unbind`, ...)
   use the `ed` namespace (`ed::Quit`, shown as "ed: quit"), not upstream's
   `zed`. Keymaps using `zed::*` names do not resolve.
+- Actions resolve only by their current names. Deprecated aliases and action
+  deprecation metadata are removed; built-in bindings use the current names.
 - Snippets are built in (`snippet` crate): Rust has `main`, `async_main`,
   `tests`, `test`, and `async_test`. Language snippets are offered with global
   ones and do not require a project. The user snippets directory is not loaded or

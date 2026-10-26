@@ -5,7 +5,6 @@ use syn::Data;
 use syn::DeriveInput;
 use syn::LitStr;
 use syn::Token;
-use syn::parse::ParseStream;
 
 use crate::register_action::generate_register_action;
 
@@ -14,11 +13,9 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
 
     let struct_name = &input.ident;
     let mut name_argument = None;
-    let mut deprecated_aliases = Vec::new();
     let mut no_json = false;
     let mut no_register = false;
     let mut namespace = None;
-    let mut deprecated = None;
     let mut doc_str: Option<String> = None;
 
     /*
@@ -55,27 +52,10 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
                         return Err(meta.error("'no_register' argument specified multiple times"));
                     }
                     no_register = true;
-                } else if meta.path.is_ident("deprecated_aliases") {
-                    if !deprecated_aliases.is_empty() {
-                        return Err(meta.error("'deprecated_aliases' argument specified multiple times"));
-                    }
-                    meta.input.parse::<Token![=]>()?;
-                    // Parse array of string literals
-                    let content;
-                    syn::bracketed!(content in meta.input);
-                    let aliases = content.parse_terminated(|input: ParseStream| input.parse::<LitStr>(), Token![,])?;
-                    deprecated_aliases.extend(aliases.into_iter().map(|lit| lit.value()));
-                } else if meta.path.is_ident("deprecated") {
-                    if deprecated.is_some() {
-                        return Err(meta.error("'deprecated' argument specified multiple times"));
-                    }
-                    meta.input.parse::<Token![=]>()?;
-                    let lit: LitStr = meta.input.parse()?;
-                    deprecated = Some(lit.value());
                 } else {
                     return Err(meta.error(format!(
                         "'{:?}' argument not recognized, expected \
-                        'namespace', 'no_json', 'no_register, 'deprecated_aliases', or 'deprecated'",
+                        'name', 'namespace', 'no_json', or 'no_register'",
                         meta.path
                     )));
                 }
@@ -120,19 +100,6 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
         quote! { Ok(Box::new(gpui::private::serde_json::from_value::<Self>(_value)?)) }
     };
 
-    let deprecated_aliases_fn_body = if deprecated_aliases.is_empty() {
-        quote! { &[] }
-    } else {
-        let aliases = deprecated_aliases.iter();
-        quote! { &[#(#aliases),*] }
-    };
-
-    let deprecation_fn_body = if let Some(message) = deprecated {
-        quote! { Some(#message) }
-    } else {
-        quote! { None }
-    };
-
     let documentation_fn_body = if let Some(doc) = doc_str {
         let doc = doc.trim();
         quote! { Some(#doc) }
@@ -174,14 +141,6 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
 
             fn build(_value: gpui::private::serde_json::Value) -> gpui::Result<Box<dyn gpui::Action>> {
                 #build_fn_body
-            }
-
-            fn deprecated_aliases() -> &'static [&'static str] {
-                #deprecated_aliases_fn_body
-            }
-
-            fn deprecation_message() -> Option<&'static str> {
-                #deprecation_fn_body
             }
 
             fn documentation() -> Option<&'static str> {

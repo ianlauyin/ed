@@ -1995,16 +1995,6 @@ impl App {
         RefCell::borrow(&self.keymap).all_bindings_for_input(input)
     }
 
-    /// Get a map from a deprecated action name to the canonical name.
-    pub fn deprecated_actions_to_preferred_actions(&self) -> &HashMap<&'static str, &'static str> {
-        self.actions.deprecated_aliases()
-    }
-
-    /// Get a map from an action name to the deprecation messages.
-    pub fn action_deprecation_messages(&self) -> &HashMap<&'static str, &'static str> {
-        self.actions.deprecation_messages()
-    }
-
     /// Get a map from an action name to the documentation.
     pub fn action_documentation(&self) -> &HashMap<&'static str, &'static str> {
         self.actions.documentation()
