@@ -39,7 +39,7 @@ pub async fn capture(
 /// Try to parse the environment output before checking the exit status.
 /// The user's shell rc files may contain commands that fail (e.g. editor
 /// integrations that call posix_spawnp outside a real PTY), causing a
-/// non-zero exit status even though `zed --printenv` ran successfully and
+/// non-zero exit status even though `ed --printenv` ran successfully and
 /// produced valid output on its separate fd.
 fn parse_env_output(
     env_output: &str,
@@ -77,7 +77,7 @@ async fn capture_unix(
     use crate::command::new_std_command;
 
     let shell_kind = ShellKind::new(shell_path);
-    let quoted_zed_path = super::get_shell_safe_zed_path(shell_kind)?;
+    let quoted_ed_path = super::get_shell_safe_ed_path(shell_kind)?;
 
     let mut command_string = String::new();
     let mut command = new_std_command(shell_path);
@@ -118,7 +118,7 @@ async fn capture_unix(
 
     // cd into the directory, triggering directory specific side-effects (asdf, direnv, etc)
     crate::write_str!(command_string, "cd {};", quoted_dir);
-    crate::write_str!(command_string, "{} --printenv {}", quoted_zed_path, redir);
+    crate::write_str!(command_string, "{} --printenv {}", quoted_ed_path, redir);
 
     command.arg(&command_string);
 

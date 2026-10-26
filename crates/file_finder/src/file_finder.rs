@@ -75,7 +75,7 @@ use workspace::Workspace;
 use workspace::item::PreviewTabsSettings;
 use workspace::notifications::NotifyResultExt;
 use workspace::pane;
-use zed_actions::search::ToggleIncludeIgnored;
+use ed_actions::search::ToggleIncludeIgnored;
 
 actions!(
     file_finder,

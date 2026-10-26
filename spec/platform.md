@@ -61,7 +61,7 @@ remote detection, command execution, and proxy startup are removed.
 - No accessibility support: GPUI has no AccessKit integration, never registers
   with the macOS accessibility API, and builds no accessibility tree. There are
   no role/aria element APIs, no accessibility dev actions, and no
-  `ZED_EXPERIMENTAL_A11Y` switch. Region navigation (`FocusNextPart`) and
+  `ED_EXPERIMENTAL_A11Y` switch. Region navigation (`FocusNextPart`) and
   keyboard toolbar navigation still work and focus the interactive content.
 - Audio input and speech recognition are unsupported; the app requests no
   microphone or speech-recognition access. Background tasks use high, medium,
@@ -110,8 +110,11 @@ remote detection, command execution, and proxy startup are removed.
   open-URL prompt or `OpenZedUrl` action, and terminal links don't match
   `zed://`. The app only accepts `file://` and `ssh://` URLs.
   Dock-menu items dispatch their actions directly through AppKit, not via URLs.
-- Kept from upstream: `ZED_*` environment variables and the `.zed` project
-  folder name.
+- Branding is `ed` everywhere (crates `ed`/`ed_actions`, UI text, proto
+  package `ed.messages`, `TERM_PROGRAM=ed`, `ed://schemas/`, pasteboard types).
+  Environment variables use the `ED_` prefix (task variables like `$ED_FILE`,
+  `ED_LOG`, `ED_WINDOW_SIZE`, ...) and the project folder is `.ed`; upstream
+  `ZED_*` variables and `.zed` folders are ignored.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.
 - Unsupported editor targets fail with a macOS-only diagnostic.
@@ -150,7 +153,7 @@ backtraces still work through sync CFI.
   installed, builds the remote server in release mode, and installs it as
   `~/.local/bin/ed_server` for SSH editing.
 - `release.fish` builds `target/release/ed.app` for the host Mac: the `ed`
-  binary in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
+  binary in `Contents/MacOS`, `crates/ed/resources/Info.plist` with the
   Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.
 - `release.fish` signs the bundle with a self-signed keychain identity
   (`ed-local`, or `ED_SIGN_IDENTITY`) and stops with setup instructions when it is
@@ -159,7 +162,7 @@ backtraces still work through sync CFI.
   LAN/VM hosts (e.g. Apple container machines on 192.168.64.x) fails with
   `Undefined error: 0`. `Info.plist` carries `NSLocalNetworkUsageDescription`.
 - App icon: Nord-dark rounded square with an inset screen showing `</>` in
-  `#88C0D0`. Source is `crates/zed/resources/app-icon.svg`; the PNGs are rendered
+  `#88C0D0`. Source is `crates/ed/resources/app-icon.svg`; the PNGs are rendered
   from it at 512 and 1024 px.
 - The bundle is for local use only: no Developer ID signing, entitlements,
   hardened runtime, provisioning profiles, notarization, DMG, or universal binary. No `cargo-bundle` metadata.

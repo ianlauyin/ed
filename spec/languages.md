@@ -62,7 +62,7 @@
   - Each resolves from the worktree's `.venv/bin`, then `PATH`, then
     `uvx <tool> server` (latest release from uv's cache).
   - There is no toolchain/virtual-environment discovery, selector, status bar
-    item or persisted toolchain. The only environment Zed knows is `.venv` at
+    item or persisted toolchain. The only environment ed knows is `.venv` at
     the worktree root; ty finds it on its own.
   - Built-in Python tasks (run file/module/selection, pytest/unittest) run
     through `uv run python …` from the worktree root.
@@ -78,7 +78,7 @@
 - There is no managed Node.js runtime and no `node` settings (`node.path`,
   `node.npm_path` are removed). Node-based tooling uses `node`/`npx` from the
   shell `PATH`, locally and on remote servers.
-- Language servers are never installed by Zed and there is no setting for a
+- Language servers are never installed by ed and there is no setting for a
   server's binary path (`lsp.<server>.binary.path` is removed). A server starts
   from a user installation the adapter finds (`PATH`, or the project). Node-based
   servers (css/html/json, yaml, bash) then fall back to

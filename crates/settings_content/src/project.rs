@@ -80,7 +80,7 @@ pub struct WorktreeSettingsContent {
     /// }
     /// ```
     ///
-    /// Use `"..."` to add patterns without repeating Zed's defaults. In project
+    /// Use `"..."` to add patterns without repeating ed's defaults. In project
     /// settings, it extends the user or parent configuration value. Omit
     /// `"..."` to replace the inherited list.
     ///
@@ -106,7 +106,7 @@ pub struct WorktreeSettingsContent {
     /// }
     /// ```
     ///
-    /// Use `"..."` to add patterns without repeating Zed's defaults. In project
+    /// Use `"..."` to add patterns without repeating ed's defaults. In project
     /// settings, it extends the user or parent configuration value. Omit
     /// `"..."` to replace the inherited list.
     ///
@@ -149,7 +149,7 @@ pub struct WorktreeSettingsContent {
     /// }
     /// ```
     ///
-    /// Use `"..."` to add patterns without repeating Zed's defaults. In project
+    /// Use `"..."` to add patterns without repeating ed's defaults. In project
     /// settings, it extends the user or parent configuration value. Omit
     /// `"..."` to replace the inherited list.
     ///
@@ -178,7 +178,7 @@ pub struct WorktreeSettingsContent {
     /// }
     /// ```
     ///
-    /// Use `"..."` to add patterns without repeating Zed's defaults. In project
+    /// Use `"..."` to add patterns without repeating ed's defaults. In project
     /// settings, it extends the user or parent configuration value. Omit
     /// `"..."` to replace the inherited list.
     ///
@@ -210,7 +210,7 @@ pub struct LspSettings {
     /// Consult the documentation for the specific language server to see which settings are supported.
     pub settings: Option<serde_json::Value>,
     /// If the server supports sending tasks over LSP extensions,
-    /// this setting can be used to enable or disable them in Zed.
+    /// this setting can be used to enable or disable them in ed.
     /// Default: true
     #[serde(default = "default_true")]
     pub enable_lsp_tasks: bool,
@@ -385,7 +385,7 @@ pub struct GitSettings {
     ///
     /// Examples:
     /// - `"../worktrees"` — `~/code/worktrees/<project>/` (default)
-    /// - `".git/zed-worktrees"` — `<project>/.git/zed-worktrees/`
+    /// - `".git/ed-worktrees"` — `<project>/.git/ed-worktrees/`
     /// - `"my-worktrees"` — `<project>/my-worktrees/`
     ///
     /// Trailing slashes are ignored.
@@ -470,7 +470,7 @@ pub struct DiagnosticsSettingsContent {
     /// Default: true
     pub include_warnings: Option<bool>,
 
-    /// Settings for using LSP pull diagnostics mechanism in Zed.
+    /// Settings for using LSP pull diagnostics mechanism in ed.
     pub lsp_pull_diagnostics: Option<LspPullDiagnosticsSettingsContent>,
 
     /// Settings for showing inline diagnostics.

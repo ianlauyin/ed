@@ -600,14 +600,14 @@ impl ContextProvider for RustContextProvider {
                 label: format!("Check (package: {})", RUST_PACKAGE_TASK_VARIABLE.template_value(),),
                 command: "cargo".into(),
                 args: vec!["check".into(), "-p".into(), RUST_PACKAGE_TASK_VARIABLE.template_value()],
-                cwd: Some("$ZED_DIRNAME".to_owned()),
+                cwd: Some("$ED_DIRNAME".to_owned()),
                 ..TaskTemplate::default()
             },
             TaskTemplate {
                 label: "Check all targets (workspace)".into(),
                 command: "cargo".into(),
                 args: vec!["check".into(), "--workspace".into(), "--all-targets".into()],
-                cwd: Some("$ZED_DIRNAME".to_owned()),
+                cwd: Some("$ED_DIRNAME".to_owned()),
                 ..TaskTemplate::default()
             },
             TaskTemplate {

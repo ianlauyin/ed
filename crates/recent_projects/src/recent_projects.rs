@@ -77,8 +77,8 @@ use workspace::WorkspaceDb;
 use workspace::WorkspaceId;
 use workspace::notifications::DetachAndPromptErr;
 use workspace::with_active_or_new_workspace;
-use zed_actions::OpenRecent;
-use zed_actions::OpenRemote;
+use ed_actions::OpenRecent;
+use ed_actions::OpenRemote;
 
 actions!(recent_projects, [ToggleActionsMenu, RemoveSelected, AddToWorkspace,]);
 

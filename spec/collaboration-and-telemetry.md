@@ -69,7 +69,7 @@ removed. Local database failures still display a diagnostic notification.
 
 The editor has a single application identity and icon. There is no
 release-channel concept anywhere (app, remote client, or remote server). The app
-version is the `zed` crate's Cargo.toml version; no commit SHA, build ID, or
+version is the `ed` crate's Cargo.toml version; no commit SHA, build ID, or
 bundle type is embedded or shown. Existing local database state remains in the
 same directory.
 

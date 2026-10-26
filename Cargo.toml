@@ -102,12 +102,12 @@ members = [
     "crates/which_key",
     "crates/workspace",
     "crates/worktree",
-    "crates/zed",
-    "crates/zed_actions",
+    "crates/ed",
+    "crates/ed_actions",
     "crates/zlog",
     "crates/zlog_settings",
 ]
-default-members = ["crates/zed"]
+default-members = ["crates/ed"]
 
 [workspace.package]
 edition = "2024"
@@ -214,7 +214,7 @@ watch = { path = "crates/watch" }
 which_key = { path = "crates/which_key" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
-zed_actions = { path = "crates/zed_actions" }
+ed_actions = { path = "crates/ed_actions" }
 zlog = { path = "crates/zlog" }
 zlog_settings = { path = "crates/zlog_settings" }
 
@@ -438,7 +438,7 @@ snippet = { codegen-units = 1 }
 theme_selector = { codegen-units = 1 }
 time_format = { codegen-units = 1 }
 ui_input = { codegen-units = 1 }
-zed_actions = { codegen-units = 1 }
+ed_actions = { codegen-units = 1 }
 
 [profile.release]
 debug = "line-tables-only"
@@ -448,7 +448,7 @@ lto = "thin"
 codegen-units = 1
 
 [profile.release.package]
-zed = { codegen-units = 16 }
+ed = { codegen-units = 16 }
 
 [workspace.lints.rust]
 unused_crate_dependencies = "warn"

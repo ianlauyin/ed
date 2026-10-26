@@ -466,7 +466,7 @@ pub trait File: Send + Sync + Any {
 /// indicator for new files.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DiskState {
-    /// File created in Zed that has not been saved.
+    /// File created in ed that has not been saved.
     New,
     /// File present on the filesystem.
     Present { mtime: MTime, size: u64 },

@@ -52,7 +52,7 @@ use workspace::item::ItemEvent;
 use workspace::item::ItemHandle;
 use workspace::item::SaveOptions;
 use workspace::searchable::SearchableItemHandle;
-use zed_actions::git as git_actions;
+use ed_actions::git as git_actions;
 
 use crate::diff_multibuffer::DiffMultibuffer;
 use crate::git_panel::GitPanel;

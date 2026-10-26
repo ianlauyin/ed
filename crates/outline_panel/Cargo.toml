@@ -37,7 +37,7 @@ ui.workspace = true
 util.workspace = true
 workspace.workspace = true
 worktree.workspace = true
-zed_actions.workspace = true
+ed_actions.workspace = true
 
 [package.metadata.cargo-shear]
 ignored = ["log"]

@@ -1,4 +1,4 @@
-//! The `language` crate provides a large chunk of Zed's language-related
+//! The `language` crate provides a large chunk of ed's language-related
 //! features (the other big contributors being project and lsp crates that revolve around LSP features).
 //! Namely, this crate:
 //! - Provides [`Language`], [`Grammar`] and [`LanguageRegistry`] types that
@@ -351,7 +351,7 @@ pub struct Location {
 
 /// Context provided to LSP adapters when a user responds to a ShowMessageRequest prompt.
 /// This allows adapters to intercept preference selections (like "Always" or "Never")
-/// and potentially persist them to Zed's settings.
+/// and potentially persist them to ed's settings.
 #[derive(Debug, Clone)]
 pub struct PromptResponseContext {
     /// The original message shown to the user
@@ -617,7 +617,7 @@ pub trait LspAdapter: 'static + Send + Sync {
 
     /// Called when a user responds to a ShowMessageRequest from this language server.
     /// This allows adapters to intercept preference selections (like "Always" or "Never")
-    /// for settings that should be persisted to Zed's settings file.
+    /// for settings that should be persisted to ed's settings file.
     fn process_prompt_response(&self, _context: &PromptResponseContext, _cx: &mut AsyncApp) {}
 }
 
@@ -929,14 +929,14 @@ impl LanguageScope {
     /// Returns additional regex patterns that act as prefix markers for creating
     /// boundaries during rewrapping.
     ///
-    /// By default, Zed treats as paragraph and comment prefixes as boundaries.
+    /// By default, ed treats as paragraph and comment prefixes as boundaries.
     pub fn rewrap_prefixes(&self) -> &[Regex] {
         &self.language.config.rewrap_prefixes
     }
 
     /// Returns a list of language-specific word characters.
     ///
-    /// By default, Zed treats alphanumeric characters (and '_') as word characters for
+    /// By default, ed treats alphanumeric characters (and '_') as word characters for
     /// the purpose of actions like 'move to next word end` or whole-word search.
     /// It additionally accounts for language's additional word characters.
     pub fn word_characters(&self) -> Option<&HashSet<char>> {

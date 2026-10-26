@@ -220,7 +220,7 @@ impl MultiDiffView {
         });
 
         // The buffers' languages may load after the diff was built, e.g. when
-        // opening the view on startup via `zed --diff`. Propagate them from rhs
+        // opening the view on startup via `ed --diff`. Propagate them from rhs
         // to the corresponding lhs buffers when they change.
         let buffer_language_subscription = cx.subscribe(&multibuffer, |_, multibuffer, event, cx| {
             let &multi_buffer::Event::LanguageChanged(buffer_id, _) = event else {

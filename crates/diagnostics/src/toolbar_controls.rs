@@ -12,7 +12,7 @@ use workspace::ToolbarItemEvent;
 use workspace::ToolbarItemLocation;
 use workspace::ToolbarItemView;
 use workspace::item::ItemHandle;
-use zed_actions::buffer_search;
+use ed_actions::buffer_search;
 
 use crate::BufferDiagnosticsEditor;
 use crate::ProjectDiagnosticsEditor;

@@ -25,5 +25,5 @@ theme_settings.workspace = true
 ui.workspace = true
 ui_input.workspace = true
 workspace.workspace = true
-zed_actions.workspace = true
+ed_actions.workspace = true
 util.workspace = true

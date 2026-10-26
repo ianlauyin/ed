@@ -50,8 +50,8 @@ impl Pasteboard {
         // outlive the autorelease pool in which it was created.
         Self {
             inner: unsafe { Retained::retain(inner).unwrap() },
-            text_hash_type: unsafe { Retained::retain(ns_string("zed-text-hash")).unwrap() },
-            metadata_type: unsafe { Retained::retain(ns_string("zed-metadata")).unwrap() },
+            text_hash_type: unsafe { Retained::retain(ns_string("ed-text-hash")).unwrap() },
+            metadata_type: unsafe { Retained::retain(ns_string("ed-metadata")).unwrap() },
         }
     }
 

@@ -55,10 +55,10 @@ use workspace::RemovalIntent;
 use workspace::Workspace;
 use workspace::dock::DockPosition;
 use workspace::notifications::DetachAndPromptErr;
-use zed_actions::CreateWorktree;
-use zed_actions::NewWorktreeBranchTarget;
-use zed_actions::OpenWorktreeInNewWindow;
-use zed_actions::SwitchWorktree;
+use ed_actions::CreateWorktree;
+use ed_actions::NewWorktreeBranchTarget;
+use ed_actions::OpenWorktreeInNewWindow;
+use ed_actions::SwitchWorktree;
 
 use crate::notifications::show_error_toast;
 use crate::worktree_service::RemoteBranchName;

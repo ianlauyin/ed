@@ -12,7 +12,7 @@ use project::LspStore;
 use settings::Settings as _;
 use settings::SettingsLocation;
 
-const SCHEMA_URI_PREFIX: &str = "zed://schemas/";
+const SCHEMA_URI_PREFIX: &str = "ed://schemas/";
 
 const TSCONFIG_SCHEMA: &str = include_str!("schemas/tsconfig.json");
 const PACKAGE_JSON_SCHEMA: &str = include_str!("schemas/package.json");

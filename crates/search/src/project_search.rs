@@ -265,7 +265,7 @@ pub fn init(cx: &mut App) {
             ProjectSearchView::new_search(workspace, action, window, cx);
             cx.notify();
         });
-        workspace.register_action(move |workspace, action: &zed_actions::search::NewSearchInDirectory, window, cx| {
+        workspace.register_action(move |workspace, action: &ed_actions::search::NewSearchInDirectory, window, cx| {
             ProjectSearchView::new_search_with_filter(workspace, action.directory.clone(), window, cx);
             cx.notify();
         });

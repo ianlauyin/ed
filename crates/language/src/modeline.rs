@@ -6,7 +6,7 @@ use regex::Regex;
 /// The settings extracted from an emacs/vim modelines.
 ///
 /// The parsing tries to best match the modeline directives and
-/// variables to Zed, matching LanguageSettings fields.
+/// variables to ed, matching LanguageSettings fields.
 /// The mode mapping is done later thanks to the LanguageRegistry.
 ///
 /// It is not exhaustive, but covers the most common settings.
@@ -30,10 +30,10 @@ pub struct ModelineSettings {
     /// Whether to show trailing whitespace on the editor.
     pub show_trailing_whitespace: Option<bool>,
 
-    /// Emacs modeline variables that were parsed but not mapped to Zed settings.
+    /// Emacs modeline variables that were parsed but not mapped to ed settings.
     /// Stored as (variable-name, value) pairs.
     pub emacs_extra_variables: Vec<(String, String)>,
-    /// Vim modeline options that were parsed but not mapped to Zed settings.
+    /// Vim modeline options that were parsed but not mapped to ed settings.
     /// Stored as (option-name, value) pairs.
     pub vim_extra_variables: Vec<(String, Option<String>)>,
 }

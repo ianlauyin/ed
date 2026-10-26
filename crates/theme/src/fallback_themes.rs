@@ -22,16 +22,16 @@ use crate::ThemeFamily;
 use crate::ThemeStyles;
 use crate::default_color_scales;
 
-/// The default theme family for Zed.
+/// The default theme family for ed.
 ///
 /// This is used to construct the default theme fallback values, as well as to
 /// have a theme available at compile time for tests.
-pub fn zed_default_themes() -> ThemeFamily {
+pub fn ed_default_themes() -> ThemeFamily {
     ThemeFamily {
-        id: "zed-default".to_string(),
-        name: "Zed Default".into(),
+        id: "ed-default".to_string(),
+        name: "ed Default".into(),
         author: "".into(),
-        themes: vec![zed_default_dark()],
+        themes: vec![ed_default_dark()],
         scales: default_color_scales(),
     }
 }
@@ -68,7 +68,7 @@ pub fn apply_theme_color_defaults(theme_colors: &mut ThemeColorsRefinement, play
     }
 }
 
-pub(crate) fn zed_default_dark() -> Theme {
+pub(crate) fn ed_default_dark() -> Theme {
     let bg = hsla(215. / 360., 12. / 100., 15. / 100., 1.);
     let editor = hsla(220. / 360., 12. / 100., 18. / 100., 1.);
     let elevated_surface = hsla(225. / 360., 12. / 100., 17. / 100., 1.);

@@ -170,9 +170,9 @@ use workspace::notifications::DetachAndPromptErr;
 use workspace::notifications::NotifyResultExt;
 use workspace::notifications::NotifyTaskExt;
 use worktree::CreatedEntry;
-use zed_actions::project_panel::Toggle;
-use zed_actions::project_panel::ToggleFocus;
-use zed_actions::workspace::OpenWithSystem;
+use ed_actions::project_panel::Toggle;
+use ed_actions::project_panel::ToggleFocus;
+use ed_actions::workspace::OpenWithSystem;
 
 use crate::undo::Change;
 use crate::undo::UndoManager;
@@ -1192,8 +1192,8 @@ impl ProjectPanel {
                         .when(is_foldable, |menu| menu.action("Fold Directory", Box::new(FoldDirectory)))
                         .separator()
                         .action("Copy", Box::new(Copy))
-                        .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
-                        .action("Copy Relative Path", Box::new(zed_actions::workspace::CopyRelativePath))
+                        .action("Copy Path", Box::new(ed_actions::workspace::CopyPath))
+                        .action("Copy Relative Path", Box::new(ed_actions::workspace::CopyRelativePath))
                         .when(is_dir && !is_root, |menu| {
                             menu.separator()
                                 .action("Expand All", Box::new(ExpandSelectedEntryAndChildren))
@@ -1241,8 +1241,8 @@ impl ProjectPanel {
                                 menu.separator().action("Download...", Box::new(DownloadFromRemote))
                             })
                             .separator()
-                            .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
-                            .action("Copy Relative Path", Box::new(zed_actions::workspace::CopyRelativePath))
+                            .action("Copy Path", Box::new(ed_actions::workspace::CopyPath))
+                            .action("Copy Relative Path", Box::new(ed_actions::workspace::CopyRelativePath))
                             .when(has_git_repo, |menu| {
                                 menu.separator()
                                     .when(!is_dir && self.has_git_changes(entry_id), |menu| {
@@ -3526,7 +3526,7 @@ impl ProjectPanel {
         self.transfer_entries(entries, EntryTransferOperation::Copy, window, cx);
     }
 
-    fn copy_path(&mut self, _: &zed_actions::workspace::CopyPath, _: &mut Window, cx: &mut Context<Self>) {
+    fn copy_path(&mut self, _: &ed_actions::workspace::CopyPath, _: &mut Window, cx: &mut Context<Self>) {
         let abs_file_paths = {
             let project = self.project.read(cx);
             self.effective_entries()
@@ -3551,7 +3551,7 @@ impl ProjectPanel {
 
     fn copy_relative_path(
         &mut self,
-        _: &zed_actions::workspace::CopyRelativePath,
+        _: &ed_actions::workspace::CopyRelativePath,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3657,7 +3657,7 @@ impl ProjectPanel {
                     Some(parent) => Arc::from(parent),
                     None => {
                         // File at root, open search with empty filter
-                        window.dispatch_action(Box::new(zed_actions::search::NewSearchInDirectory::default()), cx);
+                        window.dispatch_action(Box::new(ed_actions::search::NewSearchInDirectory::default()), cx);
                         return;
                     }
                 }
@@ -3668,7 +3668,7 @@ impl ProjectPanel {
                 if include_root { worktree.read(cx).root_name().join(&dir_path) } else { dir_path.to_rel_path_buf() };
 
             let directory = dir_path.display(self.project.read(cx).path_style(cx)).into_owned();
-            window.dispatch_action(Box::new(zed_actions::search::NewSearchInDirectory { directory }), cx);
+            window.dispatch_action(Box::new(ed_actions::search::NewSearchInDirectory { directory }), cx);
         }
     }
 

@@ -5,7 +5,7 @@ use gpui::Action;
 use gpui::SharedString;
 use ui::IconName;
 use ui::IconPosition;
-use zed_actions::OpenBrowser;
+use ed_actions::OpenBrowser;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {

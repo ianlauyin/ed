@@ -13,7 +13,7 @@ use gpui::Subscription;
 use gpui::Task;
 use ui::animation::DefaultAnimations;
 use ui::prelude::*;
-use zed_actions::toast;
+use ed_actions::toast;
 
 use crate::Workspace;
 

@@ -6,8 +6,8 @@
 set -l root (path dirname (status filename))
 cd $root; or exit 1
 
-set -l app_version (string match -rg '^version = "(.+)"' < crates/zed/Cargo.toml)[1]
-set -l resources crates/zed/resources
+set -l app_version (string match -rg '^version = "(.+)"' < crates/ed/Cargo.toml)[1]
+set -l resources crates/ed/resources
 set -l app target/release/ed.app
 set -l identity ed-local
 set -q ED_SIGN_IDENTITY; and set identity $ED_SIGN_IDENTITY
@@ -26,7 +26,7 @@ if not security find-certificate -c $identity >/dev/null 2>&1
 end
 
 echo "Building ed $app_version"
-cargo build --release --package zed; or exit 1
+cargo build --release --package ed; or exit 1
 
 rm -rf $app
 mkdir -p $app/Contents/MacOS $app/Contents/Resources

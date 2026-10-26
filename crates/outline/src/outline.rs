@@ -48,18 +48,18 @@ use workspace::ModalView;
 
 pub fn init(cx: &mut App) {
     cx.observe_new(OutlineView::register).detach();
-    zed_actions::outline::TOGGLE_OUTLINE
+    ed_actions::outline::TOGGLE_OUTLINE
         .set(|view, window, cx| {
             let Ok(editor) = view.downcast::<Editor>() else {
                 return;
             };
 
-            toggle(editor, &zed_actions::outline::ToggleOutline, window, cx);
+            toggle(editor, &ed_actions::outline::ToggleOutline, window, cx);
         })
         .ok();
 }
 
-pub fn toggle(editor: Entity<Editor>, _: &zed_actions::outline::ToggleOutline, window: &mut Window, cx: &mut App) {
+pub fn toggle(editor: Entity<Editor>, _: &ed_actions::outline::ToggleOutline, window: &mut Window, cx: &mut App) {
     let Some(workspace) = editor.read(cx).workspace() else {
         return;
     };
@@ -149,7 +149,7 @@ impl Render for OutlineView {
         v_flex()
             .on_action(cx.listener(
                 |_this: &mut OutlineView,
-                 _: &zed_actions::outline::ToggleOutline,
+                 _: &ed_actions::outline::ToggleOutline,
                  _window: &mut Window,
                  cx: &mut Context<OutlineView>| {
                     // When outline::Toggle is triggered while the outline is open, dismiss it

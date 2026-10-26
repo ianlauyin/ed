@@ -98,8 +98,8 @@ use workspace::searchable::SearchToken;
 use workspace::searchable::SearchableItem;
 use workspace::searchable::SearchableItemHandle;
 use workspace::searchable::SelectSearchOptions;
-use zed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
-use zed_actions::preview::svg::OpenPreview as OpenSvgPreview;
+use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
+use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 
 use crate::Anchor;
 use crate::Autoscroll;

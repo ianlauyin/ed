@@ -59,7 +59,7 @@ actions!(
 
 pub fn open(
     workspace: &mut Workspace,
-    _: &zed_actions::git::ViewStash,
+    _: &ed_actions::git::ViewStash,
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {

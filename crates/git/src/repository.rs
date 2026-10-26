@@ -3094,7 +3094,7 @@ async fn run_git_command(
     let git = git.envs((*env).clone());
     // GPG can launch pinentry independently of Git, including while rebasing.
     // Allow cached/unprotected keys, but fail when a passphrase is needed.
-    let signing_dir = tempfile::Builder::new().prefix("zed-git-signing").tempdir()?;
+    let signing_dir = tempfile::Builder::new().prefix("ed-git-signing").tempdir()?;
     let config_count = env
         .get("GIT_CONFIG_COUNT")
         .cloned()

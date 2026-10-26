@@ -91,11 +91,11 @@ fn parse_shell(output: &str, fallback_shell: &str) -> String {
 }
 
 const HOME_DIR_PROGRAM: &str = "/bin/sh";
-const HOME_DIR_ARGS: [&str; 2] = ["-c", "printf ZED_HOME_BEGIN; echo; pwd; printf ZED_HOME_END"];
+const HOME_DIR_ARGS: [&str; 2] = ["-c", "printf ED_HOME_BEGIN; echo; pwd; printf ED_HOME_END"];
 
 fn parse_home_dir(output: &str) -> Option<String> {
-    let (_, output) = output.split_once("ZED_HOME_BEGIN")?;
-    let (home_dir, _) = output.rsplit_once("ZED_HOME_END")?;
+    let (_, output) = output.split_once("ED_HOME_BEGIN")?;
+    let (home_dir, _) = output.rsplit_once("ED_HOME_END")?;
     let line_ending = if home_dir.starts_with("\r\n") { "\r\n" } else { "\n" };
     let home_dir = home_dir.strip_prefix(line_ending)?.strip_suffix(line_ending)?;
     (home_dir.starts_with('/') && !home_dir.contains('\u{FFFD}')).then(|| home_dir.to_owned())

@@ -19,11 +19,11 @@ template/variable/spawn types the run icon needs.
     and `tasks.prefer_lsp` per language.
 - `languages.<lang>.tasks.enabled = false` hides a language's template-based icons.
 - Clicking the icon (or `editor::SpawnNearestTask`) resolves the template with
-  `$ZED_*` variables and spawns it in the terminal panel. The icon shows
+  `$ED_*` variables and spawns it in the terminal panel. The icon shows
   running / passed / failed state.
 - A task terminal tab has a rerun button (and `terminal::RerunTask`) that
   respawns that tab's own command in place; there is no global rerun.
-- Not supported: `tasks.json` (global, `.zed/`), `.vscode/tasks.json`, the task
+- Not supported: `tasks.json` (global, `.ed/`), `.vscode/tasks.json`, the task
   picker/modal, `task::Spawn`, `task::Rerun`, task history, task hooks (including
   worktree-creation setup tasks and the worktree picker's "Automate Setup"),
   git "Custom Commands" (`git-command` tagged tasks) in commit/ref context menus,

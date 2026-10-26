@@ -27,7 +27,7 @@ use ui::DividerColor;
 use ui::KeyBinding;
 use ui::prelude::*;
 use util::ResultExt;
-use zed_actions::command_palette;
+use ed_actions::command_palette;
 
 use crate::NewFile;
 use crate::Open;
@@ -51,7 +51,7 @@ pub struct OpenRecentProject {
 actions!(
     ed,
     [
-        /// Show the Zed welcome screen
+        /// Show the ed welcome screen
         ShowWelcome
     ]
 );
@@ -282,7 +282,7 @@ impl WelcomePage {
                     })
                     .log_err();
             } else {
-                use zed_actions::OpenRecent;
+                use ed_actions::OpenRecent;
                 window.dispatch_action(OpenRecent::default().boxed_clone(), cx);
             }
         }

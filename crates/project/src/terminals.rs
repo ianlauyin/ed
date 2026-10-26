@@ -25,7 +25,7 @@ use task::SpawnInTerminal;
 use terminal::Terminal;
 use terminal::TerminalBuilder;
 use terminal::TerminalMode;
-use terminal::insert_zed_terminal_env;
+use terminal::insert_ed_terminal_env;
 use terminal::terminal_settings::TerminalSettings;
 use util::command::new_std_command;
 use util::get_default_system_shell;
@@ -194,11 +194,11 @@ impl Project {
     }
 
     /// Creates a local terminal even if the project is remote.
-    /// In remote projects: opens in Zed's launch directory (bypasses SSH).
+    /// In remote projects: opens in ed's launch directory (bypasses SSH).
     /// In local projects: opens in the project directory (same as regular terminals).
     pub fn create_local_terminal(&mut self, cx: &mut Context<Self>) -> Task<Result<Entity<Terminal>>> {
         let working_directory = if self.remote_client.is_some() {
-            // Remote project: don't use remote paths, let shell use Zed's cwd
+            // Remote project: don't use remote paths, let shell use ed's cwd
             None
         } else {
             // Local project: use project directory like normal terminals
@@ -455,7 +455,7 @@ fn create_remote_shell(
     remote_client: Entity<RemoteClient>,
     cx: &App,
 ) -> Result<(Shell, HashMap<String, String>)> {
-    insert_zed_terminal_env(&mut env);
+    insert_ed_terminal_env(&mut env);
 
     let (program, args) = match spawn_command {
         Some((program, args)) => (Some(program.clone()), args),

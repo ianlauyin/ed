@@ -314,7 +314,7 @@ pub struct DiagnosticsSettings {
     /// Whether or not to include warning diagnostics.
     pub include_warnings: bool,
 
-    /// Settings for using LSP pull diagnostics mechanism in Zed.
+    /// Settings for using LSP pull diagnostics mechanism in ed.
     pub lsp_pull_diagnostics: LspPullDiagnosticsSettings,
 
     /// Settings for showing inline diagnostics.

@@ -95,9 +95,9 @@ impl ThemeRegistry {
     pub fn new(assets: Box<dyn AssetSource>) -> Self {
         let registry = Self { state: RwLock::new(ThemeRegistryState { themes: HashMap::default() }), assets };
 
-        // We're loading the Zed default theme, as we need a theme to be loaded
+        // We're loading the ed default theme, as we need a theme to be loaded
         // for tests.
-        registry.insert_theme_families([crate::fallback_themes::zed_default_themes()]);
+        registry.insert_theme_families([crate::fallback_themes::ed_default_themes()]);
 
         registry
     }

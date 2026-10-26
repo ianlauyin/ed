@@ -45,7 +45,7 @@ use util::ResultExt;
 use workspace::ModalView;
 use workspace::Workspace;
 use workspace::WorkspaceSettings;
-use zed_actions::command_palette::Toggle;
+use ed_actions::command_palette::Toggle;
 
 actions!(command_palette, [RemoveSelected]);
 

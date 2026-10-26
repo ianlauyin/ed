@@ -1,4 +1,4 @@
-//! Baseline interface of Tasks in Zed: all tasks in Zed are intended to use those for implementing their own logic.
+//! Baseline interface of Tasks in ed: all tasks in ed are intended to use those for implementing their own logic.
 
 mod serde_helpers;
 mod task_template;
@@ -25,14 +25,14 @@ pub use task_template::substitute_variables_in_str;
 pub use util::shell::Shell;
 pub use util::shell::ShellKind;
 pub use util::shell_builder::ShellBuilder;
-pub use zed_actions::RevealTarget;
+pub use ed_actions::RevealTarget;
 
 /// Task identifier, unique within the application.
 /// Based on it, task reruns and terminal tabs are managed.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
 pub struct TaskId(pub String);
 
-/// Contains all information needed by Zed to spawn a new terminal tab for the given task.
+/// Contains all information needed by ed to spawn a new terminal tab for the given task.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct SpawnInTerminal {
     /// Id of the task to use when determining task tab affinity.
@@ -134,7 +134,7 @@ impl ResolvedTask {
     }
 }
 
-/// Variables, available for use in [`TaskContext`] when a Zed's [`TaskTemplate`] gets resolved into a [`ResolvedTask`].
+/// Variables, available for use in [`TaskContext`] when an ed's [`TaskTemplate`] gets resolved into a [`ResolvedTask`].
 /// Name of the variable must be a valid shell variable identifier, which generally means that it is
 /// a word  consisting only  of alphanumeric characters and underscores,
 /// and beginning with an alphabetic character or an  underscore.
@@ -200,7 +200,7 @@ impl FromStr for VariableName {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let without_prefix = s.strip_prefix(ZED_VARIABLE_NAME_PREFIX).ok_or(())?;
+        let without_prefix = s.strip_prefix(ED_VARIABLE_NAME_PREFIX).ok_or(())?;
         let value = match without_prefix {
             "FILE" => Self::File,
             "FILENAME" => Self::Filename,
@@ -222,7 +222,7 @@ impl FromStr for VariableName {
             "GIT_REPOSITORY_PATH" => Self::GitRepositoryPath,
             "GIT_REF" => Self::GitRef,
             _ => {
-                if let Some(custom_name) = without_prefix.strip_prefix(ZED_CUSTOM_VARIABLE_NAME_PREFIX) {
+                if let Some(custom_name) = without_prefix.strip_prefix(ED_CUSTOM_VARIABLE_NAME_PREFIX) {
                     Self::Custom(Cow::Owned(custom_name.to_owned()))
                 } else {
                     return Err(());
@@ -234,37 +234,37 @@ impl FromStr for VariableName {
 }
 
 /// A prefix that all [`VariableName`] variants are prefixed with when used in environment variables and similar template contexts.
-pub const ZED_VARIABLE_NAME_PREFIX: &str = "ZED_";
-const ZED_CUSTOM_VARIABLE_NAME_PREFIX: &str = "CUSTOM_";
+pub const ED_VARIABLE_NAME_PREFIX: &str = "ED_";
+const ED_CUSTOM_VARIABLE_NAME_PREFIX: &str = "CUSTOM_";
 
 impl std::fmt::Display for VariableName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::File => write!(f, "{ZED_VARIABLE_NAME_PREFIX}FILE"),
-            Self::Filename => write!(f, "{ZED_VARIABLE_NAME_PREFIX}FILENAME"),
-            Self::RelativeFile => write!(f, "{ZED_VARIABLE_NAME_PREFIX}RELATIVE_FILE"),
-            Self::RelativeDir => write!(f, "{ZED_VARIABLE_NAME_PREFIX}RELATIVE_DIR"),
-            Self::Dirname => write!(f, "{ZED_VARIABLE_NAME_PREFIX}DIRNAME"),
-            Self::Stem => write!(f, "{ZED_VARIABLE_NAME_PREFIX}STEM"),
-            Self::WorktreeRoot => write!(f, "{ZED_VARIABLE_NAME_PREFIX}WORKTREE_ROOT"),
-            Self::Symbol => write!(f, "{ZED_VARIABLE_NAME_PREFIX}SYMBOL"),
-            Self::Row => write!(f, "{ZED_VARIABLE_NAME_PREFIX}ROW"),
-            Self::Column => write!(f, "{ZED_VARIABLE_NAME_PREFIX}COLUMN"),
-            Self::SelectedText => write!(f, "{ZED_VARIABLE_NAME_PREFIX}SELECTED_TEXT"),
-            Self::Language => write!(f, "{ZED_VARIABLE_NAME_PREFIX}LANGUAGE"),
-            Self::RunnableSymbol => write!(f, "{ZED_VARIABLE_NAME_PREFIX}RUNNABLE_SYMBOL"),
-            Self::MainGitWorktree => write!(f, "{ZED_VARIABLE_NAME_PREFIX}MAIN_GIT_WORKTREE"),
-            Self::GitSha => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_SHA"),
-            Self::GitShaShort => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_SHA_SHORT"),
-            Self::GitRepositoryName => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_REPOSITORY_NAME"),
-            Self::GitRepositoryPath => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_REPOSITORY_PATH"),
-            Self::GitRef => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_REF"),
-            Self::Custom(s) => write!(f, "{ZED_VARIABLE_NAME_PREFIX}{ZED_CUSTOM_VARIABLE_NAME_PREFIX}{s}"),
+            Self::File => write!(f, "{ED_VARIABLE_NAME_PREFIX}FILE"),
+            Self::Filename => write!(f, "{ED_VARIABLE_NAME_PREFIX}FILENAME"),
+            Self::RelativeFile => write!(f, "{ED_VARIABLE_NAME_PREFIX}RELATIVE_FILE"),
+            Self::RelativeDir => write!(f, "{ED_VARIABLE_NAME_PREFIX}RELATIVE_DIR"),
+            Self::Dirname => write!(f, "{ED_VARIABLE_NAME_PREFIX}DIRNAME"),
+            Self::Stem => write!(f, "{ED_VARIABLE_NAME_PREFIX}STEM"),
+            Self::WorktreeRoot => write!(f, "{ED_VARIABLE_NAME_PREFIX}WORKTREE_ROOT"),
+            Self::Symbol => write!(f, "{ED_VARIABLE_NAME_PREFIX}SYMBOL"),
+            Self::Row => write!(f, "{ED_VARIABLE_NAME_PREFIX}ROW"),
+            Self::Column => write!(f, "{ED_VARIABLE_NAME_PREFIX}COLUMN"),
+            Self::SelectedText => write!(f, "{ED_VARIABLE_NAME_PREFIX}SELECTED_TEXT"),
+            Self::Language => write!(f, "{ED_VARIABLE_NAME_PREFIX}LANGUAGE"),
+            Self::RunnableSymbol => write!(f, "{ED_VARIABLE_NAME_PREFIX}RUNNABLE_SYMBOL"),
+            Self::MainGitWorktree => write!(f, "{ED_VARIABLE_NAME_PREFIX}MAIN_GIT_WORKTREE"),
+            Self::GitSha => write!(f, "{ED_VARIABLE_NAME_PREFIX}GIT_SHA"),
+            Self::GitShaShort => write!(f, "{ED_VARIABLE_NAME_PREFIX}GIT_SHA_SHORT"),
+            Self::GitRepositoryName => write!(f, "{ED_VARIABLE_NAME_PREFIX}GIT_REPOSITORY_NAME"),
+            Self::GitRepositoryPath => write!(f, "{ED_VARIABLE_NAME_PREFIX}GIT_REPOSITORY_PATH"),
+            Self::GitRef => write!(f, "{ED_VARIABLE_NAME_PREFIX}GIT_REF"),
+            Self::Custom(s) => write!(f, "{ED_VARIABLE_NAME_PREFIX}{ED_CUSTOM_VARIABLE_NAME_PREFIX}{s}"),
         }
     }
 }
 
-/// Container for predefined environment variables that describe state of Zed at the time the task was spawned.
+/// Container for predefined environment variables that describe state of ed at the time the task was spawned.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct TaskVariables(HashMap<VariableName, String>);
 
@@ -309,14 +309,14 @@ impl IntoIterator for TaskVariables {
 }
 
 /// Keeps track of the file associated with a task and context of tasks execution (i.e. current file or current function).
-/// Keeps all Zed-related state inside, used to produce a resolved task out of its template.
+/// Keeps all ed-related state inside, used to produce a resolved task out of its template.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TaskContext {
     /// A path to a directory in which the task should be executed.
     pub cwd: Option<PathBuf>,
     /// Additional environment variables associated with a given task.
     pub task_variables: TaskVariables,
-    /// Environment variables obtained when loading the project into Zed.
+    /// Environment variables obtained when loading the project into ed.
     /// This is the environment one would get when `cd`ing in a terminal
     /// into the project's root directory.
     pub project_env: HashMap<String, String>,

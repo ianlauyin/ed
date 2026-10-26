@@ -67,9 +67,9 @@ use workspace::searchable::SearchToken;
 use workspace::searchable::SearchableItemHandle;
 use workspace::searchable::SelectSearchOptions;
 use workspace::searchable::WeakSearchableItemHandle;
-use zed_actions::outline::ToggleOutline;
-use zed_actions::workspace::CopyPath;
-use zed_actions::workspace::CopyRelativePath;
+use ed_actions::outline::ToggleOutline;
+use ed_actions::workspace::CopyPath;
+use ed_actions::workspace::CopyRelativePath;
 
 use crate::FocusSearch;
 use crate::NextHistoryQuery;
@@ -100,11 +100,11 @@ use crate::search_bar::should_navigate_history;
 
 const MAX_BUFFER_SEARCH_HISTORY_SIZE: usize = 50;
 
-pub use zed_actions::buffer_search::Deploy;
-pub use zed_actions::buffer_search::DeployReplace;
-pub use zed_actions::buffer_search::Dismiss;
-pub use zed_actions::buffer_search::FocusEditor;
-pub use zed_actions::buffer_search::UseSelectionForFind;
+pub use ed_actions::buffer_search::Deploy;
+pub use ed_actions::buffer_search::DeployReplace;
+pub use ed_actions::buffer_search::Dismiss;
+pub use ed_actions::buffer_search::FocusEditor;
+pub use ed_actions::buffer_search::UseSelectionForFind;
 
 pub enum Event {
     UpdateLocation,

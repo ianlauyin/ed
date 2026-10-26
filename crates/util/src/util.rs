@@ -177,18 +177,18 @@ where
 ///
 /// This function checks if the current process is running with root privileges
 /// and terminates the program with an error message unless explicitly allowed via the
-/// `ZED_ALLOW_ROOT` environment variable.
+/// `ED_ALLOW_ROOT` environment variable.
 pub fn prevent_root_execution() {
     let is_root = unsafe { libc::geteuid() } == 0;
-    let allow_root = std::env::var("ZED_ALLOW_ROOT").is_ok_and(|val| val == "true");
+    let allow_root = std::env::var("ED_ALLOW_ROOT").is_ok_and(|val| val == "true");
 
     if is_root && !allow_root {
         eprintln!(
             "\
-Error: Running Zed as root or via sudo is unsupported.
-       Doing so (even once) may subtly break things for all subsequent non-root usage of Zed.
+Error: Running ed as root or via sudo is unsupported.
+       Doing so (even once) may subtly break things for all subsequent non-root usage of ed.
        It is untested and not recommended, don't complain when things break.
-       If you wish to proceed anyways, set `ZED_ALLOW_ROOT=true` in your environment."
+       If you wish to proceed anyways, set `ED_ALLOW_ROOT=true` in your environment."
         );
         std::process::exit(1);
     }
@@ -276,21 +276,21 @@ fn load_shell_from_passwd() -> Result<()> {
     Ok(())
 }
 
-/// Returns a shell escaped path for the current zed executable
-pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<String> {
+/// Returns a shell escaped path for the current ed executable
+pub fn get_shell_safe_ed_path(shell_kind: shell::ShellKind) -> anyhow::Result<String> {
     use anyhow::Context as _;
     use paths::PathExt;
-    let mut zed_path = std::env::current_exe().context("Failed to determine current zed executable path.")?;
+    let mut ed_path = std::env::current_exe().context("Failed to determine current ed executable path.")?;
     if cfg!(target_os = "linux")
-        && !zed_path.is_file()
+        && !ed_path.is_file()
         && let Some(truncated) =
-            zed_path.clone().file_name().and_then(|s| s.to_str()).and_then(|n| n.strip_suffix(" (deleted)"))
+            ed_path.clone().file_name().and_then(|s| s.to_str()).and_then(|n| n.strip_suffix(" (deleted)"))
     {
         // Might have been deleted during update; let's use the new binary if there is one.
-        zed_path.set_file_name(truncated);
+        ed_path.set_file_name(truncated);
     }
 
-    zed_path.try_shell_safe(shell_kind).context("Failed to shell-escape Zed executable path.")
+    ed_path.try_shell_safe(shell_kind).context("Failed to shell-escape ed executable path.")
 }
 
 pub async fn load_login_shell_environment() -> Result<()> {
@@ -307,9 +307,9 @@ pub async fn load_login_shell_environment() -> Result<()> {
         .await
         .with_context(|| format!("capturing environment with {:?}", get_system_shell()))?
     {
-        // Skip SHLVL to prevent it from polluting Zed's process environment.
+        // Skip SHLVL to prevent it from polluting ed's process environment.
         // The login shell used for env capture increments SHLVL, and if we propagate it,
-        // terminals spawned by Zed will inherit it and increment again, causing SHLVL
+        // terminals spawned by ed will inherit it and increment again, causing SHLVL
         // to start at 2 instead of 1 (and increase by 2 on each reload).
         if name == "SHLVL" {
             continue;

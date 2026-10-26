@@ -33,7 +33,7 @@ use workspace::PreviousWorkspaceState;
 use workspace::ToastView;
 use workspace::Workspace;
 use workspace::dock::DockPosition;
-use zed_actions::NewWorktreeBranchTarget;
+use ed_actions::NewWorktreeBranchTarget;
 
 use crate::notifications::open_output;
 use crate::notifications::show_error_toast;
@@ -256,7 +256,7 @@ impl Render for WorktreeFetchFailedToast {
                             workspace.update(cx, |workspace, cx| {
                                 let task = create_worktree_workspace_inner(
                                     workspace,
-                                    &zed_actions::CreateWorktree {
+                                    &ed_actions::CreateWorktree {
                                         worktree_name: worktree_name.clone(),
                                         branch_target: branch_target.clone(),
                                     },
@@ -378,7 +378,7 @@ async fn fetch_remote_for_worktree_base(
 ///
 /// Multiple entries in `git_repos` can be linked worktrees of the *same*
 /// underlying repository (e.g. a project that has both the main checkout and
-/// one of its linked worktrees open as separate Zed worktrees). Those entries
+/// one of its linked worktrees open as separate ed worktrees). Those entries
 /// resolve to the same target path via [`project::git_store::RepositorySnapshot::path_for_new_linked_worktree`],
 /// so we create the new worktree only once and remap every contributing
 /// work directory onto it. Without this dedup, the second `git worktree add`
@@ -576,7 +576,7 @@ fn maybe_propagate_worktree_trust(
 /// Errors are surfaced to the user via toasts.
 pub fn handle_create_worktree(
     workspace: &mut Workspace,
-    action: &zed_actions::CreateWorktree,
+    action: &ed_actions::CreateWorktree,
     window: &mut gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     cx: &mut gpui::Context<Workspace>,
@@ -594,7 +594,7 @@ pub fn handle_create_worktree(
 
 fn create_worktree_workspace_inner(
     workspace: &mut Workspace,
-    action: &zed_actions::CreateWorktree,
+    action: &ed_actions::CreateWorktree,
     window: &gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     remote_branch_fetch_mode: RemoteBranchFetchMode,
@@ -692,7 +692,7 @@ fn create_worktree_workspace_inner(
 
 pub fn handle_switch_worktree(
     workspace: &mut Workspace,
-    action: &zed_actions::SwitchWorktree,
+    action: &ed_actions::SwitchWorktree,
     window: &mut gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     cx: &mut gpui::Context<Workspace>,
@@ -825,7 +825,7 @@ async fn do_create_worktree(
     let created_paths = await_and_rollback_on_failure(creation_infos, fs, cx).await?;
 
     // Record each created worktree so thread archival can later verify that
-    // Zed created it before deleting it from disk. Failures are non-fatal:
+    // ed created it before deleting it from disk. Failures are non-fatal:
     // the worktree just won't be eligible for automatic archival.
     for (repo, path) in creation_pairs {
         crate::created_worktrees::record_created_worktree_for_repo(

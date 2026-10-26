@@ -122,10 +122,10 @@ use workspace::Workspace;
 use workspace::item::Item;
 use workspace::item::ItemEvent;
 use workspace::item::TabTooltipContent;
-use zed_actions::buffer_search;
-use zed_actions::search::SelectNextMatch;
-use zed_actions::search::SelectPreviousMatch;
-use zed_actions::search::ToggleCaseSensitive;
+use ed_actions::buffer_search;
+use ed_actions::search::SelectNextMatch;
+use ed_actions::search::SelectPreviousMatch;
+use ed_actions::search::ToggleCaseSensitive;
 
 use crate::commit_context_menu::CommitContextMenuData;
 pub use crate::commit_context_menu::CopyCommitSha;

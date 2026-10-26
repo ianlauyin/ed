@@ -3,16 +3,16 @@ use gpui::Menu;
 use gpui::MenuItem;
 use gpui::OsAction;
 use terminal_view::terminal_panel;
-use zed_actions::Quit;
-use zed_actions::git_panel;
-use zed_actions::project_panel;
+use ed_actions::Quit;
+use ed_actions::git_panel;
+use ed_actions::project_panel;
 
 pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
     let mut view_items = vec![
-        MenuItem::action("Zoom In", zed_actions::IncreaseBufferFontSize { persist: false }),
-        MenuItem::action("Zoom Out", zed_actions::DecreaseBufferFontSize { persist: false }),
-        MenuItem::action("Reset Zoom", zed_actions::ResetBufferFontSize { persist: false }),
-        MenuItem::action("Reset All Zoom", zed_actions::ResetAllZoom { persist: false }),
+        MenuItem::action("Zoom In", ed_actions::IncreaseBufferFontSize { persist: false }),
+        MenuItem::action("Zoom Out", ed_actions::DecreaseBufferFontSize { persist: false }),
+        MenuItem::action("Reset Zoom", ed_actions::ResetBufferFontSize { persist: false }),
+        MenuItem::action("Reset All Zoom", ed_actions::ResetAllZoom { persist: false }),
         MenuItem::separator(),
         MenuItem::action("Toggle Left Dock", workspace::ToggleLeftDock),
         MenuItem::action("Toggle Right Dock", workspace::ToggleRightDock),
@@ -46,11 +46,11 @@ pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
             name: "ed".into(),
             disabled: false,
             items: vec![
-                MenuItem::action("About ed", zed_actions::About),
+                MenuItem::action("About ed", ed_actions::About),
                 MenuItem::separator(),
                 MenuItem::submenu(
                     Menu::new("Settings")
-                        .items([MenuItem::action("Select Theme...", zed_actions::theme_selector::Toggle::default())]),
+                        .items([MenuItem::action("Select Theme...", ed_actions::theme_selector::Toggle::default())]),
                 ),
                 MenuItem::separator(),
                 #[cfg(target_os = "macos")]
@@ -79,8 +79,8 @@ pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
                     if cfg!(not(target_os = "macos")) { "Open Folder..." } else { "Open…" },
                     workspace::Open::default(),
                 ),
-                MenuItem::action("Open Recent…", zed_actions::OpenRecent::default()),
-                MenuItem::action("Open Remote…", zed_actions::OpenRemote::default()),
+                MenuItem::action("Open Recent…", ed_actions::OpenRecent::default()),
+                MenuItem::action("Open Remote…", ed_actions::OpenRemote::default()),
                 MenuItem::separator(),
                 MenuItem::action("Add Folder to Project…", workspace::AddFolderToProject),
                 MenuItem::separator(),
@@ -143,11 +143,11 @@ pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
                 MenuItem::action("Back", workspace::GoBack),
                 MenuItem::action("Forward", workspace::GoForward),
                 MenuItem::separator(),
-                MenuItem::action("Command Palette...", zed_actions::command_palette::Toggle),
+                MenuItem::action("Command Palette...", ed_actions::command_palette::Toggle),
                 MenuItem::separator(),
                 MenuItem::action("Go to File...", workspace::ToggleFileFinder::default()),
                 // MenuItem::action("Go to Symbol in Project", project_symbols::Toggle),
-                MenuItem::action("Go to Symbol in Editor...", zed_actions::outline::ToggleOutline),
+                MenuItem::action("Go to Symbol in Editor...", ed_actions::outline::ToggleOutline),
                 MenuItem::action("Go to Line/Column...", editor::actions::ToggleGoToLine),
                 MenuItem::separator(),
                 MenuItem::action("Go to Definition", editor::actions::GoToDefinition::default()),

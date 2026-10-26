@@ -40,7 +40,7 @@ use workspace::SerializedWorkspaceLocation;
 use workspace::Workspace;
 use workspace::WorkspaceDb;
 use workspace::notifications::DetachAndPromptErr;
-use zed_actions::OpenRemote;
+use ed_actions::OpenRemote;
 
 use crate::highlights_for_path;
 use crate::icon_for_remote_connection;

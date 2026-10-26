@@ -14,7 +14,7 @@ migrator, or Vim/Helix mode.
 ## Behaviour
 
 - Stateless mode is removed. Databases use persistent storage, with an in-memory
-  fallback only when storage cannot be opened. `ZED_STATELESS` has no effect;
+  fallback only when storage cannot be opened. `ED_STATELESS` has no effect;
   single-instance checks are bypassed only in debug builds.
 - Database schemas are not migrated. Each domain declares only its current
   schema; when the combined schema changes, the whole database is wiped and
@@ -31,7 +31,7 @@ migrator, or Vim/Helix mode.
   field by field (nested groups such as `completions` too). Lists and maps are
   plain values that replace; there is no `"..."` splicing or extend-only list
   type. Typed settings register with `settings::register_setting!(Type)`.
-- User, global, server, and `.zed/settings.json` files are not loaded, watched,
+- User, global, server, and `.ed/settings.json` files are not loaded, watched,
   created, or rewritten. There are no settings profiles or project overrides.
   Changing persistent preferences requires editing the built-in settings and
   rebuilding. Existing settings controls affect only the running session.

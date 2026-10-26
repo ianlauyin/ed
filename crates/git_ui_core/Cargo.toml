@@ -41,4 +41,4 @@ ui.workspace = true
 util.workspace = true
 watch.workspace = true
 workspace.workspace = true
-zed_actions.workspace = true
+ed_actions.workspace = true

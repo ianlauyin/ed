@@ -408,7 +408,7 @@ impl ContextProvider for GoContextProvider {
 
     fn associated_tasks(&self, _: Option<Entity<Buffer>>, _: &App) -> Task<Option<TaskTemplates>> {
         let package_cwd =
-            if GO_PACKAGE_TASK_VARIABLE.template_value() == "." { None } else { Some("$ZED_DIRNAME".to_string()) };
+            if GO_PACKAGE_TASK_VARIABLE.template_value() == "." { None } else { Some("$ED_DIRNAME".to_string()) };
         let module_cwd = Some(GO_MODULE_ROOT_TASK_VARIABLE.template_value());
 
         Task::ready(Some(TaskTemplates(vec![

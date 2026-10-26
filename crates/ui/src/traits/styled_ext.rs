@@ -17,7 +17,7 @@ fn elevated_borderless<E: Styled>(this: E, cx: &App, index: ElevationIndex) -> E
     this.bg(cx.theme().colors().elevated_surface_background).rounded_lg().shadow(index.shadow(cx))
 }
 
-/// Extends [`gpui::Styled`] with Zed-specific styling methods.
+/// Extends [`gpui::Styled`] with ed-specific styling methods.
 pub trait StyledExt: Styled + Sized {
     /// Horizontally stacks elements.
     ///

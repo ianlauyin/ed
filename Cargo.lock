@@ -489,6 +489,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 name = "call_hierarchy"
 version = "0.1.0"
 dependencies = [
+ "ed_actions",
  "editor",
  "fuzzy",
  "gpui",
@@ -503,7 +504,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -652,6 +652,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "db",
+ "ed_actions",
  "fuzzy_nucleo",
  "gpui",
  "log",
@@ -663,7 +664,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -873,6 +873,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
+ "ed_actions",
  "editor",
  "futures-lite",
  "gpui",
@@ -889,7 +890,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -981,6 +981,88 @@ dependencies = [
 ]
 
 [[package]]
+name = "ed"
+version = "1.45.0"
+dependencies = [
+ "activity_indicator",
+ "anyhow",
+ "assets",
+ "breadcrumbs",
+ "call_hierarchy",
+ "clap",
+ "collections",
+ "command_palette",
+ "control",
+ "db",
+ "diagnostics",
+ "ed_actions",
+ "editor",
+ "encoding_selector",
+ "file_finder",
+ "fs",
+ "futures",
+ "git",
+ "git_ui",
+ "git_ui_core",
+ "go_to_line",
+ "gpui",
+ "gpui_platform",
+ "image_viewer",
+ "json_schema_store",
+ "language",
+ "language_selector",
+ "language_tools",
+ "languages",
+ "log",
+ "lsp_command_selector",
+ "lsp_locations",
+ "markdown_preview",
+ "menu",
+ "mimalloc",
+ "outline",
+ "outline_panel",
+ "paths",
+ "project",
+ "project_panel",
+ "project_symbols",
+ "rayon",
+ "recent_projects",
+ "remote",
+ "search",
+ "serde_json",
+ "session",
+ "settings",
+ "settings_content",
+ "smol",
+ "svg_preview",
+ "tab_switcher",
+ "tabular_data_preview",
+ "terminal_view",
+ "theme",
+ "theme_selector",
+ "theme_settings",
+ "title_bar",
+ "ui",
+ "url",
+ "urlencoding",
+ "util",
+ "uuid",
+ "which_key",
+ "workspace",
+ "zlog",
+ "zlog_settings",
+]
+
+[[package]]
+name = "ed_actions"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "serde",
+ "util",
+]
+
+[[package]]
 name = "editor"
 version = "0.1.0"
 dependencies = [
@@ -993,6 +1075,7 @@ dependencies = [
  "collections",
  "convert_case 0.11.0",
  "db",
+ "ed_actions",
  "emojis",
  "file_icons",
  "fs",
@@ -1035,7 +1118,6 @@ dependencies = [
  "util",
  "uuid",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -1192,6 +1274,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
+ "ed_actions",
  "editor",
  "file_icons",
  "futures",
@@ -1207,7 +1290,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -1556,6 +1638,7 @@ dependencies = [
  "collections",
  "component",
  "db",
+ "ed_actions",
  "editor",
  "file_icons",
  "futures",
@@ -1589,7 +1672,6 @@ dependencies = [
  "util",
  "watch",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -1600,6 +1682,7 @@ dependencies = [
  "buffer_diff",
  "collections",
  "db",
+ "ed_actions",
  "editor",
  "fs",
  "futures",
@@ -1624,7 +1707,6 @@ dependencies = [
  "util",
  "watch",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -2385,6 +2467,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
+ "ed_actions",
  "editor",
  "gpui",
  "itertools 0.15.0",
@@ -2402,7 +2485,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -2755,6 +2837,7 @@ dependencies = [
  "anyhow",
  "collections",
  "db",
+ "ed_actions",
  "editor",
  "gpui",
  "language",
@@ -2769,7 +2852,6 @@ dependencies = [
  "urlencoding",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -2923,10 +3005,10 @@ name = "notifications"
 version = "0.1.0"
 dependencies = [
  "component",
+ "ed_actions",
  "gpui",
  "ui",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -3243,6 +3325,7 @@ dependencies = [
 name = "outline"
 version = "0.1.0"
 dependencies = [
+ "ed_actions",
  "editor",
  "fuzzy_nucleo",
  "gpui",
@@ -3252,7 +3335,6 @@ dependencies = [
  "theme",
  "ui",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -3263,6 +3345,7 @@ dependencies = [
  "async-channel",
  "collections",
  "db",
+ "ed_actions",
  "editor",
  "file_icons",
  "fuzzy",
@@ -3284,7 +3367,6 @@ dependencies = [
  "util",
  "workspace",
  "worktree",
- "zed_actions",
 ]
 
 [[package]]
@@ -3420,6 +3502,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "db",
+ "ed_actions",
  "gpui",
  "language",
  "menu",
@@ -3432,7 +3515,6 @@ dependencies = [
  "ui_input",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -3650,6 +3732,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
+ "ed_actions",
  "editor",
  "file_icons",
  "fs",
@@ -3677,7 +3760,6 @@ dependencies = [
  "util",
  "workspace",
  "worktree",
- "zed_actions",
 ]
 
 [[package]]
@@ -3898,6 +3980,7 @@ name = "recent_projects"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ed_actions",
  "editor",
  "fs",
  "futures",
@@ -3915,7 +3998,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -4245,6 +4327,7 @@ dependencies = [
  "bitflags",
  "collections",
  "db",
+ "ed_actions",
  "editor",
  "file_icons",
  "futures",
@@ -4265,7 +4348,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -4709,6 +4791,7 @@ checksum = "0193cc4331cfd2f3d2011ef287590868599a2f33c3e69bc22c1a3d3acf9e02fb"
 name = "svg_preview"
 version = "0.1.0"
 dependencies = [
+ "ed_actions",
  "file_icons",
  "gpui",
  "language",
@@ -4716,7 +4799,6 @@ dependencies = [
  "project",
  "ui",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -4858,6 +4940,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
+ "ed_actions",
  "gpui",
  "hex",
  "proto",
@@ -4866,7 +4949,6 @@ dependencies = [
  "sha2",
  "shellexpand",
  "util",
- "zed_actions",
 ]
 
 [[package]]
@@ -4991,6 +5073,7 @@ dependencies = [
 name = "theme_selector"
 version = "0.1.0"
 dependencies = [
+ "ed_actions",
  "fs",
  "fuzzy",
  "gpui",
@@ -5002,7 +5085,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -5149,6 +5231,7 @@ name = "title_bar"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "ed_actions",
  "git_ui_core",
  "gpui",
  "project",
@@ -5161,7 +5244,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -5774,12 +5856,12 @@ name = "which_key"
 version = "0.1.0"
 dependencies = [
  "command_palette",
+ "ed_actions",
  "gpui",
  "settings",
  "ui",
  "util",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -6242,6 +6324,7 @@ dependencies = [
  "component",
  "db",
  "dirs",
+ "ed_actions",
  "fs",
  "futures",
  "futures-lite",
@@ -6272,7 +6355,6 @@ dependencies = [
  "url",
  "util",
  "uuid",
- "zed_actions",
 ]
 
 [[package]]
@@ -6345,88 +6427,6 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "synstructure",
-]
-
-[[package]]
-name = "zed"
-version = "1.45.0"
-dependencies = [
- "activity_indicator",
- "anyhow",
- "assets",
- "breadcrumbs",
- "call_hierarchy",
- "clap",
- "collections",
- "command_palette",
- "control",
- "db",
- "diagnostics",
- "editor",
- "encoding_selector",
- "file_finder",
- "fs",
- "futures",
- "git",
- "git_ui",
- "git_ui_core",
- "go_to_line",
- "gpui",
- "gpui_platform",
- "image_viewer",
- "json_schema_store",
- "language",
- "language_selector",
- "language_tools",
- "languages",
- "log",
- "lsp_command_selector",
- "lsp_locations",
- "markdown_preview",
- "menu",
- "mimalloc",
- "outline",
- "outline_panel",
- "paths",
- "project",
- "project_panel",
- "project_symbols",
- "rayon",
- "recent_projects",
- "remote",
- "search",
- "serde_json",
- "session",
- "settings",
- "settings_content",
- "smol",
- "svg_preview",
- "tab_switcher",
- "tabular_data_preview",
- "terminal_view",
- "theme",
- "theme_selector",
- "theme_settings",
- "title_bar",
- "ui",
- "url",
- "urlencoding",
- "util",
- "uuid",
- "which_key",
- "workspace",
- "zed_actions",
- "zlog",
- "zlog_settings",
-]
-
-[[package]]
-name = "zed_actions"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "serde",
- "util",
 ]
 
 [[package]]

@@ -326,7 +326,7 @@ impl ContextProvider for PythonContextProvider {
             TaskTemplate {
                 tags: target_tags.map(ToOwned::to_owned).to_vec(),
                 ..uv_python_task(
-                    format!("{runner} $ZED_CUSTOM_PYTHON_TEST_TARGET"),
+                    format!("{runner} $ED_CUSTOM_PYTHON_TEST_TARGET"),
                     ["-m".to_owned(), runner.to_owned(), test_target],
                 )
             },

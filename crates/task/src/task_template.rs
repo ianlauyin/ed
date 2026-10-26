@@ -19,14 +19,14 @@ use crate::SpawnInTerminal;
 use crate::TaskContext;
 use crate::TaskId;
 use crate::VariableName;
-use crate::ZED_VARIABLE_NAME_PREFIX;
+use crate::ED_VARIABLE_NAME_PREFIX;
 use crate::serde_helpers::non_empty_string_vec;
 
-/// A template definition of a Zed task to run.
+/// A template definition of an ed task to run.
 /// May use the [`VariableName`] to get the corresponding substitutions into its fields.
 ///
 /// Template itself is not ready to spawn a task, it needs to be resolved with a [`TaskContext`] first, that
-/// contains all relevant Zed state in task variables.
+/// contains all relevant ed state in task variables.
 /// A single template may produce different tasks (or none) for different contexts.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -270,11 +270,11 @@ impl TaskTemplate {
         })
     }
 
-    /// Validates that all `$ZED_*` variables used in this template are known
+    /// Validates that all `$ED_*` variables used in this template are known
     /// variable names, returning a vector with all of the unique unknown
     /// variables.
     ///
-    /// Note that `$ZED_CUSTOM_*` variables are never considered to be invalid
+    /// Note that `$ED_CUSTOM_*` variables are never considered to be invalid
     /// since those are provided dynamically by extensions.
     pub fn unknown_variables(&self) -> Vec<String> {
         let mut variables = HashSet::default();
@@ -296,13 +296,13 @@ impl TaskTemplate {
     fn collect_unknown_variables(template: &str, unknown: &mut HashSet<String>) {
         shellexpand::env_with_context_no_errors(template, |variable| {
             // It's possible that the variable has a default defined, which is
-            // separated by a `:`, for example, `${ZED_FILE:default_value} so we
+            // separated by a `:`, for example, `${ED_FILE:default_value} so we
             // ensure that we're only looking at the variable name itself.
             let colon_position = variable.find(':').unwrap_or(variable.len());
             let variable_name = &variable[..colon_position];
 
-            if variable_name.starts_with(ZED_VARIABLE_NAME_PREFIX)
-                && let without_prefix = &variable_name[ZED_VARIABLE_NAME_PREFIX.len()..]
+            if variable_name.starts_with(ED_VARIABLE_NAME_PREFIX)
+                && let without_prefix = &variable_name[ED_VARIABLE_NAME_PREFIX.len()..]
                 && !without_prefix.starts_with("CUSTOM_")
                 && variable_name.parse::<VariableName>().is_err()
             {
@@ -365,7 +365,7 @@ fn substitute_all_template_variables_in_str<A: AsRef<str>>(
             }
             // Got a task variable hit - use the variable value, ignore default
             return Ok(Some(name.as_ref().to_owned()));
-        } else if variable_name.starts_with(ZED_VARIABLE_NAME_PREFIX) {
+        } else if variable_name.starts_with(ED_VARIABLE_NAME_PREFIX) {
             // Unknown ZED variable - use default if available
             if !default.is_empty() {
                 // Strip the colon and return the default value

@@ -4,8 +4,8 @@ use workspace::Workspace;
 
 pub mod svg_preview_view;
 
-pub use zed_actions::preview::svg::OpenPreview;
-pub use zed_actions::preview::svg::OpenPreviewToTheSide;
+pub use ed_actions::preview::svg::OpenPreview;
+pub use ed_actions::preview::svg::OpenPreviewToTheSide;
 
 actions!(
     svg,

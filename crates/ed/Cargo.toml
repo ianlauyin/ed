@@ -1,7 +1,7 @@
 [package]
 description = "A focused single-user code editor."
 edition.workspace = true
-name = "zed"
+name = "ed"
 version = "1.45.0"
 default-run = "ed"
 
@@ -78,7 +78,7 @@ util.workspace = true
 uuid.workspace = true
 which_key.workspace = true
 workspace.workspace = true
-zed_actions.workspace = true
+ed_actions.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
 

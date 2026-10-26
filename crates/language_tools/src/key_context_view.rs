@@ -36,7 +36,7 @@ use ui::v_flex;
 use workspace::Item;
 use workspace::SplitDirection;
 use workspace::Workspace;
-use zed_actions::dev::OpenKeyContextView;
+use ed_actions::dev::OpenKeyContextView;
 
 pub fn init(cx: &App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {

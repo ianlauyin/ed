@@ -18,7 +18,7 @@ pub use typed_envelope::*;
 
 mod generated {
     #![allow(clippy::missing_const_for_fn)]
-    include!(concat!(env!("OUT_DIR"), "/zed.messages.rs"));
+    include!(concat!(env!("OUT_DIR"), "/ed.messages.rs"));
 }
 pub use generated::*;
 

@@ -23,7 +23,7 @@ use ui::Styled as _;
 use ui::Window;
 use ui::h_flex;
 use ui::v_flex;
-use zed_actions::workspace::OpenWithSystem;
+use ed_actions::workspace::OpenWithSystem;
 
 use crate::Item;
 

@@ -248,7 +248,7 @@ pub use workspace_settings::RestoreOnStartupBehavior;
 pub use workspace_settings::StatusBarSettings;
 pub use workspace_settings::TabBarSettings;
 pub use workspace_settings::WorkspaceSettings;
-use zed_actions::theme::ToggleMode;
+use ed_actions::theme::ToggleMode;
 
 use crate::item::ItemBufferKind;
 use crate::notifications::NotificationId;
@@ -393,11 +393,11 @@ fn render_window_title_format(template: &str, separator: &str, context: &WindowT
     segments.join(separator)
 }
 
-static ZED_WINDOW_SIZE: LazyLock<Option<Size<Pixels>>> =
-    LazyLock::new(|| env::var("ZED_WINDOW_SIZE").ok().as_deref().and_then(parse_pixel_size_env_var));
+static ED_WINDOW_SIZE: LazyLock<Option<Size<Pixels>>> =
+    LazyLock::new(|| env::var("ED_WINDOW_SIZE").ok().as_deref().and_then(parse_pixel_size_env_var));
 
-static ZED_WINDOW_POSITION: LazyLock<Option<Point<Pixels>>> =
-    LazyLock::new(|| env::var("ZED_WINDOW_POSITION").ok().as_deref().and_then(parse_pixel_position_env_var));
+static ED_WINDOW_POSITION: LazyLock<Option<Point<Pixels>>> =
+    LazyLock::new(|| env::var("ED_WINDOW_POSITION").ok().as_deref().and_then(parse_pixel_position_env_var));
 
 pub trait TerminalProvider {
     fn spawn(&self, task: SpawnInTerminal, window: &mut Window, cx: &mut App) -> Task<Option<Result<ExitStatus>>>;
@@ -6280,7 +6280,7 @@ fn project_window_title(project: &Project, cx: &App) -> String {
 }
 
 fn window_bounds_env_override() -> Option<Bounds<Pixels>> {
-    ZED_WINDOW_POSITION.zip(*ZED_WINDOW_SIZE).map(|(position, size)| Bounds { origin: position, size })
+    ED_WINDOW_POSITION.zip(*ED_WINDOW_SIZE).map(|(position, size)| Bounds { origin: position, size })
 }
 
 #[allow(clippy::type_complexity)]
@@ -7062,9 +7062,9 @@ fn restore_native_window_state(
 actions!(
     ed,
     [
-        /// Opens the Zed log file.
+        /// Opens the ed log file.
         OpenLog,
-        /// Reveals the Zed log file in the system file manager.
+        /// Reveals the ed log file in the system file manager.
         RevealLogInFileManager
     ]
 );
@@ -7115,7 +7115,7 @@ pub async fn get_any_active_multi_workspace(
         cx.update(|cx| Workspace::new_local(vec![], app_state.clone(), None, None, None, OpenMode::Activate, cx))
             .await?;
     }
-    activate_any_workspace_window(&mut cx).context("could not open zed")
+    activate_any_workspace_window(&mut cx).context("could not open ed")
 }
 
 pub fn activate_any_workspace_window(cx: &mut AsyncApp) -> Option<WindowHandle<MultiWorkspace>> {

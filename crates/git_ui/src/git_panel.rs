@@ -157,12 +157,12 @@ use workspace::dock::Panel;
 use workspace::dock::PanelEvent;
 use workspace::notifications::DetachAndPromptErr;
 use workspace::notifications::NotifyTaskExt;
-use zed_actions::DecreaseBufferFontSize;
-use zed_actions::IncreaseBufferFontSize;
-use zed_actions::ResetBufferFontSize;
-use zed_actions::git_panel::ToggleFocus;
-use zed_actions::workspace::CopyPath;
-use zed_actions::workspace::CopyRelativePath;
+use ed_actions::DecreaseBufferFontSize;
+use ed_actions::IncreaseBufferFontSize;
+use ed_actions::ResetBufferFontSize;
+use ed_actions::git_panel::ToggleFocus;
+use ed_actions::workspace::CopyPath;
+use ed_actions::workspace::CopyRelativePath;
 
 use crate::branch_picker;
 use crate::commit_tooltip::CommitTooltip;
@@ -373,7 +373,7 @@ fn git_panel_context_menu(
                 context_menu.action_disabled_when(!has_staged_changes, "Stash Staged", StashStaged.boxed_clone())
             })
             .action_disabled_when(!has_stash_items, "Stash Pop", StashPop.boxed_clone())
-            .action("View Stash", zed_actions::git::ViewStash.boxed_clone())
+            .action("View Stash", ed_actions::git::ViewStash.boxed_clone())
             .when(include_copy_paths, |context_menu| {
                 context_menu
                     .separator()
@@ -5188,10 +5188,10 @@ impl GitPanel {
                                         .h_full()
                                         .flex_grow_1()
                                         .cursor_text()
-                                        .on_action(|&zed_actions::editor::MoveUp, _, cx| {
+                                        .on_action(|&ed_actions::editor::MoveUp, _, cx| {
                                             cx.stop_propagation();
                                         })
-                                        .on_action(|&zed_actions::editor::MoveDown, _, cx| {
+                                        .on_action(|&ed_actions::editor::MoveDown, _, cx| {
                                             cx.stop_propagation();
                                         })
                                         .child(EditorElement::new(&self.commit_editor, panel_editor_style)),
@@ -6888,7 +6888,7 @@ impl RenderOnce for PanelRepoFooter {
             .label_size(LabelSize::Small)
             .truncate(true)
             .on_click(|_, window, cx| {
-                window.dispatch_action(zed_actions::git::Switch.boxed_clone(), cx);
+                window.dispatch_action(ed_actions::git::Switch.boxed_clone(), cx);
             });
 
         let branch_selector = PopoverMenu::new("popover-button")
@@ -6899,7 +6899,7 @@ impl RenderOnce for PanelRepoFooter {
             })
             .trigger_with_tooltip(
                 branch_selector_button,
-                Tooltip::for_action_title("Switch Branch", &zed_actions::git::Switch),
+                Tooltip::for_action_title("Switch Branch", &ed_actions::git::Switch),
             )
             .anchor(Anchor::BottomLeft)
             .offset(gpui::Point { x: px(0.0), y: px(-2.0) });

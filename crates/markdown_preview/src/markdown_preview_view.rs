@@ -98,9 +98,9 @@ use workspace::searchable::SearchOptions;
 use workspace::searchable::SearchToken;
 use workspace::searchable::SearchableItem;
 use workspace::searchable::SearchableItemHandle;
-use zed_actions::DecreaseBufferFontSize;
-use zed_actions::IncreaseBufferFontSize;
-use zed_actions::ResetBufferFontSize;
+use ed_actions::DecreaseBufferFontSize;
+use ed_actions::IncreaseBufferFontSize;
+use ed_actions::ResetBufferFontSize;
 
 use crate::CloseAndReturnToEditor;
 use crate::OpenFollowingPreview;

@@ -6,7 +6,7 @@ use gpui::actions;
 use serde::Deserialize;
 use serde::Serialize;
 
-// If the zed binary doesn't use anything in this crate, it will be optimized away
+// If the ed binary doesn't use anything in this crate, it will be optimized away
 // and the actions won't initialize. So we just provide an empty initialization function
 // to be called from main.
 //
@@ -28,7 +28,7 @@ actions!(
     [
         /// Quits the application.
         Quit,
-        /// Shows information about Zed.
+        /// Shows information about ed.
         About,
     ]
 );
@@ -161,7 +161,7 @@ pub enum NewWorktreeBranchTarget {
 #[action(namespace = git)]
 #[serde(deny_unknown_fields)]
 pub struct CreateWorktree {
-    /// When this is None, Zed will randomly generate a worktree name.
+    /// When this is None, ed will randomly generate a worktree name.
     pub worktree_name: Option<String>,
     pub branch_target: NewWorktreeBranchTarget,
 }

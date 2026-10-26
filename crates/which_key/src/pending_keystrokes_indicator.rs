@@ -255,7 +255,7 @@ impl Render for PendingKeystrokesIndicator {
 
         let button = ButtonLike::new("pending-keystrokes-indicator")
             .on_click(|_, window, cx| {
-                window.dispatch_action(zed_actions::dev::OpenKeyContextView.boxed_clone(), cx);
+                window.dispatch_action(ed_actions::dev::OpenKeyContextView.boxed_clone(), cx);
             })
             .when_some(render_state.timeout.as_ref(), |button, timeout| {
                 let remaining_fraction = if timeout.timeout_duration.is_zero() {

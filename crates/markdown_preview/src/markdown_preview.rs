@@ -7,8 +7,8 @@ mod markdown_preview_style;
 pub mod markdown_preview_view;
 mod mermaid_diagrams;
 
-pub use zed_actions::preview::markdown::OpenPreview;
-pub use zed_actions::preview::markdown::OpenPreviewToTheSide;
+pub use ed_actions::preview::markdown::OpenPreview;
+pub use ed_actions::preview::markdown::OpenPreviewToTheSide;
 
 use crate::markdown_preview_view::MarkdownPreviewView;
 

@@ -1228,10 +1228,10 @@ impl Render for CommitViewToolbar {
                 IconButton::new("buffer-search", IconName::MagnifyingGlass)
                     .icon_size(IconSize::Small)
                     .tooltip(move |_, cx| {
-                        Tooltip::for_action("Buffer Search", &zed_actions::buffer_search::Deploy::find(), cx)
+                        Tooltip::for_action("Buffer Search", &ed_actions::buffer_search::Deploy::find(), cx)
                     })
                     .on_click(|_, window, cx| {
-                        window.dispatch_action(Box::new(zed_actions::buffer_search::Deploy::find()), cx);
+                        window.dispatch_action(Box::new(ed_actions::buffer_search::Deploy::find()), cx);
                     }),
             )
             .when(!is_stash, |this| {

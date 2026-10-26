@@ -94,8 +94,8 @@ impl MoveToApplicationsRequest {
         let response = cx
             .prompt(
                 PromptLevel::Info,
-                "Move Zed to Applications?",
-                Some("Zed is running from a temporary location. Move it to Applications to finish installing it."),
+                "Move ed to Applications?",
+                Some("ed is running from a temporary location. Move it to Applications to finish installing it."),
                 &[PromptButton::ok("Yes"), PromptButton::cancel("No"), PromptButton::new("Don't ask me again")],
             )
             .await?;
@@ -117,7 +117,7 @@ impl MoveToApplicationsRequest {
                         .ok();
                     cx.prompt(
                         PromptLevel::Critical,
-                        "Failed to move Zed to Applications",
+                        "Failed to move ed to Applications",
                         Some(&error.to_string()),
                         &["OK"],
                     )
@@ -184,7 +184,7 @@ impl Render for InstallingZedModal {
                     .py_3()
                     .border_b_1()
                     .border_color(theme.colors().border_variant)
-                    .child(Label::new("Installing Zed…")),
+                    .child(Label::new("Installing ed…")),
             )
             .child(
                 h_flex()
@@ -200,8 +200,8 @@ impl Render for InstallingZedModal {
                             .with_rotate_animation(3),
                     )
                     .child(
-                        v_flex().gap_1().child(Label::new("Moving Zed to Applications")).child(
-                            Label::new("Zed will reopen when installation is complete.")
+                        v_flex().gap_1().child(Label::new("Moving ed to Applications")).child(
+                            Label::new("ed will reopen when installation is complete.")
                                 .size(LabelSize::Small)
                                 .color(Color::Muted),
                         ),

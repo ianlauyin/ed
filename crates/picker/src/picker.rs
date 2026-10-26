@@ -45,8 +45,8 @@ use ui::prelude::*;
 use ui_input::ErasedEditorEvent;
 use util::ResultExt;
 use workspace::ModalView;
-use zed_actions::editor::MoveDown;
-use zed_actions::editor::MoveUp;
+use ed_actions::editor::MoveDown;
+use ed_actions::editor::MoveUp;
 
 mod footer;
 mod head;

@@ -1,6 +1,6 @@
 #![allow(rustdoc::private_intra_doc_links)]
 //! This is the place where everything editor-related is stored (data-wise) and displayed (ui-wise).
-//! The main point of interest in this crate is [`Editor`] type, which is used in every other Zed part as a user input element.
+//! The main point of interest in this crate is [`Editor`] type, which is used in every other ed part as a user input element.
 //! It comes in different flavors: single line, multiline and a fixed height one.
 //!
 //! Editor contains of multiple large submodules:
@@ -667,9 +667,9 @@ use workspace::notifications::NotifyTaskExt;
 pub use workspace::searchable::Direction;
 use workspace::searchable::SearchEvent;
 use workspace::searchable::SelectSearchOptions;
-use zed_actions::editor::MoveDown;
-use zed_actions::editor::MoveUp;
-pub use zed_actions::editor::RevealInFileManager;
+use ed_actions::editor::MoveDown;
+use ed_actions::editor::MoveUp;
+pub use ed_actions::editor::RevealInFileManager;
 
 use crate::code_context_menus::CompletionsMenuSource;
 use crate::editor_settings::MultiCursorModifier;
@@ -1242,7 +1242,7 @@ struct SettledScrollRange {
     editor_bounds_size: Size<Pixels>,
 }
 
-/// Zed's primary implementation of text input, allowing users to edit a [`MultiBuffer`].
+/// ed's primary implementation of text input, allowing users to edit a [`MultiBuffer`].
 ///
 /// See the [module level documentation](self) for more information.
 pub struct Editor {
@@ -2623,7 +2623,7 @@ impl Editor {
             cx,
             |e, _, _| match e.error_code() {
                 ErrorCode::RemoteUpgradeRequired => Some(format!(
-                    "The remote instance of Zed does not support this yet. It must be upgraded to {}",
+                    "The remote instance of ed does not support this yet. It must be upgraded to {}",
                     e.error_tag("required").unwrap_or("the latest version")
                 )),
                 _ => None,
@@ -2699,7 +2699,7 @@ impl Editor {
         })
         .detach_and_prompt_err("Failed to create buffer", window, cx, |e, _, _| match e.error_code() {
             ErrorCode::RemoteUpgradeRequired => Some(format!(
-                "The remote instance of Zed does not support this yet. It must be upgraded to {}",
+                "The remote instance of ed does not support this yet. It must be upgraded to {}",
                 e.error_tag("required").unwrap_or("the latest version")
             )),
             _ => None,
@@ -6821,7 +6821,7 @@ impl Editor {
         }
     }
 
-    fn copy_path(&mut self, _: &zed_actions::workspace::CopyPath, _window: &mut Window, cx: &mut Context<Self>) {
+    fn copy_path(&mut self, _: &ed_actions::workspace::CopyPath, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(path) = self.target_file_abs_path(cx)
             && let Some(path) = path.to_str()
         {
@@ -6833,7 +6833,7 @@ impl Editor {
 
     fn copy_relative_path(
         &mut self,
-        _: &zed_actions::workspace::CopyRelativePath,
+        _: &ed_actions::workspace::CopyRelativePath,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {

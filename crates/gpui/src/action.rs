@@ -24,7 +24,7 @@ use serde_json::json;
 ///
 /// This will create actions with names like `editor::MoveUp`, `editor::MoveDown`, etc.
 ///
-/// The namespace argument `editor` can also be omitted, though it is required for Zed actions.
+/// The namespace argument `editor` can also be omitted, though it is required for ed actions.
 #[macro_export]
 macro_rules! actions {
     ($namespace:path, [ $( $(#[$attr:meta])* $name:ident),* $(,)? ]) => {
@@ -72,11 +72,11 @@ macro_rules! actions {
 ///
 /// The derive macro for `Action` requires that the type implement `Clone` and `PartialEq`. It also
 /// requires `serde::Deserialize` unless `#[action(no_json)]` is
-/// specified. In Zed these trait impls are used to load keymaps from JSON.
+/// specified. In ed these trait impls are used to load keymaps from JSON.
 ///
 /// Multiple arguments separated by commas may be specified in `#[action(...)]`:
 ///
-/// - `namespace = some_namespace` sets the namespace. In Zed this is required.
+/// - `namespace = some_namespace` sets the namespace. In ed this is required.
 ///
 /// - `name = "ActionName"` overrides the action's name. This must not contain `::`.
 ///
@@ -178,7 +178,7 @@ impl dyn Action {
     }
 }
 
-/// Error type for `Keystroke::parse`. This is used instead of `anyhow::Error` so that Zed can use
+/// Error type for `Keystroke::parse`. This is used instead of `anyhow::Error` so that ed can use
 /// markdown to display it.
 #[derive(Debug)]
 pub enum ActionBuildError {

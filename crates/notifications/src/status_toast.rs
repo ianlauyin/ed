@@ -10,7 +10,7 @@ use ui::Tooltip;
 use ui::prelude::*;
 use workspace::ToastAction;
 use workspace::ToastView;
-use zed_actions::toast;
+use ed_actions::toast;
 
 #[derive(RegisterComponent)]
 pub struct StatusToast {

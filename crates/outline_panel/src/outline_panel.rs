@@ -1656,8 +1656,8 @@ impl OutlinePanel {
                 .when(is_unfoldable, |menu| menu.action("Unfold Directory", Box::new(UnfoldDirectory)))
                 .when(is_foldable, |menu| menu.action("Fold Directory", Box::new(FoldDirectory)))
                 .separator()
-                .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
-                .action("Copy Relative Path", Box::new(zed_actions::workspace::CopyRelativePath))
+                .action("Copy Path", Box::new(ed_actions::workspace::CopyPath))
+                .action("Copy Relative Path", Box::new(ed_actions::workspace::CopyRelativePath))
         });
         window.focus(&context_menu.focus_handle(cx), cx);
         let subscription = cx.subscribe(&context_menu, |outline_panel, _, _: &DismissEvent, cx| {
@@ -2027,7 +2027,7 @@ impl OutlinePanel {
         })
     }
 
-    fn copy_path(&mut self, _: &zed_actions::workspace::CopyPath, _: &mut Window, cx: &mut Context<Self>) {
+    fn copy_path(&mut self, _: &ed_actions::workspace::CopyPath, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(clipboard_text) =
             self.selected_entry().and_then(|entry| self.abs_path(entry, cx)).map(|p| p.to_string_lossy().into_owned())
         {
@@ -2037,7 +2037,7 @@ impl OutlinePanel {
 
     fn copy_relative_path(
         &mut self,
-        _: &zed_actions::workspace::CopyRelativePath,
+        _: &ed_actions::workspace::CopyRelativePath,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {

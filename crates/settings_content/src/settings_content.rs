@@ -166,7 +166,7 @@ pub struct SettingsContent {
     /// Configuration for session-related features
     pub session: Option<SessionSettingsContent>,
 
-    /// Configuration of the terminal in Zed.
+    /// Configuration of the terminal in ed.
     pub terminal: Option<TerminalSettingsContent>,
 
     pub title_bar: Option<TitleBarSettingsContent>,
@@ -349,7 +349,7 @@ pub struct FileFinderSettingsContent {
     /// Default: true
     pub skip_focus_for_active_in_search: Option<bool>,
     /// Whether to use gitignored files when searching.
-    /// Only the file Zed had indexed will be used, not necessary all the gitignored files.
+    /// Only the file ed had indexed will be used, not necessary all the gitignored files.
     ///
     /// Default: Smart
     pub include_ignored: Option<IncludeIgnoredContent>,
@@ -367,7 +367,7 @@ pub struct FileFinderSettingsContent {
 pub enum IncludeIgnoredContent {
     /// Use all gitignored files
     All,
-    /// Use only the files Zed had indexed
+    /// Use only the files ed had indexed
     Indexed,
     /// Be smart and search for ignored when called from a gitignored worktree
     #[default]

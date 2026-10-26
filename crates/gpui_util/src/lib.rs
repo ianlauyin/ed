@@ -31,12 +31,12 @@ pub fn post_inc<T: From<u8> + AddAssign<T> + Copy>(value: &mut T) -> T {
 }
 
 pub fn measure<R>(label: &str, f: impl FnOnce() -> R) -> R {
-    static ZED_MEASUREMENTS: OnceLock<bool> = OnceLock::new();
-    let zed_measurements = ZED_MEASUREMENTS.get_or_init(|| {
-        env::var("ZED_MEASUREMENTS").map(|measurements| measurements == "1" || measurements == "true").unwrap_or(false)
+    static ED_MEASUREMENTS: OnceLock<bool> = OnceLock::new();
+    let ed_measurements = ED_MEASUREMENTS.get_or_init(|| {
+        env::var("ED_MEASUREMENTS").map(|measurements| measurements == "1" || measurements == "true").unwrap_or(false)
     });
 
-    if *zed_measurements {
+    if *ed_measurements {
         let start = Instant::now();
         let result = f();
         let elapsed = start.elapsed();

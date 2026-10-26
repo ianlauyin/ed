@@ -19,11 +19,11 @@ use util::paths::PathMatcher;
 use workspace::Toast;
 use workspace::Workspace;
 use workspace::notifications::NotificationId;
-pub use zed_actions::search::FocusSearch;
-pub use zed_actions::search::SelectNextMatch;
-pub use zed_actions::search::SelectPreviousMatch;
-pub use zed_actions::search::ToggleCaseSensitive;
-pub use zed_actions::search::ToggleIncludeIgnored;
+pub use ed_actions::search::FocusSearch;
+pub use ed_actions::search::SelectNextMatch;
+pub use ed_actions::search::SelectPreviousMatch;
+pub use ed_actions::search::ToggleCaseSensitive;
+pub use ed_actions::search::ToggleIncludeIgnored;
 
 use crate::project_search::ProjectSearchBar;
 

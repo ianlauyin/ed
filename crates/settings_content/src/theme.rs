@@ -165,7 +165,7 @@ pub struct ThemeSettingsContent {
     /// The name of a font to use for rendering Mermaid diagrams in the
     /// markdown preview. Falls back to the UI font if unset.
     pub mermaid_font_family: Option<FontFamilyName>,
-    /// The name of the Zed theme to use.
+    /// The name of the ed theme to use.
     pub theme: Option<ThemeSelection>,
 
     /// UNSTABLE: Expect many elements to be broken.

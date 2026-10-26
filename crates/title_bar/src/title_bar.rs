@@ -45,7 +45,7 @@ use util::ResultExt;
 use workspace::MultiWorkspace;
 use workspace::ToggleWorktreeSecurity;
 use workspace::Workspace;
-use zed_actions::OpenRemote;
+use ed_actions::OpenRemote;
 
 use crate::application_menu::ApplicationMenu;
 
@@ -211,7 +211,7 @@ impl TitleBar {
         let project = workspace.project().clone();
         let git_store = project.read(cx).git_store().clone();
 
-        let application_menu = if option_env!("ZED_USE_CROSS_PLATFORM_MENU").is_some() {
+        let application_menu = if option_env!("ED_USE_CROSS_PLATFORM_MENU").is_some() {
             Some(cx.new(|cx| ApplicationMenu::new(window, cx)))
         } else {
             None
@@ -496,7 +496,7 @@ impl TitleBar {
                     })
                     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                     .when(!is_project_selected, |s| s.color(Color::Muted)),
-                move |_window, cx| Tooltip::for_action("Recent Projects", &zed_actions::OpenRecent::default(), cx),
+                move |_window, cx| Tooltip::for_action("Recent Projects", &ed_actions::OpenRecent::default(), cx),
             )
             .anchor(gpui::Anchor::TopLeft)
             .into_any_element()
@@ -540,7 +540,7 @@ impl TitleBar {
                     })
                     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                     .when(!is_project_selected, |s| s.color(Color::Muted)),
-                move |_window, cx| Tooltip::for_action("Recent Projects", &zed_actions::OpenRecent::default(), cx),
+                move |_window, cx| Tooltip::for_action("Recent Projects", &ed_actions::OpenRecent::default(), cx),
             )
             .anchor(gpui::Anchor::TopLeft)
     }
@@ -628,7 +628,7 @@ impl TitleBar {
                     move |_window, cx| {
                         Tooltip::with_meta(
                             "Worktree",
-                            Some(&zed_actions::git::Worktree),
+                            Some(&ed_actions::git::Worktree),
                             format!("Currently In Use: {}", worktree_label),
                             cx,
                         )
@@ -673,7 +673,7 @@ impl TitleBar {
                         } else {
                             format!("Currently Checked Out: {}", branch_tooltip_label)
                         };
-                        Tooltip::with_meta("Branch & Stash", Some(&zed_actions::git::Branch), meta, cx)
+                        Tooltip::with_meta("Branch & Stash", Some(&ed_actions::git::Branch), meta, cx)
                     })
                     .anchor(gpui::Anchor::TopLeft)
             })

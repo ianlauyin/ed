@@ -10,8 +10,8 @@ use gpui::Subscription;
 use gpui::Window;
 use gpui::prelude::FluentBuilder;
 use workspace::OpenInTerminal;
-use zed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
-use zed_actions::preview::svg::OpenPreview as OpenSvgPreview;
+use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
+use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 
 use crate::Copy;
 use crate::CopyAndTrim;
@@ -222,8 +222,8 @@ pub fn deploy_context_menu(
                 .action("Go to Type Definition", Box::new(GoToTypeDefinition::default()))
                 .action("Go to Implementation", Box::new(GoToImplementation::default()))
                 .action("Find All References", Box::new(FindAllReferences::default()))
-                .action("Show Incoming Calls", Box::new(zed_actions::ShowIncomingCalls))
-                .action("Show Outgoing Calls", Box::new(zed_actions::ShowOutgoingCalls))
+                .action("Show Incoming Calls", Box::new(ed_actions::ShowIncomingCalls))
+                .action("Show Outgoing Calls", Box::new(ed_actions::ShowOutgoingCalls))
                 .separator()
                 .action("Rename Symbol", Box::new(Rename))
                 .action("Format Buffer", Box::new(Format))

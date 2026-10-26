@@ -15,7 +15,7 @@ pub enum IsOnlyInstance {
 
 /// Takes an exclusive `flock` on `<state_dir>/ed.lock`. The lock lives under
 /// this app's own XDG state directory, so it is per user and never collides
-/// with an upstream Zed instance.
+/// with an upstream ed instance.
 pub fn ensure_only_instance() -> IsOnlyInstance {
     let path = paths::state_dir().join(format!("{}.lock", paths::APP_NAME));
     let file = match fs::create_dir_all(paths::state_dir())

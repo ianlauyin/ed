@@ -98,12 +98,12 @@ pub struct LanguageConfig {
     /// A list of additional regex patterns that should be treated as prefixes
     /// for creating boundaries during rewrapping, ensuring content from one
     /// prefixed section doesn't merge with another (e.g., markdown list items).
-    /// By default, Zed treats as paragraph and comment prefixes as boundaries.
+    /// By default, ed treats as paragraph and comment prefixes as boundaries.
     #[serde(default, deserialize_with = "deserialize_regex_vec")]
     pub rewrap_prefixes: Vec<Regex>,
     #[serde(default)]
     pub overrides: HashMap<String, LanguageConfigOverride>,
-    /// A list of characters that Zed should treat as word characters for the
+    /// A list of characters that ed should treat as word characters for the
     /// purpose of features that operate on word boundaries, like 'move to next word end'
     /// or a whole-word search in buffer search.
     #[serde(default)]
@@ -128,10 +128,10 @@ pub struct LanguageConfig {
     /// If configured, this language contains JSX style tags, and should support auto-closing of those tags.
     #[serde(default)]
     pub jsx_tag_auto_close: Option<JsxTagAutoCloseConfig>,
-    /// A list of characters that Zed should treat as word characters for completion queries.
+    /// A list of characters that ed should treat as word characters for completion queries.
     #[serde(default)]
     pub completion_query_characters: HashSet<char>,
-    /// A list of characters that Zed should treat as word characters for linked edit operations.
+    /// A list of characters that ed should treat as word characters for linked edit operations.
     #[serde(default)]
     pub linked_edit_characters: HashSet<char>,
 }

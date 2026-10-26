@@ -99,9 +99,9 @@ use workspace::workspace_error::ErrorAction;
 use workspace::workspace_error::ErrorSeverity;
 #[cfg(debug_assertions)]
 use workspace::workspace_error::WorkspaceError;
-use zed_actions::About;
-use zed_actions::OpenBrowser;
-use zed_actions::Quit;
+use ed_actions::About;
+use ed_actions::OpenBrowser;
+use ed_actions::Quit;
 
 actions!(
     ed,
@@ -140,7 +140,7 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
     cx.on_action(quit);
 
-    // When Zed logs to stdout rather than the log file, avoid registering
+    // When ed logs to stdout rather than the log file, avoid registering
     // handlers for both `OpenLog` and `RevealLogInFileManager`, as the log file
     // does not exist in that scenario and these actions would error.
     if !crate::stdout_is_a_pty() {
@@ -163,7 +163,7 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
     let display =
         display_uuid.and_then(|uuid| cx.displays().into_iter().find(|display| display.uuid().ok() == Some(uuid)));
     let app_id = settings_content::app_metadata::APP_ID;
-    let window_decorations = match std::env::var("ZED_WINDOW_DECORATIONS") {
+    let window_decorations = match std::env::var("ED_WINDOW_DECORATIONS") {
         Ok(val) if val == "server" => gpui::WindowDecorations::Server,
         Ok(val) if val == "client" => gpui::WindowDecorations::Client,
         _ => match WorkspaceSettings::get_global(cx).window_decorations {
@@ -183,7 +183,7 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
         show: false,
         kind: WindowKind::Normal,
         is_movable: true,
-        // Zed draws its own titlebar and moves the window via [`Window::start_window_move`],
+        // ed draws its own titlebar and moves the window via [`Window::start_window_move`],
         // so on macOS AppKit should not own titlebar dragging. This avoids the titlebar
         // click delay from AppKit's drag disambiguation (first observed on macOS 27) while
         // keeping the window movable and the Window-menu tiling items enabled. No-op on
@@ -386,7 +386,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
                 cx,
             );
         })
-        .register_action(|workspace, action: &zed_actions::OpenRemote, window, cx| {
+        .register_action(|workspace, action: &ed_actions::OpenRemote, window, cx| {
             if !action.from_existing_connection {
                 cx.propagate();
                 return;
@@ -422,7 +422,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::IncreaseUiFontSize, _window, cx| {
+            move |_, action: &ed_actions::IncreaseUiFontSize, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, cx| {
                         let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx) + px(1.0);
@@ -438,7 +438,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::DecreaseUiFontSize, _window, cx| {
+            move |_, action: &ed_actions::DecreaseUiFontSize, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, cx| {
                         let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx) - px(1.0);
@@ -454,7 +454,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::ResetUiFontSize, _window, cx| {
+            move |_, action: &ed_actions::ResetUiFontSize, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, _| {
                         settings.theme.ui_font_size = None;
@@ -466,7 +466,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::IncreaseBufferFontSize, _window, cx| {
+            move |_, action: &ed_actions::IncreaseBufferFontSize, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, cx| {
                         let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size(cx) + px(1.0);
@@ -482,7 +482,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::DecreaseBufferFontSize, _window, cx| {
+            move |_, action: &ed_actions::DecreaseBufferFontSize, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, cx| {
                         let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size(cx) - px(1.0);
@@ -498,7 +498,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::ResetBufferFontSize, _window, cx| {
+            move |_, action: &ed_actions::ResetBufferFontSize, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, _| {
                         settings.theme.buffer_font_size = None;
@@ -510,7 +510,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             let fs = app_state.fs.clone();
-            move |_, action: &zed_actions::ResetAllZoom, _window, cx| {
+            move |_, action: &ed_actions::ResetAllZoom, _window, cx| {
                 if action.persist {
                     update_settings_file(fs.clone(), cx, move |settings, _| {
                         settings.theme.ui_font_size = None;
@@ -524,7 +524,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action(
             |workspace: &mut Workspace,
-             _: &zed_actions::project_panel::ToggleFocus,
+             _: &ed_actions::project_panel::ToggleFocus,
              window: &mut Window,
              cx: &mut Context<Workspace>| {
                 workspace.toggle_panel_focus::<ProjectPanel>(window, cx);

@@ -9,7 +9,7 @@ Metal, so the OS sees no UI structure; the app reports what it painted itself.
 - `crates/control` holds the protocol (newline-delimited JSON over a Unix
   socket, one response per request) and the `edctl` binary. It has no GPUI
   dependency, so any agent or shell script can drive the app.
-- The server lives in the app (`zed::control_server`). It only runs when the
+- The server lives in the app (`ed::control_server`). It only runs when the
   app starts with `ED_CONTROL` (socket `$TMPDIR/ed-control-<pid>.sock`) or
   `ED_CONTROL_SOCKET=<path>`; otherwise nothing is recorded or opened.
 

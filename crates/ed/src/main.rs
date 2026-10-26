@@ -1,4 +1,4 @@
-mod zed;
+mod ed;
 
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
 // at runtime (data dir, config dir, etc.) match what the binary is called.
@@ -59,14 +59,14 @@ use workspace::WorkspaceSettings;
 use workspace::WorkspaceStore;
 use workspace::notifications::NotificationId;
 use workspace::restore_multiworkspace;
-use zed::OpenListener;
-use zed::OpenRequest;
-use zed::RawOpenRequest;
-use zed::build_window_options;
-use zed::derive_paths_with_position;
-use zed::initialize_keymap;
-use zed::initialize_workspace;
-use zed::open_paths_with_positions;
+use ed::OpenListener;
+use ed::OpenRequest;
+use ed::RawOpenRequest;
+use ed::build_window_options;
+use ed::derive_paths_with_position;
+use ed::initialize_keymap;
+use ed::initialize_workspace;
+use ed::open_paths_with_positions;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -139,7 +139,7 @@ fn main() {
 
     let args = Args::parse();
 
-    // `zed --printenv` Outputs environment variables as JSON to stdout
+    // `ed --printenv` Outputs environment variables as JSON to stdout
     if args.printenv {
         util::shell_env::print_env();
         return;
@@ -194,8 +194,8 @@ fn main() {
         false
     } else {
         {
-            use zed::mac_only_instance::IsOnlyInstance;
-            use zed::mac_only_instance::ensure_only_instance;
+            use ed::mac_only_instance::IsOnlyInstance;
+            use ed::mac_only_instance::ensure_only_instance;
             ensure_only_instance() != IsOnlyInstance::Yes
         }
     };
@@ -241,7 +241,7 @@ fn main() {
         };
         trusted_worktrees::init(db_trusted_paths, cx);
         menu::init();
-        zed_actions::init();
+        ed_actions::init();
 
         settings::init(cx);
         zlog_settings::init(cx);
@@ -258,9 +258,9 @@ fn main() {
 
         let workspace_store = cx.new(WorkspaceStore::new);
 
-        zed::init(cx);
+        ed::init(cx);
 
-        zed::move_to_applications::init(cx);
+        ed::move_to_applications::init(cx);
 
         let session = cx.foreground_executor().block_on(session);
 
@@ -349,7 +349,7 @@ fn main() {
         watch_languages(app_state.fs.clone(), app_state.languages.clone(), cx);
 
         initialize_workspace(app_state.clone(), cx);
-        zed::control_server::init(cx);
+        ed::control_server::init(cx);
 
         cx.activate(true);
 
@@ -413,7 +413,7 @@ fn main() {
             let _first_window_subscription = _first_window_subscription;
             let first_window_placed = first_window_rx.shared();
             while let Some(urls) = open_rx.next().await {
-                // On a macOS cold launch, `zed <path>` arrives here after startup already
+                // On a macOS cold launch, `ed <path>` arrives here after startup already
                 // began restoring the session, so wait for a restored window to exist before
                 // matching. Otherwise this open sees no windows and spawns a redundant one (#61346).
                 futures::select_biased! {
@@ -433,7 +433,7 @@ fn main() {
 
 fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &App) {
     if let Some(connection_options) = request.remote_connection {
-        let base_open_options = zed::open_options_for_request(cx);
+        let base_open_options = ed::open_options_for_request(cx);
         cx.spawn(async move |cx| {
             let paths: Vec<PathBuf> = request.open_paths.into_iter().map(PathBuf::from).collect();
             open_remote_project(connection_options, paths, app_state, base_open_options, cx).await
@@ -444,7 +444,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &App)
 
     let mut task = None;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
-        let base_open_options = zed::open_options_for_request(cx);
+        let base_open_options = ed::open_options_for_request(cx);
         task = Some(cx.spawn(async move |cx| {
             let paths_with_position = derive_paths_with_position(app_state.fs.as_ref(), request.open_paths).await;
             let (_window, results) = open_paths_with_positions(
@@ -558,7 +558,7 @@ pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &m
         // If the user cancelled a failed remote connection at startup,
         // open_remote_project returns Ok but removes the window, so error_count
         // stays 0 and the toast fallback above does not trigger. Without this
-        // check, Zed would exit silently.
+        // check, ed would exit silently.
         if cx.update(|cx| cx.windows().is_empty()) {
             cx.update(|cx| {
                 workspace::open_new(
@@ -692,7 +692,7 @@ fn stdout_is_a_pty() -> bool {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "zed", disable_version_flag = true, max_term_width = 100)]
+#[command(name = "ed", disable_version_flag = true, max_term_width = 100)]
 struct Args {
     /// A sequence of space-separated paths or urls that you want to open.
     ///
@@ -714,7 +714,7 @@ struct Args {
     #[arg(long, value_name = "DIR", verbatim_doc_comment)]
     user_data_dir: Option<String>,
 
-    /// Instructs zed to run as a dev server on this machine. (not implemented)
+    /// Instructs ed to run as a dev server on this machine. (not implemented)
     #[arg(long)]
     dev_server_token: Option<String>,
 

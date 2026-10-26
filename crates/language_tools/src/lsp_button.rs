@@ -1212,7 +1212,7 @@ impl Render for LspButton {
                 .anchor(Anchor::BottomLeft)
                 .with_handle(self.popover_menu_handle.clone())
                 .trigger_with_tooltip(
-                    IconButton::new("zed-lsp-tool-button", IconName::BoltOutlined)
+                    IconButton::new("ed-lsp-tool-button", IconName::BoltOutlined)
                         .when_some(indicator, IconButton::indicator)
                         .icon_size(IconSize::Small)
                         .tab_index(0isize)

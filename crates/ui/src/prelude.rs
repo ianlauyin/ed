@@ -1,4 +1,4 @@
-//! The prelude of this crate. When building UI in Zed you almost always want to import this.
+//! The prelude of this crate. When building UI in ed you almost always want to import this.
 
 pub use component::Component;
 pub use component::ComponentScope;

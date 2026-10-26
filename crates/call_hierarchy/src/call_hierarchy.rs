@@ -58,9 +58,9 @@ use util::paths::PathExt;
 use workspace::DismissDecision;
 use workspace::ModalView;
 use workspace::Workspace;
-pub use zed_actions::ShowIncomingCalls;
-pub use zed_actions::ShowOutgoingCalls;
-pub use zed_actions::ToggleDirection;
+pub use ed_actions::ShowIncomingCalls;
+pub use ed_actions::ShowOutgoingCalls;
+pub use ed_actions::ToggleDirection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CallHierarchyMode {

@@ -92,6 +92,6 @@ upstream change depends on them or the need changes.
    warning-free; prefer `&Window`/`&Context` when clippy flags an unused `mut`.
 5. Dependency bumps: `cargo update -p <crate> --precise <version>` per crate,
    then revert any unrelated transitive reselections Cargo makes in
-   `Cargo.lock` and confirm with `cargo check --locked -p zed`.
+   `Cargo.lock` and confirm with `cargo check --locked -p ed`.
 6. Update `/spec` where a fix sets a lasting rule, then move the reviewed
    range and the new Declined entries into this file.

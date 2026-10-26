@@ -126,14 +126,14 @@ pub fn init(cx: &mut App) {
         repository_selector::register(workspace);
         git_picker::register(workspace);
 
-        workspace.register_action(|workspace, action: &zed_actions::CreateWorktree, window, cx| {
+        workspace.register_action(|workspace, action: &ed_actions::CreateWorktree, window, cx| {
             git_ui_core::worktree_service::handle_create_worktree(workspace, action, window, None, cx);
         });
-        workspace.register_action(|workspace, action: &zed_actions::SwitchWorktree, window, cx| {
+        workspace.register_action(|workspace, action: &ed_actions::SwitchWorktree, window, cx| {
             git_ui_core::worktree_service::handle_switch_worktree(workspace, action, window, None, cx);
         });
 
-        workspace.register_action(|workspace, _: &zed_actions::git::Worktree, window, cx| {
+        workspace.register_action(|workspace, _: &ed_actions::git::Worktree, window, cx| {
             let focused_dock = workspace.focused_dock_position(window, cx);
             let project = workspace.project().clone();
             let workspace_handle = workspace.weak_handle();
@@ -148,7 +148,7 @@ pub fn init(cx: &mut App) {
             });
         });
 
-        workspace.register_action(|workspace, action: &zed_actions::OpenWorktreeInNewWindow, window, cx| {
+        workspace.register_action(|workspace, action: &ed_actions::OpenWorktreeInNewWindow, window, cx| {
             let path = action.path.clone();
             let is_remote = !workspace.project().read(cx).is_local();
 

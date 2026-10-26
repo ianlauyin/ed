@@ -128,7 +128,7 @@ pub fn init(cx: &mut App) {
 
 impl TextFinder {
     fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
-        pub use zed_actions::text_finder::Toggle;
+        pub use ed_actions::text_finder::Toggle;
         workspace.register_action(|workspace, _: &Toggle, window, cx| {
             let Some(text_picker) = workspace.active_modal::<Self>(cx) else {
                 let seed_query = Self::seed_query(workspace, window, cx);

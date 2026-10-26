@@ -1134,7 +1134,7 @@ impl WorkspaceDb {
     }
 
     // Returns the locations of the workspaces that were still opened when the last
-    // session was closed (i.e. when Zed was quit).
+    // session was closed (i.e. when ed was quit).
     // If `last_session_window_order` is provided, the returned locations are ordered
     // according to that.
     pub async fn last_session_workspace_locations(
