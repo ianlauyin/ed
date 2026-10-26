@@ -1589,7 +1589,6 @@ dependencies = [
  "settings",
  "smallvec",
  "strum",
- "sysinfo",
  "theme",
  "theme_settings",
  "time",
