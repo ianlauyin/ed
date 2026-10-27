@@ -73,11 +73,22 @@
   resolved alongside the hover request. Always on whenever a language server
   provides lenses: there is no `code_lens` setting, `editor::ToggleCodeLens`
   action or quick action bar toggle.
+- Inlay hints and LSP semantic highlights are always on whenever a language
+  server provides them; stop the server (or set `enable_language_server: false`)
+  to get rid of them. Semantic tokens always layer on top of tree-sitter
+  highlighting, never replace it. There is no `semantic_tokens` setting, no
+  `inlay_hints.enabled` / `inlay_hints.toggle_on_modifiers_press`, no
+  `editor::ToggleInlayHints` / `editor::ToggleSemanticHighlights` action,
+  keybinding or quick action bar toggle. The per-kind `inlay_hints.show_*`
+  filters, background and debounce settings remain.
 - The hover popover's code lens row renders in the UI font, like the outline
   panel; the signature and docs below it use the shared hover markdown style.
 - The selections menu in the editor toolbar is always shown: there is no
   `toolbar.selections_menu` setting, `editor::ToggleSelectionMenu` action or
   quick action bar toggle.
+- The quick action bar's "Editor Controls" menu has three groups: display
+  (Minimap, Diagnostics), editing toggles (Soft Wrap, room for more editor
+  actions), and Git Blame last.
 - Diagnostics have one per-editor switch, the quick action bar's
   "Diagnostics" toggle (`editor::ToggleDiagnostics`), which turns underlines,
   inline messages, problem navigation and LSP pulls on or off together. Inline

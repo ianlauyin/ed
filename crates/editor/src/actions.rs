@@ -831,10 +831,6 @@ actions!(
         ToggleDiagnostics,
         /// Toggles indent guides display.
         ToggleIndentGuides,
-        /// Toggles inlay hints display.
-        ToggleInlayHints,
-        /// Toggles semantic highlights display.
-        ToggleSemanticHighlights,
         /// Toggles the minimap display.
         ToggleMinimap,
         /// Swaps the start and end of the current selection.

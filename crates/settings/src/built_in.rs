@@ -94,7 +94,6 @@ use settings_content::MinimapThumb;
 use settings_content::MinimapThumbBorder;
 use settings_content::MinimumContrast;
 use settings_content::ModalWidthContent;
-use settings_content::ModifiersContent;
 use settings_content::MultiCursorModifier;
 use settings_content::OnNewWindow;
 use settings_content::OpenResultsIn;
@@ -123,7 +122,6 @@ use settings_content::SearchSettingsContent;
 use settings_content::SeedQuerySetting;
 use settings_content::SemanticTokenRule;
 use settings_content::SemanticTokenRules;
-use settings_content::SemanticTokens;
 use settings_content::SessionSettingsContent;
 use settings_content::SettingsContent;
 use settings_content::Shell;
@@ -578,7 +576,6 @@ fn language_settings() -> AllLanguageSettingsContent {
             formatter: Some(FormatterList::Single(Formatter::Auto)),
             jsx_tag_auto_close: Some(JsxTagAutoCloseSettingsContent { enabled: Some(true) }),
             enable_language_server: Some(true),
-            semantic_tokens: Some(SemanticTokens::Combined),
             document_folding_ranges: Some(DocumentFoldingRanges::Off),
             document_symbols: Some(DocumentSymbols::On),
             allow_rewrap: Some(RewrapBehavior::InComments),
@@ -588,20 +585,12 @@ fn language_settings() -> AllLanguageSettingsContent {
             extend_list_on_newline: Some(true),
             indent_list_on_tab: Some(true),
             inlay_hints: Some(InlayHintSettingsContent {
-                enabled: Some(true),
                 show_type_hints: Some(true),
                 show_parameter_hints: Some(true),
                 show_other_hints: Some(true),
                 show_background: Some(false),
                 edit_debounce_ms: Some(700),
                 scroll_debounce_ms: Some(50),
-                toggle_on_modifiers_press: Some(ModifiersContent {
-                    control: false,
-                    alt: false,
-                    shift: false,
-                    platform: false,
-                    function: false,
-                }),
             }),
             use_autoclose: Some(true),
             use_auto_surround: Some(true),

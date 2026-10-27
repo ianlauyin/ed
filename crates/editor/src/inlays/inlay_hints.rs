@@ -48,7 +48,6 @@ use crate::AcceptInlayHint;
 use crate::DisplayPoint;
 use crate::Editor;
 use crate::EditorSnapshot;
-use crate::ToggleInlayHints;
 use crate::debounce_value;
 use crate::display_map::DisplayMap;
 use crate::display_map::DisplaySnapshot;
@@ -88,9 +87,6 @@ pub fn inlay_hint_settings(
 
 #[derive(Debug)]
 pub struct LspInlayHintData {
-    enabled: bool,
-    modifiers_override: bool,
-    enabled_in_settings: bool,
     allowed_hint_kinds: HashSet<Option<InlayHintKind>>,
     invalidate_debounce: Option<Duration>,
     append_debounce: Option<Duration>,
@@ -125,9 +121,6 @@ struct PendingHintTextEdit {
 impl LspInlayHintData {
     pub fn new(settings: InlayHintSettings) -> Self {
         Self {
-            modifiers_override: false,
-            enabled: settings.enabled,
-            enabled_in_settings: settings.enabled,
             hint_refresh_tasks: HashMap::default(),
             added_hints: HashMap::default(),
             hint_chunk_fetching: HashMap::default(),
@@ -139,31 +132,6 @@ impl LspInlayHintData {
             pending_text_edit: None,
             pending_refresh_acceptance: None,
         }
-    }
-
-    pub fn modifiers_override(&mut self, new_override: bool) -> Option<bool> {
-        if self.modifiers_override == new_override {
-            return None;
-        }
-        self.modifiers_override = new_override;
-        if self.should_show() {
-            Some(true)
-        } else {
-            self.clear();
-            Some(false)
-        }
-    }
-
-    pub fn toggle(&mut self, enabled: bool) -> bool {
-        if self.enabled == enabled {
-            return false;
-        }
-        self.enabled = enabled;
-        self.modifiers_override = false;
-        if !enabled {
-            self.clear();
-        }
-        true
     }
 
     pub fn clear(&mut self) {
@@ -238,86 +206,33 @@ impl LspInlayHintData {
         }
     }
 
-    /// Checks inlay hint settings for enabled hint kinds and general enabled state.
-    /// Generates corresponding inlay_map splice updates on settings changes.
-    /// Does not update inlay hint cache state on disabling or inlay hint kinds change: only reenabling forces new LSP queries.
+    /// Checks inlay hint settings for enabled hint kinds.
+    /// Removes visible hints whose kind got disabled; re-enabling a kind forces new LSP queries.
     fn update_settings(
         &mut self,
         new_hint_settings: InlayHintSettings,
         visible_hints: impl IntoIterator<Item = Inlay>,
-    ) -> ControlFlow<Option<InlaySplice>, Option<InlaySplice>> {
-        let old_enabled = self.enabled;
-        // If the setting for inlay hints has changed, update `enabled`. This condition avoids inlay
-        // hint visibility changes when other settings change (such as theme).
-        //
-        // Another option might be to store whether the user has manually toggled inlay hint
-        // visibility, and prefer this. This could lead to confusion as it means inlay hint
-        // visibility would not change when updating the setting if they were ever toggled.
-        if new_hint_settings.enabled != self.enabled_in_settings {
-            self.enabled = new_hint_settings.enabled;
-            self.enabled_in_settings = new_hint_settings.enabled;
-            self.modifiers_override = false;
-        };
+    ) -> ControlFlow<(), Option<InlaySplice>> {
         self.invalidate_debounce = debounce_value(new_hint_settings.edit_debounce_ms);
         self.append_debounce = debounce_value(new_hint_settings.scroll_debounce_ms);
         let new_allowed_hint_kinds = new_hint_settings.enabled_inlay_hint_kinds();
-        match (old_enabled, self.enabled) {
-            (false, false) => {
-                self.allowed_hint_kinds = new_allowed_hint_kinds;
-                ControlFlow::Break(None)
-            }
-            (true, true) => {
-                if new_allowed_hint_kinds == self.allowed_hint_kinds {
-                    ControlFlow::Break(None)
-                } else {
-                    self.allowed_hint_kinds = new_allowed_hint_kinds;
-                    ControlFlow::Continue(
-                        Some(InlaySplice {
-                            to_remove: visible_hints
-                                .into_iter()
-                                .filter_map(|inlay| {
-                                    let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                    if !self.allowed_hint_kinds.contains(&inlay_kind) { Some(inlay.id) } else { None }
-                                })
-                                .collect(),
-                            to_insert: Vec::new(),
-                        })
-                        .filter(|splice| !splice.is_empty()),
-                    )
-                }
-            }
-            (true, false) => {
-                self.modifiers_override = false;
-                self.allowed_hint_kinds = new_allowed_hint_kinds;
-                let mut visible_hints = visible_hints.into_iter().peekable();
-                if visible_hints.peek().is_none() {
-                    ControlFlow::Break(None)
-                } else {
-                    self.clear();
-                    ControlFlow::Break(Some(InlaySplice {
-                        to_remove: visible_hints.map(|inlay| inlay.id).collect(),
-                        to_insert: Vec::new(),
-                    }))
-                }
-            }
-            (false, true) => {
-                self.modifiers_override = false;
-                self.allowed_hint_kinds = new_allowed_hint_kinds;
-                ControlFlow::Continue(
-                    Some(InlaySplice {
-                        to_remove: visible_hints
-                            .into_iter()
-                            .filter_map(|inlay| {
-                                let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                if !self.allowed_hint_kinds.contains(&inlay_kind) { Some(inlay.id) } else { None }
-                            })
-                            .collect(),
-                        to_insert: Vec::new(),
-                    })
-                    .filter(|splice| !splice.is_empty()),
-                )
-            }
+        if new_allowed_hint_kinds == self.allowed_hint_kinds {
+            return ControlFlow::Break(());
         }
+        self.allowed_hint_kinds = new_allowed_hint_kinds;
+        ControlFlow::Continue(
+            Some(InlaySplice {
+                to_remove: visible_hints
+                    .into_iter()
+                    .filter_map(|inlay| {
+                        let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
+                        if !self.allowed_hint_kinds.contains(&inlay_kind) { Some(inlay.id) } else { None }
+                    })
+                    .collect(),
+                to_insert: Vec::new(),
+            })
+            .filter(|splice| !splice.is_empty()),
+        )
     }
 
     fn pending_refreshes(&self, buffer_ids: &HashSet<BufferId>) -> Vec<Shared<oneshot::Receiver<()>>> {
@@ -329,20 +244,10 @@ impl LspInlayHintData {
             .map(|refresh| refresh.finished.clone())
             .collect()
     }
-
-    const fn should_refresh(&self) -> bool {
-        self.enabled || self.modifiers_override
-    }
-
-    const fn should_show(&self) -> bool {
-        self.enabled != self.modifiers_override
-    }
 }
 
 #[derive(Debug, Clone)]
 pub enum InlayHintRefreshReason {
-    ModifiersChanged(bool),
-    Toggle(bool),
     SettingsChange(InlayHintSettings),
     NewLinesShown,
     BufferEdited(BufferId),
@@ -368,10 +273,6 @@ impl Editor {
         supports
     }
 
-    pub fn toggle_inlay_hints(&mut self, _: &ToggleInlayHints, _: &mut Window, cx: &mut Context<Self>) {
-        self.refresh_inlay_hints(InlayHintRefreshReason::Toggle(!self.inlay_hints_enabled()), cx);
-    }
-
     pub fn accept_inlay_hint(&mut self, _: &AcceptInlayHint, window: &mut Window, cx: &mut Context<Self>) {
         if !self.can_accept_inlay_hint(cx) {
             return;
@@ -387,10 +288,6 @@ impl Editor {
         let display_snapshot = self.display_snapshot(cx);
         let targets = self.inlay_hints_at_selections(&display_snapshot, cx).collect::<Vec<_>>();
         self.apply_inlay_hint_text_edits(targets.into_iter(), None, window, cx);
-    }
-
-    pub fn inlay_hints_enabled(&self) -> bool {
-        self.inlay_hints.as_ref().is_some_and(|cache| cache.enabled)
     }
 
     pub fn clear_inlay_hints(&mut self, cx: &mut Context<Self>) {
@@ -595,7 +492,7 @@ impl Editor {
         self.lsp_data_enabled()
             && !self.read_only(cx)
             && self.project().is_some()
-            && self.inlay_hints.as_ref().is_some_and(|inlay_hints| inlay_hints.should_show())
+            && self.inlay_hints.is_some()
     }
 
     pub(crate) fn inlay_hint_visibility_changed(&mut self, cx: &mut Context<Self>) {
@@ -720,10 +617,7 @@ impl Editor {
         };
 
         let debounce = match &reason {
-            InlayHintRefreshReason::SettingsChange(_)
-            | InlayHintRefreshReason::Toggle(_)
-            | InlayHintRefreshReason::BuffersRemoved(_)
-            | InlayHintRefreshReason::ModifiersChanged(_) => None,
+            InlayHintRefreshReason::SettingsChange(_) | InlayHintRefreshReason::BuffersRemoved(_) => None,
             _may_need_lsp_call => self.inlay_hints.as_ref().and_then(|inlay_hints| {
                 if invalidate_cache.should_invalidate() {
                     inlay_hints.invalidate_debounce
@@ -738,9 +632,7 @@ impl Editor {
 
         let mut invalidate_hints_for_buffers = HashSet::default();
         let ignore_previous_fetches = match reason {
-            InlayHintRefreshReason::ModifiersChanged(_)
-            | InlayHintRefreshReason::Toggle(_)
-            | InlayHintRefreshReason::SettingsChange(_)
+            InlayHintRefreshReason::SettingsChange(_)
             | InlayHintRefreshReason::ServerRemoved
             | InlayHintRefreshReason::LanguageServerRegistered
             | InlayHintRefreshReason::RefreshRequested { .. } => true,
@@ -1065,35 +957,10 @@ impl Editor {
         let inlay_hints = self.inlay_hints.as_mut()?;
 
         let invalidate_cache = match reason {
-            InlayHintRefreshReason::ModifiersChanged(enabled) => {
-                let enabled = inlay_hints.modifiers_override(*enabled)?;
-                if enabled {
-                    InvalidationStrategy::None
-                } else {
-                    self.clear_inlay_hints(cx);
-                    return None;
-                }
-            }
-            InlayHintRefreshReason::Toggle(enabled) => {
-                if inlay_hints.toggle(*enabled) {
-                    if *enabled {
-                        InvalidationStrategy::None
-                    } else {
-                        self.clear_inlay_hints(cx);
-                        return None;
-                    }
-                } else {
-                    return None;
-                }
-            }
             InlayHintRefreshReason::SettingsChange(new_settings) => {
                 let visible_inlay_hints = Self::visible_inlay_hints(self.display_map.read(cx)).collect::<Vec<_>>();
                 match inlay_hints.update_settings(*new_settings, visible_inlay_hints) {
-                    ControlFlow::Break(Some(InlaySplice { to_remove, to_insert })) => {
-                        self.splice_inlays(&to_remove, to_insert, cx);
-                        return None;
-                    }
-                    ControlFlow::Break(None) => return None,
+                    ControlFlow::Break(()) => return None,
                     ControlFlow::Continue(splice) => {
                         if let Some(InlaySplice { to_remove, to_insert }) = splice {
                             self.splice_inlays(&to_remove, to_insert, cx);
@@ -1124,10 +991,6 @@ impl Editor {
                 InvalidationStrategy::RefreshRequested { server_id: *server_id }
             }
         };
-
-        if !self.inlay_hints.as_ref().is_some_and(LspInlayHintData::should_refresh) {
-            return None;
-        }
 
         Some(invalidate_cache)
     }
@@ -1177,7 +1040,6 @@ impl Editor {
         let Some(inlay_hints) = &mut self.inlay_hints else {
             return;
         };
-        let should_show = inlay_hints.should_show();
         let Some(buffer_snapshot) = self.buffer.read(cx).buffer(buffer_id).map(|buffer| buffer.read(cx).snapshot())
         else {
             return;
@@ -1295,7 +1157,7 @@ impl Editor {
             .into_iter()
             // Hidden kinds must not claim a dedup slot, or they could suppress a visible
             // identical hint from another server.
-            .filter(|(_, _, hint, _)| should_show && inlay_hints.allowed_hint_kinds.contains(&hint.kind))
+            .filter(|(_, _, hint, _)| inlay_hints.allowed_hint_kinds.contains(&hint.kind))
             // Deduplicate identical hints from different servers by (offset, text),
             // independently of the anchor bias.
             .filter(|(server_id, _, hint, offset)| {

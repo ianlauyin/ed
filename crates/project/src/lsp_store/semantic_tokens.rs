@@ -18,7 +18,6 @@ use gpui::SharedString;
 use gpui::Task;
 use language::Buffer;
 use language::LanguageName;
-use language::language_settings::all_language_settings;
 use lsp::LanguageServerId;
 use rpc::TypedEnvelope;
 use rpc::proto;
@@ -54,7 +53,6 @@ type StylizerKey = (LanguageServerId, Option<LanguageName>);
 pub(super) struct SemanticTokenConfig {
     stylizers: HashMap<StylizerKey, (lsp::SemanticTokensLegend, SemanticTokenStylizer)>,
     rules: SemanticTokenRules,
-    global_mode: settings::SemanticTokens,
 }
 
 impl SemanticTokenConfig {
@@ -62,7 +60,6 @@ impl SemanticTokenConfig {
         Self {
             stylizers: HashMap::default(),
             rules: ProjectSettings::get_global(cx).global_lsp_settings.semantic_token_rules.clone(),
-            global_mode: all_language_settings(None, cx).defaults.semantic_tokens,
         }
     }
 
@@ -87,15 +84,6 @@ impl SemanticTokenConfig {
     /// are picked up. Stylizers are recreated lazily on next use.
     pub(super) fn clear_stylizers(&mut self) {
         self.stylizers.clear();
-    }
-
-    pub(super) fn update_global_mode(&mut self, new_mode: settings::SemanticTokens) -> bool {
-        if new_mode != self.global_mode {
-            self.global_mode = new_mode;
-            true
-        } else {
-            false
-        }
     }
 }
 

@@ -12,9 +12,7 @@ use gpui::App;
 use gpui::AsyncApp;
 use gpui::Entity;
 use gpui::Task;
-use language::LanguageName;
 use language::LspAdapterDelegate;
-use language::language_settings::LanguageSettings;
 pub use language::*;
 use lsp::LanguageServerBinary;
 use lsp::LanguageServerName;
@@ -69,9 +67,6 @@ impl LspAdapter for GoLspAdapter {
         delegate: &Arc<dyn LspAdapterDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<Option<serde_json::Value>> {
-        let semantic_tokens_enabled = cx
-            .update(|cx| LanguageSettings::resolve(None, Some(&LanguageName::new("Go")), cx).semantic_tokens.enabled());
-
         let mut default_config = json!({
             "usePlaceholders": false,
             "hints": {
@@ -83,7 +78,7 @@ impl LspAdapter for GoLspAdapter {
                 "parameterNames": true,
                 "rangeVariableTypes": true
             },
-            "semanticTokens": semantic_tokens_enabled
+            "semanticTokens": true
         });
 
         let project_initialization_options = cx.update(|cx| {

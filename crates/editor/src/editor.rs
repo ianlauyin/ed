@@ -314,7 +314,6 @@ pub(crate) use actions::ToggleDiagnostics;
 pub(crate) use actions::ToggleFold;
 pub(crate) use actions::ToggleFoldAll;
 pub(crate) use actions::ToggleIndentGuides;
-pub(crate) use actions::ToggleInlayHints;
 pub(crate) use actions::ToggleMinimap;
 pub(crate) use actions::ToggleSelectedDiffHunks;
 pub(crate) use actions::ToggleSoftWrap;
@@ -1498,7 +1497,6 @@ pub struct EditorSnapshot {
     scroll_anchor: SharedScrollAnchor,
     current_line_highlight: CurrentLineHighlight,
     gutter_hovered: bool,
-    semantic_tokens_enabled: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2353,7 +2351,7 @@ impl Editor {
             on_local_selections_changed: None,
             suppress_selection_callback: false,
             applicable_language_settings: HashMap::default(),
-            semantic_token_state: SemanticTokenState::new(cx, full_mode),
+            semantic_token_state: SemanticTokenState::new(cx),
             accent_data: None,
             bracket_fetched_tree_sitter_chunks: HashMap::default(),
             number_deleted_lines: false,
@@ -2747,7 +2745,6 @@ impl Editor {
             show_line_numbers: self.show_line_numbers,
             number_deleted_lines: self.number_deleted_lines,
             show_git_diff_gutter: self.show_git_diff_gutter,
-            semantic_tokens_enabled: self.semantic_token_state.enabled(),
             show_code_actions: self.show_code_actions,
             show_runnables: self.show_runnables,
             git_blame_gutter_max_author_length,
@@ -8157,12 +8154,11 @@ impl Editor {
         cx.emit(EditorEvent::FocusedIn)
     }
 
-    fn handle_focus_out(&mut self, event: FocusOutEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    fn handle_focus_out(&mut self, event: FocusOutEvent, _window: &mut Window, _cx: &mut Context<Self>) {
         if event.blurred != self.focus_handle {
             self.last_focused_descendant = Some(event.blurred);
         }
         self.selection_drag_state = SelectionDragState::None;
-        self.refresh_inlay_hints(InlayHintRefreshReason::ModifiersChanged(false), cx);
     }
 
     pub fn handle_blur(&mut self, window: &mut Window, cx: &mut Context<Self>) {

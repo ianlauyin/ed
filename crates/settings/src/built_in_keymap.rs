@@ -645,7 +645,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-shift-e", "pane::RevealInProjectPanel"),
             KeyBindingSpec::new("cmd-f8", "editor::GoToHunk"),
             KeyBindingSpec::new("cmd-shift-f8", "editor::GoToPreviousHunk"),
-            KeyBindingSpec::new("ctrl-:", "editor::ToggleInlayHints"),
         ],
     );
     add_bindings(

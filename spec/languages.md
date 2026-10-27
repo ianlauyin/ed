@@ -46,9 +46,7 @@
   - Search query inputs (buffer search, project search, text finder) are
     highlighted with the bundled "Regular Expression" syntax while regex mode
     is on, and stay unhighlighted otherwise.
-  - It obeys the same switch as tree-sitter highlighting
-    (`semantic_tokens: "full"` turns it off), and LSP semantic tokens layer on
-    top as usual.
+  - LSP semantic tokens layer on top as usual.
 - HTML uses `vscode-html-language-server` (from `vscode-langservers-extracted`),
   started with `--stdio` and `provideFormatter: true`; `lsp.vscode-html-language-server.settings`
   is passed through as workspace configuration.

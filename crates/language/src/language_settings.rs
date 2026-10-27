@@ -10,7 +10,6 @@ use globset::Glob;
 use globset::GlobSet;
 use globset::GlobSetBuilder;
 use gpui::App;
-use gpui::Modifiers;
 use gpui::SharedString;
 pub use settings::AutoIndentMode;
 pub use settings::CompletionSettingsContent;
@@ -20,12 +19,10 @@ pub use settings::FormatOnSave;
 pub use settings::Formatter;
 pub use settings::FormatterList;
 pub use settings::InlayHintKind;
-use settings::IntoGpui;
 pub use settings::LanguageSettingsContent;
 pub use settings::LineEndingSetting;
 pub use settings::LspInsertMode;
 pub use settings::RewrapBehavior;
-use settings::SemanticTokens;
 use settings::Settings;
 use settings::SettingsLocation;
 pub use settings::ShowWhitespaceSetting;
@@ -104,8 +101,6 @@ pub struct LanguageSettings {
     pub jsx_tag_auto_close: bool,
     /// Whether to use language servers to provide code intelligence.
     pub enable_language_server: bool,
-    /// Controls how semantic tokens from language servers are used for syntax highlighting.
-    pub semantic_tokens: SemanticTokens,
     /// Controls whether folding ranges from language servers are used instead of
     /// tree-sitter and indent-based folding.
     pub document_folding_ranges: DocumentFoldingRanges,
@@ -312,10 +307,6 @@ impl LanguageSettings {
 // The settings for inlay hints.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct InlayHintSettings {
-    /// Global switch to toggle hints on and off.
-    ///
-    /// Default: false
-    pub enabled: bool,
     /// Whether type hints should be shown.
     ///
     /// Default: true
@@ -347,12 +338,6 @@ pub struct InlayHintSettings {
     ///
     /// Default: 50
     pub scroll_debounce_ms: u64,
-    /// Toggles inlay hints (hides or shows) when the user presses the modifiers specified.
-    /// If only a subset of the modifiers specified is pressed, hints are not toggled.
-    /// If no modifiers are specified, this is equivalent to `None`.
-    ///
-    /// Default: None
-    pub toggle_on_modifiers_press: Option<Modifiers>,
 }
 
 impl InlayHintSettings {
@@ -435,7 +420,6 @@ impl settings::Settings for AllLanguageSettings {
                 formatter: settings.formatter.unwrap(),
                 jsx_tag_auto_close: settings.jsx_tag_auto_close.unwrap().enabled.unwrap(),
                 enable_language_server: settings.enable_language_server.unwrap(),
-                semantic_tokens: settings.semantic_tokens.unwrap(),
                 document_folding_ranges: settings.document_folding_ranges.unwrap(),
                 document_symbols: settings.document_symbols.unwrap(),
                 allow_rewrap: settings.allow_rewrap.unwrap(),
@@ -449,14 +433,12 @@ impl settings::Settings for AllLanguageSettings {
                 extend_list_on_newline: settings.extend_list_on_newline.unwrap(),
                 indent_list_on_tab: settings.indent_list_on_tab.unwrap(),
                 inlay_hints: InlayHintSettings {
-                    enabled: inlay_hints.enabled.unwrap(),
                     show_type_hints: inlay_hints.show_type_hints.unwrap(),
                     show_parameter_hints: inlay_hints.show_parameter_hints.unwrap(),
                     show_other_hints: inlay_hints.show_other_hints.unwrap(),
                     show_background: inlay_hints.show_background.unwrap(),
                     edit_debounce_ms: inlay_hints.edit_debounce_ms.unwrap(),
                     scroll_debounce_ms: inlay_hints.scroll_debounce_ms.unwrap(),
-                    toggle_on_modifiers_press: inlay_hints.toggle_on_modifiers_press.map(|m| m.into_gpui()),
                 },
                 use_autoclose: settings.use_autoclose.unwrap(),
                 use_auto_surround: settings.use_auto_surround.unwrap(),

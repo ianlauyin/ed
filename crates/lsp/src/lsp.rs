@@ -828,7 +828,7 @@ impl LanguageServer {
         Ok(())
     }
 
-    pub fn default_initialize_params(&self, pull_diagnostics: bool, augments_syntax_tokens: bool) -> InitializeParams {
+    pub fn default_initialize_params(&self, pull_diagnostics: bool) -> InitializeParams {
         let workspace_folders = self.workspace_folders.as_ref().map_or_else(
             || vec![workspace_folder_for_uri(self.root_uri.clone())],
             |folders| folders.lock().iter().cloned().map(workspace_folder_for_uri).collect(),
@@ -988,7 +988,7 @@ impl LanguageServer {
                         overlapping_token_support: Some(true),
                         multiline_token_support: Some(true),
                         server_cancel_support: Some(true),
-                        augments_syntax_tokens: Some(augments_syntax_tokens),
+                        augments_syntax_tokens: Some(true),
                     }),
                     publish_diagnostics: Some(PublishDiagnosticsClientCapabilities {
                         related_information: Some(true),

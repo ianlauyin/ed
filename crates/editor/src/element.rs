@@ -161,7 +161,6 @@ use crate::GutterDimensions;
 use crate::HalfPageDown;
 use crate::HalfPageUp;
 use crate::HandleInput;
-use crate::InlayHintRefreshReason;
 use crate::LineDown;
 use crate::LineHighlight;
 use crate::LineUp;
@@ -205,7 +204,6 @@ use crate::hover_popover::MIN_POPOVER_CHARACTER_WIDTH;
 use crate::hover_popover::MIN_POPOVER_LINE_HEIGHT;
 use crate::hover_popover::POPOVER_RIGHT_OFFSET;
 use crate::hover_popover::{self};
-use crate::inlay_hint_settings;
 use crate::scroll::ActiveScrollbarState;
 use crate::scroll::ScrollOffset;
 use crate::scroll::ScrollPixelOffset;
@@ -643,11 +641,9 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_indent_guides);
 
         if editor.read(cx).lsp_data_enabled() {
-            register_action(editor, window, Editor::toggle_inlay_hints);
             if editor.read(cx).can_accept_inlay_hint(cx) {
                 register_action(editor, window, Editor::accept_inlay_hint);
             }
-            register_action(editor, window, Editor::toggle_semantic_highlights);
             register_action(editor, window, Editor::toggle_diagnostics);
         }
         if editor.read(cx).supports_minimap(cx) {
@@ -871,21 +867,6 @@ impl EditorElement {
                     return;
                 }
                 editor.update(cx, |editor, cx| {
-                    let inlay_hint_settings = inlay_hint_settings(
-                        editor.selections.newest_anchor().head(),
-                        &editor.buffer.read(cx).snapshot(cx),
-                        cx,
-                    );
-
-                    if let Some(inlay_modifiers) =
-                        inlay_hint_settings.toggle_on_modifiers_press.as_ref().filter(|modifiers| modifiers.modified())
-                    {
-                        editor.refresh_inlay_hints(
-                            InlayHintRefreshReason::ModifiersChanged(inlay_modifiers == &event.modifiers),
-                            cx,
-                        );
-                    }
-
                     if editor.hover_state.focused(window, cx) {
                         return;
                     }
@@ -2295,10 +2276,8 @@ impl EditorElement {
                 })
                 .collect()
         } else {
-            let use_tree_sitter =
-                !snapshot.semantic_tokens_enabled || snapshot.use_tree_sitter_for_syntax(rows.start, cx);
             let language_aware = LanguageAwareStyling {
-                tree_sitter: use_tree_sitter,
+                tree_sitter: true,
                 diagnostics: snapshot.display_snapshot.diagnostics_visible(),
             };
             let chunks = snapshot.highlighted_chunks(rows.clone(), language_aware, style);
@@ -7604,9 +7583,8 @@ pub fn layout_line(
     window: &mut Window,
     cx: &mut App,
 ) -> LineWithInvisibles {
-    let use_tree_sitter = !snapshot.semantic_tokens_enabled || snapshot.use_tree_sitter_for_syntax(row, cx);
     let language_aware = LanguageAwareStyling {
-        tree_sitter: use_tree_sitter,
+        tree_sitter: true,
         diagnostics: snapshot.display_snapshot.diagnostics_visible(),
     };
     let chunks = snapshot.highlighted_chunks(row..row + DisplayRow(1), language_aware, style);

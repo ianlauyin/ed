@@ -130,12 +130,10 @@ use language::ToOffset;
 use language::ToPointUtf16;
 use language::Transaction;
 use language::Unclipped;
-use language::language_settings::AllLanguageSettings;
 use language::language_settings::FormatOnSave;
 use language::language_settings::Formatter;
 use language::language_settings::LanguageSettings;
 use language::language_settings::LineEndingSetting;
-use language::language_settings::all_language_settings;
 use language::lsp_to_symbol_kind;
 use language::modeline;
 use language::point_to_lsp;
@@ -678,11 +676,6 @@ impl LocalLspStore {
             let lsp_store = self.weak.clone();
             let pending_workspace_folders = pending_workspace_folders.clone();
             let pull_diagnostics = ProjectSettings::get_global(cx).diagnostics.lsp_pull_diagnostics.enabled;
-            let settings_location = SettingsLocation { worktree_id, path: RelPath::empty() };
-            let augments_syntax_tokens = AllLanguageSettings::get(Some(settings_location), cx)
-                .language(Some(&language_name))
-                .semantic_tokens
-                .use_tree_sitter();
             cx.spawn(async move |cx| {
                 let result = async {
                     let language_server = pending_server.await?;
@@ -703,7 +696,7 @@ impl LocalLspStore {
 
                     let initialization_params = cx.update(|cx| {
                         let mut params =
-                            language_server.default_initialize_params(pull_diagnostics, augments_syntax_tokens);
+                            language_server.default_initialize_params(pull_diagnostics);
                         params.initialization_options = initialization_options;
                         adapter.adapter.prepare_initialize_params(params, cx)
                     })?;
@@ -5373,17 +5366,6 @@ impl LspStore {
         // language-specific semantic token rules are
         // picked up. Stylizers are recreated lazily, so this is cheap.
         self.semantic_token_config.clear_stylizers();
-
-        let new_global_semantic_tokens_mode = all_language_settings(None, cx).defaults.semantic_tokens;
-        if self.semantic_token_config.update_global_mode(new_global_semantic_tokens_mode) {
-            let buffers = self.buffer_store.read(cx).buffers().collect();
-            self.restart_local_language_servers_for_buffers(
-                buffers,
-                HashSet::default(),
-                LanguageServerStartMode::Automatic,
-                cx,
-            );
-        }
 
         cx.notify();
     }

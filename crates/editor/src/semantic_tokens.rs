@@ -16,7 +16,6 @@ use gpui::UnderlineStyle;
 use itertools::Itertools;
 use language::LanguageName;
 use language::LanguageRegistry;
-use language::language_settings::LanguageSettings;
 use lsp::LanguageServerId;
 use project::LspStore;
 use project::lsp_store::BufferSemanticToken;
@@ -35,33 +34,22 @@ use theme::SyntaxTheme;
 use ui::ActiveTheme as _;
 
 use crate::Editor;
-use crate::actions::ToggleSemanticHighlights;
 use crate::display_map::HighlightStyleInterner;
 use crate::display_map::SemanticTokenHighlight;
 
 pub(super) struct SemanticTokenState {
     rules: SemanticTokenRules,
-    enabled: bool,
     update_task: Task<()>,
     fetched_for_buffers: HashMap<BufferId, clock::Global>,
 }
 
 impl SemanticTokenState {
-    pub(super) fn new(cx: &App, enabled: bool) -> Self {
+    pub(super) fn new(cx: &App) -> Self {
         Self {
             rules: ProjectSettings::get_global(cx).global_lsp_settings.semantic_token_rules.clone(),
-            enabled,
             update_task: Task::ready(()),
             fetched_for_buffers: HashMap::default(),
         }
-    }
-
-    pub(super) const fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    pub(super) const fn toggle_enabled(&mut self) {
-        self.enabled = !self.enabled;
     }
 
     pub(super) fn invalidate_buffer(&mut self, buffer_id: &BufferId) {
@@ -94,21 +82,6 @@ impl Editor {
         supports
     }
 
-    pub const fn semantic_highlights_enabled(&self) -> bool {
-        self.semantic_token_state.enabled()
-    }
-
-    pub fn toggle_semantic_highlights(
-        &mut self,
-        _: &ToggleSemanticHighlights,
-        _window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.semantic_token_state.toggle_enabled();
-        self.invalidate_semantic_tokens(None);
-        self.refresh_semantic_tokens(None, false, cx);
-    }
-
     pub(super) fn invalidate_semantic_tokens(&mut self, for_buffer: Option<BufferId>) {
         match for_buffer {
             Some(for_buffer) => self.semantic_token_state.invalidate_buffer(&for_buffer),
@@ -122,7 +95,7 @@ impl Editor {
         server_refreshed: bool,
         cx: &mut Context<Self>,
     ) {
-        if !self.lsp_data_enabled() || !self.semantic_token_state.enabled() {
+        if !self.lsp_data_enabled() {
             self.invalidate_semantic_tokens(None);
             self.display_map.update(cx, |display_map, _| {
                 match Arc::get_mut(&mut display_map.semantic_token_highlights) {
@@ -153,9 +126,7 @@ impl Editor {
             .chain(buffer_id.and_then(|buffer_id| self.buffer.read(cx).buffer(buffer_id)))
             .filter_map(|editor_buffer| {
                 let editor_buffer_id = editor_buffer.read(cx).remote_id();
-                if self.registered_buffers.contains_key(&editor_buffer_id)
-                    && LanguageSettings::for_buffer(editor_buffer.read(cx), cx).semantic_tokens.enabled()
-                {
+                if self.registered_buffers.contains_key(&editor_buffer_id) {
                     Some((editor_buffer_id, editor_buffer))
                 } else {
                     None
@@ -163,24 +134,19 @@ impl Editor {
             })
             .collect::<HashMap<_, _>>();
 
-        for buffer_with_disabled_tokens in self
+        for removed_buffer in self
             .display_map
             .read(cx)
             .semantic_token_highlights
             .keys()
             .copied()
             .filter(|buffer_id| !buffers_to_query.contains_key(buffer_id))
-            .filter(|buffer_id| {
-                !self.buffer.read(cx).buffer(*buffer_id).is_some_and(|buffer| {
-                    let buffer = buffer.read(cx);
-                    LanguageSettings::for_buffer(buffer, cx).semantic_tokens.enabled()
-                })
-            })
+            .filter(|buffer_id| self.buffer.read(cx).buffer(*buffer_id).is_none())
             .collect::<Vec<_>>()
         {
-            self.semantic_token_state.invalidate_buffer(&buffer_with_disabled_tokens);
+            self.semantic_token_state.invalidate_buffer(&removed_buffer);
             self.display_map.update(cx, |display_map, _| {
-                display_map.invalidate_semantic_highlights(buffer_with_disabled_tokens);
+                display_map.invalidate_semantic_highlights(removed_buffer);
             });
         }
 

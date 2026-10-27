@@ -1436,18 +1436,6 @@ impl DisplaySnapshot {
         self.buffer_snapshot().len() == MultiBufferOffset(0)
     }
 
-    /// Returns whether tree-sitter syntax highlighting should be used.
-    /// Returns `false` if any buffer with semantic token highlights has the "full" mode setting,
-    /// meaning LSP semantic tokens should replace tree-sitter highlighting.
-    pub fn use_tree_sitter_for_syntax(&self, position: DisplayRow, cx: &App) -> bool {
-        let position = DisplayPoint::new(position, 0);
-        let Some((buffer_snapshot, ..)) = self.point_to_buffer_point(position.to_point(self)) else {
-            return false;
-        };
-        let settings = LanguageSettings::for_buffer_snapshot(buffer_snapshot, None, cx);
-        settings.semantic_tokens.use_tree_sitter()
-    }
-
     pub fn row_infos(&self, start_row: DisplayRow) -> impl Iterator<Item = RowInfo> + '_ {
         self.block_snapshot.row_infos(BlockRow(start_row.0))
     }

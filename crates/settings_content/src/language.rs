@@ -7,7 +7,6 @@ use serde::Serialize;
 
 use crate::DocumentFoldingRanges;
 use crate::DocumentSymbols;
-use crate::SemanticTokens;
 
 /// The state of the modifier keys at some point in time
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,7 +69,6 @@ impl LanguageSettingsContent {
         overlay(&mut self.formatter, &other.formatter);
         overlay(&mut self.jsx_tag_auto_close, &other.jsx_tag_auto_close);
         overlay(&mut self.enable_language_server, &other.enable_language_server);
-        overlay(&mut self.semantic_tokens, &other.semantic_tokens);
         overlay(&mut self.document_folding_ranges, &other.document_folding_ranges);
         overlay(&mut self.document_symbols, &other.document_symbols);
         overlay(&mut self.allow_rewrap, &other.allow_rewrap);
@@ -83,14 +81,12 @@ impl LanguageSettingsContent {
         overlay(&mut self.extend_list_on_newline, &other.extend_list_on_newline);
         overlay(&mut self.indent_list_on_tab, &other.indent_list_on_tab);
         overlay_group(&mut self.inlay_hints, &other.inlay_hints, |this, other| {
-            overlay(&mut this.enabled, &other.enabled);
             overlay(&mut this.show_type_hints, &other.show_type_hints);
             overlay(&mut this.show_parameter_hints, &other.show_parameter_hints);
             overlay(&mut this.show_other_hints, &other.show_other_hints);
             overlay(&mut this.show_background, &other.show_background);
             overlay(&mut this.edit_debounce_ms, &other.edit_debounce_ms);
             overlay(&mut this.scroll_debounce_ms, &other.scroll_debounce_ms);
-            overlay(&mut this.toggle_on_modifiers_press, &other.toggle_on_modifiers_press);
         });
         overlay(&mut self.use_autoclose, &other.use_autoclose);
         overlay(&mut self.use_auto_surround, &other.use_auto_surround);
@@ -268,15 +264,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: true
     pub enable_language_server: Option<bool>,
-    /// Controls how semantic tokens from language servers are used for syntax highlighting.
-    ///
-    /// Options:
-    /// - "off": Do not request semantic tokens from language servers.
-    /// - "combined": Use LSP semantic tokens together with tree-sitter highlighting.
-    /// - "full": Use LSP semantic tokens exclusively, replacing tree-sitter highlighting.
-    ///
-    /// Default: "off"
-    pub semantic_tokens: Option<SemanticTokens>,
     /// Controls whether folding ranges from language servers are used instead of
     /// tree-sitter and indent-based folding.
     ///
@@ -440,10 +427,6 @@ pub struct JsxTagAutoCloseSettingsContent {
 /// The settings for inlay hints.
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InlayHintSettingsContent {
-    /// Global switch to toggle hints on and off.
-    ///
-    /// Default: false
-    pub enabled: Option<bool>,
     /// Whether type hints should be shown.
     ///
     /// Default: true
@@ -475,12 +458,6 @@ pub struct InlayHintSettingsContent {
     ///
     /// Default: 50
     pub scroll_debounce_ms: Option<u64>,
-    /// Toggles inlay hints (hides or shows) when the user presses the modifiers specified.
-    /// If only a subset of the modifiers specified is pressed, hints are not toggled.
-    /// If no modifiers are specified, this is equivalent to `null`.
-    ///
-    /// Default: null
-    pub toggle_on_modifiers_press: Option<ModifiersContent>,
 }
 
 /// The kind of an inlay hint.

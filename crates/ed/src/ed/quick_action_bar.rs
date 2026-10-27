@@ -3,6 +3,7 @@ mod preview;
 use ed_actions::outline::ToggleOutline;
 use editor::Editor;
 use editor::EditorSettings;
+use editor::SoftWrap;
 use editor::actions::AddSelectionAbove;
 use editor::actions::AddSelectionBelow;
 use editor::actions::CodeActionSource;
@@ -20,6 +21,7 @@ use editor::actions::SelectSmallerSyntaxNode;
 use editor::actions::ToggleCodeActions;
 use editor::actions::ToggleDiagnostics;
 use editor::actions::ToggleGoToLine;
+use editor::actions::ToggleSoftWrap;
 use editor::code_context_menus::CodeContextMenu;
 use editor::code_context_menus::ContextMenuOrigin;
 use gpui::Action;
@@ -36,7 +38,6 @@ use gpui::InteractiveElement;
 use gpui::ParentElement;
 use gpui::Render;
 use gpui::Styled;
-use gpui::Subscription;
 use gpui::WeakEntity;
 use gpui::Window;
 use gpui::anchored;
@@ -66,8 +67,6 @@ use workspace::item::ItemHandle;
 const MAX_CODE_ACTION_MENU_LINES: u32 = 16;
 
 pub struct QuickActionBar {
-    _inlay_hints_enabled_subscription: Option<Subscription>,
-
     active_item: Option<Box<dyn ItemHandle>>,
     buffer_search_bar: Entity<BufferSearchBar>,
     show: bool,
@@ -79,8 +78,6 @@ pub struct QuickActionBar {
 impl QuickActionBar {
     pub fn new(buffer_search_bar: Entity<BufferSearchBar>, workspace: &Workspace, cx: &mut Context<Self>) -> Self {
         let mut this = Self {
-            _inlay_hints_enabled_subscription: None,
-
             active_item: None,
             buffer_search_bar,
             show: true,
@@ -120,11 +117,7 @@ impl Render for QuickActionBar {
             return div().id("empty quick action bar");
         };
 
-        let supports_inlay_hints = editor.update(cx, |editor, cx| editor.supports_inlay_hints(cx));
-        let supports_semantic_tokens = editor.update(cx, |editor, cx| editor.supports_semantic_tokens(cx));
         let editor_value = editor.read(cx);
-        let inlay_hints_enabled = editor_value.inlay_hints_enabled();
-        let semantic_highlights_enabled = editor_value.semantic_highlights_enabled();
         let is_full = editor_value.mode().is_full();
         let diagnostics_enabled =
             editor_value.diagnostics_enabled() && editor_value.diagnostics_max_severity != DiagnosticSeverity::Off;
@@ -132,6 +125,7 @@ impl Render for QuickActionBar {
 
         let supports_minimap = editor_value.supports_minimap(cx);
         let minimap_enabled = supports_minimap && editor_value.minimap().is_some();
+        let soft_wrap_enabled = !matches!(editor_value.soft_wrap_mode(cx), SoftWrap::None);
         let has_available_code_actions = editor_value.has_available_code_actions_for_selection();
         let code_action_enabled = editor_value.code_actions_enabled_for_toolbar(cx);
         let focus_handle = editor_value.focus_handle(cx);
@@ -274,53 +268,6 @@ impl Render for QuickActionBar {
                         |mut menu, _, _| {
                             menu = menu.context(focus_handle);
 
-                            if supports_inlay_hints {
-                                menu = menu.toggleable_entry(
-                                    "Inlay Hints",
-                                    inlay_hints_enabled,
-                                    IconPosition::Start,
-                                    Some(editor::actions::ToggleInlayHints.boxed_clone()),
-                                    {
-                                        let editor = editor.clone();
-                                        move |window, cx| {
-                                            editor
-                                                .update(cx, |editor, cx| {
-                                                    editor.toggle_inlay_hints(
-                                                        &editor::actions::ToggleInlayHints,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .ok();
-                                        }
-                                    },
-                                );
-
-                            }
-
-                            if supports_semantic_tokens {
-                                menu = menu.toggleable_entry(
-                                    "Semantic Highlights",
-                                    semantic_highlights_enabled,
-                                    IconPosition::Start,
-                                    Some(editor::actions::ToggleSemanticHighlights.boxed_clone()),
-                                    {
-                                        let editor = editor.clone();
-                                        move |window, cx| {
-                                            editor
-                                                .update(cx, |editor, cx| {
-                                                    editor.toggle_semantic_highlights(
-                                                        &editor::actions::ToggleSemanticHighlights,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .ok();
-                                        }
-                                    },
-                                );
-                            }
-
                             if supports_minimap {
                                 menu = menu.toggleable_entry("Minimap", minimap_enabled, IconPosition::Start, Some(editor::actions::ToggleMinimap.boxed_clone()), {
                                     let editor = editor.clone();
@@ -337,10 +284,6 @@ impl Render for QuickActionBar {
                                     }
                                 },)
                             }
-
-
-
-                            menu = menu.separator();
 
                             if is_full {
                                 menu = menu.toggleable_entry(
@@ -364,6 +307,25 @@ impl Render for QuickActionBar {
                                     },
                                 );
                             }
+
+                            menu = menu.separator();
+
+                            menu = menu.toggleable_entry(
+                                "Soft Wrap",
+                                soft_wrap_enabled,
+                                IconPosition::Start,
+                                Some(ToggleSoftWrap.boxed_clone()),
+                                {
+                                    let editor = editor.clone();
+                                    move |window, cx| {
+                                        editor
+                                            .update(cx, |editor, cx| {
+                                                editor.toggle_soft_wrap(&ToggleSoftWrap, window, cx);
+                                            })
+                                            .ok();
+                                    }
+                                },
+                            );
 
                             menu = menu.separator();
 
@@ -461,42 +423,9 @@ impl ToolbarItemView for QuickActionBar {
         &mut self,
         active_pane_item: Option<&dyn ItemHandle>,
         _: &mut Window,
-        cx: &mut Context<Self>,
+        _: &mut Context<Self>,
     ) -> ToolbarItemLocation {
         self.active_item = active_pane_item.map(ItemHandle::boxed_clone);
-        if let Some(active_item) = active_pane_item {
-            self._inlay_hints_enabled_subscription.take();
-
-            if let Some(editor) = active_item.downcast::<Editor>() {
-                let (mut inlay_hints_enabled, mut supports_inlay_hints, mut supports_semantic_tokens) =
-                    editor.update(cx, |editor, cx| {
-                        (
-                            editor.inlay_hints_enabled(),
-                            editor.supports_inlay_hints(cx),
-                            editor.supports_semantic_tokens(cx),
-                        )
-                    });
-                self._inlay_hints_enabled_subscription = Some(cx.observe(&editor, move |_, editor, cx| {
-                    let (new_inlay_hints_enabled, new_supports_inlay_hints, new_supports_semantic_tokens) = editor
-                        .update(cx, |editor, cx| {
-                            (
-                                editor.inlay_hints_enabled(),
-                                editor.supports_inlay_hints(cx),
-                                editor.supports_semantic_tokens(cx),
-                            )
-                        });
-                    let should_notify = inlay_hints_enabled != new_inlay_hints_enabled
-                        || supports_inlay_hints != new_supports_inlay_hints
-                        || supports_semantic_tokens != new_supports_semantic_tokens;
-                    inlay_hints_enabled = new_inlay_hints_enabled;
-                    supports_inlay_hints = new_supports_inlay_hints;
-                    supports_semantic_tokens = new_supports_semantic_tokens;
-                    if should_notify {
-                        cx.notify()
-                    }
-                }));
-            }
-        }
         self.get_toolbar_item_location()
     }
 }
