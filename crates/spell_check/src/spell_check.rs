@@ -25,7 +25,7 @@ static DICTIONARY: LazyLock<spellbook::Dictionary> = LazyLock::new(|| {
         include_str!("../dictionaries/en_US.dic"),
     )
     .expect("bundled en_US dictionary must parse");
-    for line in include_str!("../dictionaries/code_words.txt").lines().filter(|line| !line.is_empty()) {
+    for line in include_str!("../dictionaries/code.dic").lines().filter(|line| !line.is_empty()) {
         dictionary.add(line).unwrap_or_else(|error| panic!("invalid code word entry {line:?}: {error}"));
     }
     dictionary
@@ -249,7 +249,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn code_words_load_into_dictionary() {
+    fn load_code_dictionary() {
         let project_words = HashSet::default();
         assert!(is_correct("addr", &project_words));
         assert!(is_correct("ADDR", &project_words));

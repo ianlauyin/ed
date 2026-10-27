@@ -41,11 +41,11 @@
 ## Dictionaries
 
 - `crates/spell_check/dictionaries/`: `en_US.aff` / `en_US.dic` (Hunspell)
-  and `code_words.txt` (programming terms).
+  and `code.dic` (programming terms).
 - Code words are added to the en_US dictionary at load, not kept in a
   separate list, so they get Hunspell's case rules, affix rules and
   suggestions (typos can be corrected to a code word).
-- `code_words.txt` is one `.dic` entry per line: `word` or `word/FLAGS`,
+- `code.dic` is one `.dic` entry per line (no count header): `word` or `word/FLAGS`,
   using the affix flags of `en_US.aff`. A plain word accepts only itself;
   add flags by hand where other forms are wanted (`addr/S`, `mmap/SDG`).
   An invalid entry panics on load (covered by the crate's test).
