@@ -2123,8 +2123,10 @@ impl Workspace {
         self.sidebar_focus_handle = handle;
     }
 
+    /// The status bar is hidden while something is zoomed, so the zoomed view
+    /// extends down to the window edge.
     pub fn status_bar_visible(&self, cx: &App) -> bool {
-        StatusBarSettings::get_global(cx).show
+        StatusBarSettings::get_global(cx).show && self.zoomed.is_none()
     }
 
     pub const fn multi_workspace(&self) -> Option<&WeakEntity<MultiWorkspace>> {

@@ -35,7 +35,9 @@ because it hurt readability; an opaque window is also cheaper to composite.
   bars stay the plain chrome colour in every pane.
 - A zoomed view (editor or any dock) covers exactly the area the cards occupy,
   on the chrome, overlaying the others, so every zoomed view has the same size.
-  The `zoomed_padding` setting is removed.
+  The `zoomed_padding` setting is removed. The status bar is hidden while
+  something is zoomed, so the zoomed view reaches down to the bottom gap. The
+  title bar stays, since it holds the macOS window controls.
 - An 8px gap separates the cards from the window edges and from open docks.
   There is no gap under the title bar. When the status bar is shown, it replaces
   the bottom gap and pads its content evenly above and below, so the icons sit
