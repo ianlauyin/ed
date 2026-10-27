@@ -258,20 +258,6 @@ impl Editor {
         self.inline_diagnostics_enabled && self.diagnostics_enabled()
     }
 
-    pub const fn show_inline_diagnostics(&self) -> bool {
-        self.show_inline_diagnostics
-    }
-
-    pub fn toggle_inline_diagnostics(
-        &mut self,
-        _: &ToggleInlineDiagnostics,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        self.show_inline_diagnostics = !self.show_inline_diagnostics;
-        self.refresh_inline_diagnostics(false, window, cx);
-    }
-
     pub fn set_max_diagnostics_severity(&mut self, severity: DiagnosticSeverity, cx: &mut App) {
         self.diagnostics_max_severity = if self.diagnostics_enabled() { severity } else { DiagnosticSeverity::Off };
         self.display_map.update(cx, |display_map, _| {
@@ -401,7 +387,6 @@ impl Editor {
 
         if !self.inline_diagnostics_enabled()
             || !self.diagnostics_enabled()
-            || !self.show_inline_diagnostics
             || max_severity == DiagnosticSeverity::Off
         {
             self.inline_diagnostics_update = Task::ready(());

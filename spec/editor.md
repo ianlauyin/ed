@@ -78,6 +78,12 @@
 - The selections menu in the editor toolbar is always shown: there is no
   `toolbar.selections_menu` setting, `editor::ToggleSelectionMenu` action or
   quick action bar toggle.
+- Diagnostics have one per-editor switch, the quick action bar's
+  "Diagnostics" toggle (`editor::ToggleDiagnostics`), which turns underlines,
+  inline messages, problem navigation and LSP pulls on or off together. Inline
+  messages always show while diagnostics are on: there is no
+  `editor::ToggleInlineDiagnostics` action and no `diagnostics.inline.enabled`
+  setting (the other `diagnostics.inline` settings remain).
 - Run/test code lenses are never requested: gutter runnables cover them.
   rust-analyzer isn't told the client supports `rust-analyzer.runSingle` (so
   it omits "Run" / "Run Test" lenses), and gopls's `test` codelens is left at

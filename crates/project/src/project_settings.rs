@@ -323,10 +323,6 @@ pub struct DiagnosticsSettings {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InlineDiagnosticsSettings {
-    /// Whether or not to show inline diagnostics
-    ///
-    /// Default: false
-    pub enabled: bool,
     /// Whether to only show the inline diagnostics after a delay after the
     /// last editor event.
     ///
@@ -423,7 +419,6 @@ impl Settings for ProjectSettings {
                     debounce_ms: lsp_pull_diagnostics.debounce_ms.unwrap().0,
                 },
                 inline: InlineDiagnosticsSettings {
-                    enabled: inline_diagnostics.enabled.unwrap(),
                     update_debounce_ms: inline_diagnostics.update_debounce_ms.unwrap().0,
                     padding: inline_diagnostics.padding.unwrap(),
                     min_column: inline_diagnostics.min_column.unwrap(),

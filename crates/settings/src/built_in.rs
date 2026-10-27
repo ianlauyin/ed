@@ -230,7 +230,6 @@ pub fn settings() -> SettingsContent {
                 debounce_ms: Some(DelayMs(50)),
             }),
             inline: Some(InlineDiagnosticsSettingsContent {
-                enabled: Some(true),
                 update_debounce_ms: Some(DelayMs(150)),
                 padding: Some(4),
                 min_column: Some(0),

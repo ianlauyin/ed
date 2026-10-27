@@ -315,7 +315,6 @@ pub(crate) use actions::ToggleFold;
 pub(crate) use actions::ToggleFoldAll;
 pub(crate) use actions::ToggleIndentGuides;
 pub(crate) use actions::ToggleInlayHints;
-pub(crate) use actions::ToggleInlineDiagnostics;
 pub(crate) use actions::ToggleMinimap;
 pub(crate) use actions::ToggleSelectedDiffHunks;
 pub(crate) use actions::ToggleSoftWrap;
@@ -1275,7 +1274,6 @@ pub struct Editor {
     ime_transaction: Option<TransactionId>,
     pub diagnostics_max_severity: DiagnosticSeverity,
     active_diagnostics: ActiveDiagnostic,
-    show_inline_diagnostics: bool,
     inline_diagnostics_update: Task<()>,
     inline_diagnostics_enabled: bool,
     diagnostics_enabled: bool,
@@ -2197,7 +2195,6 @@ impl Editor {
             select_syntax_node_history: SelectSyntaxNodeHistory::default(),
             ime_transaction: None,
             active_diagnostics: ActiveDiagnostic::None,
-            show_inline_diagnostics: ProjectSettings::get_global(cx).diagnostics.inline.enabled,
             inline_diagnostics_update: Task::ready(()),
             inline_diagnostics: Vec::new(),
             soft_wrap_mode_override,
@@ -7718,19 +7715,11 @@ impl Editor {
             cx.emit(EditorEvent::BreadcrumbsChanged);
         }
 
-        let (restore_unsaved_buffers, show_inline_diagnostics) = {
-            let project_settings = ProjectSettings::get_global(cx);
-            (project_settings.session.restore_unsaved_buffers, project_settings.diagnostics.inline.enabled)
-        };
+        let restore_unsaved_buffers = ProjectSettings::get_global(cx).session.restore_unsaved_buffers;
         self.buffer_serialization =
             self.should_serialize_buffer().then(|| BufferSerialization::new(restore_unsaved_buffers));
 
         if self.mode.is_full() {
-            if self.show_inline_diagnostics != show_inline_diagnostics {
-                self.show_inline_diagnostics = show_inline_diagnostics;
-                self.refresh_inline_diagnostics(false, window, cx);
-            }
-
             let minimap_settings = EditorSettings::get_global(cx).minimap;
             if self.minimap_visibility != MinimapVisibility::Disabled {
                 if self.minimap_visibility.settings_visibility() != minimap_settings.minimap_enabled() {

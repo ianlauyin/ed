@@ -20,7 +20,6 @@ use editor::actions::SelectSmallerSyntaxNode;
 use editor::actions::ToggleCodeActions;
 use editor::actions::ToggleDiagnostics;
 use editor::actions::ToggleGoToLine;
-use editor::actions::ToggleInlineDiagnostics;
 use editor::code_context_menus::CodeContextMenu;
 use editor::code_context_menus::ContextMenuOrigin;
 use gpui::Action;
@@ -50,8 +49,6 @@ use settings::Settings;
 use settings::SettingsStore;
 use ui::ButtonStyle;
 use ui::ContextMenu;
-use ui::ContextMenuEntry;
-use ui::DocumentationSide;
 use ui::IconButton;
 use ui::IconName;
 use ui::IconSize;
@@ -131,8 +128,6 @@ impl Render for QuickActionBar {
         let is_full = editor_value.mode().is_full();
         let diagnostics_enabled =
             editor_value.diagnostics_enabled() && editor_value.diagnostics_max_severity != DiagnosticSeverity::Off;
-        let supports_inline_diagnostics = editor_value.inline_diagnostics_enabled();
-        let inline_diagnostics_enabled = editor_value.show_inline_diagnostics();
         let show_git_blame_gutter = editor_value.show_git_blame_gutter();
 
         let supports_minimap = editor_value.supports_minimap(cx);
@@ -368,30 +363,6 @@ impl Render for QuickActionBar {
                                         }
                                     },
                                 );
-
-                                if supports_inline_diagnostics {
-                                    let mut inline_diagnostics_item = ContextMenuEntry::new("Inline Diagnostics")
-                                        .toggleable(IconPosition::Start, diagnostics_enabled && inline_diagnostics_enabled)
-                                        .action(ToggleInlineDiagnostics.boxed_clone())
-                                        .handler({
-                                            let editor = editor.clone();
-                                            move |window, cx| {
-                                                editor
-                                                    .update(cx, |editor, cx| {
-                                                        editor.toggle_inline_diagnostics(
-                                                            &ToggleInlineDiagnostics,
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    })
-                                                    .ok();
-                                            }
-                                        });
-                                    if !diagnostics_enabled {
-                                        inline_diagnostics_item = inline_diagnostics_item.disabled(true).documentation_aside(DocumentationSide::Left, |_|  Label::new("Inline diagnostics are not available until regular diagnostics are enabled.").into_any_element());
-                                    }
-                                    menu = menu.item(inline_diagnostics_item)
-                                }
                             }
 
                             menu = menu.separator();

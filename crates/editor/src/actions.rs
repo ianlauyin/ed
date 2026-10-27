@@ -827,7 +827,7 @@ actions!(
         BlameRevision,
         /// Opens a blame of the file at the revision preceding the blame entry at cursor.
         BlamePreviousRevision,
-        /// Toggles the diagnostics panel.
+        /// Toggles all diagnostics in this editor: underlines, inline messages, and navigation.
         ToggleDiagnostics,
         /// Toggles indent guides display.
         ToggleIndentGuides,
@@ -835,8 +835,6 @@ actions!(
         ToggleInlayHints,
         /// Toggles semantic highlights display.
         ToggleSemanticHighlights,
-        /// Toggles inline diagnostics display.
-        ToggleInlineDiagnostics,
         /// Toggles the minimap display.
         ToggleMinimap,
         /// Swaps the start and end of the current selection.

@@ -492,10 +492,6 @@ pub struct LspPullDiagnosticsSettingsContent {
 
 #[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, Eq)]
 pub struct InlineDiagnosticsSettingsContent {
-    /// Whether or not to show inline diagnostics
-    ///
-    /// Default: false
-    pub enabled: Option<bool>,
     /// Whether to only show the inline diagnostics after a delay after the
     /// last editor event.
     ///
