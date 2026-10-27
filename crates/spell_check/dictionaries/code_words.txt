@@ -46,8 +46,8 @@ added
 addeventlistener
 additional
 addon
-addr
-address
+addr/S
+address/S
 addtime
 adjust
 admin
@@ -119,7 +119,7 @@ apilevel
 apk
 app
 appearance
-append
+append/R
 appendto
 apple
 applescript
@@ -793,7 +793,6 @@ desc
 describe
 description
 descriptor
-deserialize
 dest
 destroy
 destructor
@@ -3012,8 +3011,8 @@ seo
 separator
 sequence
 ser
-serializable
-serialize
+serializable/C
+serialize/CR
 serialversionuid
 series
 serif

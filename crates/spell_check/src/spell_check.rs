@@ -17,13 +17,19 @@ pub const PROJECT_WORDS_FILE: &str = "spellcheck.txt";
 const MIN_WORD_LEN: usize = 3;
 const MAX_SUGGESTIONS: usize = 5;
 
+/// en_US plus the code words. Code word lines are `.dic` entries, so they can
+/// carry en_US affix flags (`addr/S` also accepts "addrs").
 static DICTIONARY: LazyLock<spellbook::Dictionary> = LazyLock::new(|| {
-    spellbook::Dictionary::new(include_str!("../dictionaries/en_US.aff"), include_str!("../dictionaries/en_US.dic"))
-        .expect("bundled en_US dictionary must parse")
+    let mut dictionary = spellbook::Dictionary::new(
+        include_str!("../dictionaries/en_US.aff"),
+        include_str!("../dictionaries/en_US.dic"),
+    )
+    .expect("bundled en_US dictionary must parse");
+    for line in include_str!("../dictionaries/code_words.txt").lines().filter(|line| !line.is_empty()) {
+        dictionary.add(line).unwrap_or_else(|error| panic!("invalid code word entry {line:?}: {error}"));
+    }
+    dictionary
 });
-
-static CODE_WORDS: LazyLock<HashSet<&'static str>> =
-    LazyLock::new(|| include_str!("../dictionaries/code_words.txt").lines().filter(|line| !line.is_empty()).collect());
 
 static SKIP_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -56,7 +62,6 @@ static SKIP_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
 /// this from a background thread to keep that cost off the first check.
 pub fn warm_up() {
     LazyLock::force(&DICTIONARY);
-    LazyLock::force(&CODE_WORDS);
     LazyLock::force(&SKIP_PATTERNS);
 }
 
@@ -127,8 +132,7 @@ pub fn is_correct(word: &str, project_words: &HashSet<String>) -> bool {
     if word.chars().count() < MIN_WORD_LEN || word.chars().any(|c| c.is_numeric()) {
         return true;
     }
-    let lowercase = word.to_lowercase();
-    if CODE_WORDS.contains(lowercase.as_str()) || project_words.contains(&lowercase) {
+    if project_words.contains(&word.to_lowercase()) {
         return true;
     }
     DICTIONARY.check(word) || DICTIONARY.checker().check_lower_as_title(true).check_lower_as_upper(true).check(word)
@@ -237,5 +241,20 @@ fn split_identifier(token: &str, parts: &mut Vec<Range<usize>>) {
     }
     if start < token.len() {
         parts.push(start..token.len());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_words_load_into_dictionary() {
+        let project_words = HashSet::default();
+        assert!(is_correct("addr", &project_words));
+        assert!(is_correct("ADDR", &project_words));
+        assert!(is_correct("addrs", &project_words));
+        assert!(is_correct("deserializable", &project_words));
+        assert!(is_correct("deserializer", &project_words));
     }
 }
