@@ -81,6 +81,7 @@ impl Project {
         spawn_task: SpawnInTerminal,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Terminal>>> {
+        let original_task = spawn_task.clone();
         let is_via_remote = self.remote_client.is_some();
 
         let path: Option<Arc<Path>> = if let Some(cwd) = &spawn_task.cwd {
@@ -104,7 +105,15 @@ impl Project {
         let settings = TerminalSettings::get(settings_location, cx).clone();
         let venv = self.project_venv(path.as_deref(), &settings, cx);
 
-        let terminal_mode = TerminalMode::task(spawn_task.clone());
+        // The terminal keeps the task as requested so a rerun wraps it in the shell afresh.
+        let remote_shell = self.remote_client.as_ref().and_then(|remote_client| remote_client.read(cx).shell());
+        let shell = match remote_shell {
+            Some(remote_shell) if spawn_task.shell == Shell::System => Shell::Program(remote_shell),
+            _ => spawn_task.shell.clone(),
+        };
+        let spawn_task = wrap_task_in_shell(&spawn_task, &shell);
+        let terminal_mode =
+            TerminalMode::task(SpawnInTerminal { command_label: spawn_task.command_label.clone(), ..original_task });
 
         let local_path = if is_via_remote { None } else { path.clone() };
         let remote_client = self.remote_client.clone();
@@ -495,4 +504,13 @@ fn add_venv_to_env(env: &mut HashMap<String, String>, venv: &Path, path_style: P
     };
     env.insert("PATH".to_owned(), path);
     env.insert("VIRTUAL_ENV".to_owned(), venv.to_string_lossy().into_owned());
+}
+
+/// Wraps the task's command and args into an invocation of `shell`.
+fn wrap_task_in_shell(task: &SpawnInTerminal, shell: &Shell) -> SpawnInTerminal {
+    let builder = ShellBuilder::new(shell);
+    let command_label = builder.command_label(task.command.as_deref().unwrap_or(""));
+    let (command, args) = builder.build_no_quote(task.command.clone(), &task.args);
+
+    SpawnInTerminal { command_label, command: Some(command), args, ..task.clone() }
 }

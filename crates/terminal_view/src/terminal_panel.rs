@@ -38,8 +38,6 @@ use settings::Settings;
 use settings::TerminalDockPosition;
 use task::RevealStrategy;
 use task::RevealTarget;
-use task::Shell;
-use task::ShellBuilder;
 use task::SpawnInTerminal;
 use task::TaskId;
 use terminal::Terminal;
@@ -597,24 +595,7 @@ impl TerminalPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<WeakEntity<Terminal>>> {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return Task::ready(Err(anyhow!("failed to read workspace")));
-        };
-
-        let project = workspace.read(cx).project().read(cx);
-
-        let remote_client = project.remote_client();
-        let remote_shell = remote_client.as_ref().and_then(|remote_client| remote_client.read(cx).shell());
-
-        let shell = if let Some(remote_shell) = remote_shell
-            && task.shell == Shell::System
-        {
-            Shell::Program(remote_shell)
-        } else {
-            task.shell.clone()
-        };
-
-        let task = prepare_task_for_spawn(task, &shell);
+        let task = task.clone();
 
         if task.allow_concurrent_runs && task.use_new_terminal {
             return self.spawn_in_new_terminal(task, window, cx);
@@ -1115,17 +1096,6 @@ impl TerminalPanel {
             cx.notify();
         }
     }
-}
-
-/// Prepares a `SpawnInTerminal` by computing the command, args, and command_label
-/// based on the shell configuration. This is a pure function that can be tested
-/// without spawning actual terminals.
-pub fn prepare_task_for_spawn(task: &SpawnInTerminal, shell: &Shell) -> SpawnInTerminal {
-    let builder = ShellBuilder::new(shell);
-    let command_label = builder.command_label(task.command.as_deref().unwrap_or(""));
-    let (command, args) = builder.build_no_quote(task.command.clone(), &task.args);
-
-    SpawnInTerminal { command_label, command: Some(command), args, ..task.clone() }
 }
 
 fn is_enabled_in_workspace(workspace: &Workspace, cx: &App) -> bool {

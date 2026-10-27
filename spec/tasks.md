@@ -22,7 +22,12 @@ template/variable/spawn types the run icon needs.
   `$ED_*` variables and spawns it in the terminal panel. The icon shows
   running / passed / failed state.
 - A task terminal tab has a rerun button (and `terminal::RerunTask`) that
-  respawns that tab's own command in place; there is no global rerun.
+  respawns that tab's own command in place; there is no global rerun. The tab
+  keeps the task as requested; wrapping it in the shell happens on each spawn,
+  so a rerun never wraps an already wrapped command.
+- Rust `#[cfg(test)] mod <name>` icons run `cargo test -p <pkg> -- <file module>::<name>::`
+  (just `<name>::` in a crate root); the file's full module path isn't known,
+  which is fine because libtest filters by substring.
 - Not supported: `tasks.json` (global, `.ed/`), `.vscode/tasks.json`, the task
   picker/modal, `task::Spawn`, `task::Rerun`, task history, task hooks (including
   worktree-creation setup tasks and the worktree picker's "Automate Setup"),

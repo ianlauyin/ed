@@ -8,7 +8,7 @@
   (#eq? @_attribute "cfg"))
   .
   (mod_item
-    name: (_) @run)
+    name: (_) @run @_test_name)
   (#set! tag rust-mod-test))
 
 ; Rust test

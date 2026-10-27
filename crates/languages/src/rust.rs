@@ -34,7 +34,6 @@ use task::VariableName;
 use util::ResultExt;
 use util::command::Stdio;
 use util::command::new_command;
-use util::maybe;
 use util::merge_json_value_into;
 use util::rel_path::RelPath;
 
@@ -515,7 +514,7 @@ const RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE: VariableName =
 const RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE: VariableName =
     VariableName::Custom(Cow::Borrowed("RUST_BIN_REQUIRED_FEATURES"));
 
-const RUST_TEST_FRAGMENT_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_TEST_FRAGMENT"));
+const RUST_TEST_MOD_FILTER_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_TEST_MOD_FILTER"));
 
 const RUST_DOC_TEST_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_DOC_TEST_NAME"));
 
@@ -536,12 +535,11 @@ impl ContextProvider for RustContextProvider {
 
         let mut variables = TaskVariables::default();
 
-        if let (Some(path), Some(stem)) = (&local_abs_path, task_variables.get(&VariableName::Stem)) {
-            let fragment = test_fragment(&variables, path, stem);
-            variables.insert(RUST_TEST_FRAGMENT_TASK_VARIABLE, fragment);
-        };
         if let Some(test_name) = task_variables.get(&VariableName::Custom(Cow::Borrowed("_test_name"))) {
             variables.insert(RUST_TEST_NAME_TASK_VARIABLE, test_name.into());
+            if let (Some(path), Some(stem)) = (&local_abs_path, task_variables.get(&VariableName::Stem)) {
+                variables.insert(RUST_TEST_MOD_FILTER_TASK_VARIABLE, test_mod_filter(path, stem, test_name));
+            }
         }
         if let Some(doc_test_name) = task_variables.get(&VariableName::Custom(Cow::Borrowed("_doc_test_name"))) {
             variables.insert(RUST_DOC_TEST_NAME_TASK_VARIABLE, doc_test_name.into());
@@ -654,7 +652,7 @@ impl ContextProvider for RustContextProvider {
             TaskTemplate {
                 label: format!(
                     "Test mod '{}' (package: {})",
-                    VariableName::Stem.template_value(),
+                    RUST_TEST_NAME_TASK_VARIABLE.template_value(),
                     RUST_PACKAGE_TASK_VARIABLE.template_value(),
                 ),
                 command: "cargo".into(),
@@ -663,7 +661,7 @@ impl ContextProvider for RustContextProvider {
                     "-p".into(),
                     RUST_PACKAGE_TASK_VARIABLE.template_value(),
                     "--".into(),
-                    RUST_TEST_FRAGMENT_TASK_VARIABLE.template_value(),
+                    RUST_TEST_MOD_FILTER_TASK_VARIABLE.template_value(),
                 ],
                 tags: vec!["rust-mod-test".to_owned()],
                 cwd: Some(RUST_MANIFEST_DIRNAME_TASK_VARIABLE.template_value()),
@@ -924,26 +922,20 @@ fn package_name_from_pkgid(pkgid: &str) -> Option<&str> {
     Some(package_name)
 }
 
-fn test_fragment(variables: &TaskVariables, path: &Path, stem: &str) -> String {
-    let fragment = if stem == "lib" {
-        // This isn't quite right---it runs the tests for the entire library, rather than
-        // just for the top-level `mod tests`. But we don't really have the means here to
-        // filter out just that module.
-        Some("--lib".to_owned())
-    } else if stem == "mod" {
-        maybe!({ Some(path.parent()?.file_name()?.to_string_lossy().into_owned()) })
-    } else if stem == "main" {
-        if let (Some(bin_name), Some(bin_kind)) =
-            (variables.get(&RUST_BIN_NAME_TASK_VARIABLE), variables.get(&RUST_BIN_KIND_TASK_VARIABLE))
-        {
-            Some(format!("--{bin_kind}={bin_name}"))
-        } else {
-            None
-        }
-    } else {
-        Some(stem.to_owned())
+/// Test name filter for the inline module `mod_name` declared in the file at `path`.
+///
+/// Only the file's own module name is known, not its full path, which is fine since
+/// libtest filters by substring.
+fn test_mod_filter(path: &Path, stem: &str, mod_name: &str) -> String {
+    let file_module = match stem {
+        "lib" | "main" => None,
+        "mod" => path.parent().and_then(|dir| dir.file_name()).map(|name| name.to_string_lossy().into_owned()),
+        _ => Some(stem.to_owned()),
     };
-    fragment.unwrap_or_else(|| "--".to_owned())
+    match file_module {
+        Some(file_module) => format!("{file_module}::{mod_name}::"),
+        None => format!("{mod_name}::"),
+    }
 }
 
 #[cfg(test)]
@@ -952,6 +944,14 @@ mod tests {
 
     fn library_root(abs_path: &str) -> Option<LibraryRoot> {
         CargoLibraryProvider.library_root(Path::new(abs_path))
+    }
+
+    #[test]
+    fn test_mod_filter_scopes_to_file_module() {
+        assert_eq!(test_mod_filter(Path::new("/p/src/lib.rs"), "lib", "tests"), "tests::");
+        assert_eq!(test_mod_filter(Path::new("/p/src/main.rs"), "main", "tests"), "tests::");
+        assert_eq!(test_mod_filter(Path::new("/p/src/foo/mod.rs"), "mod", "tests"), "foo::tests::");
+        assert_eq!(test_mod_filter(Path::new("/p/src/foo/bar.rs"), "bar", "tests"), "bar::tests::");
     }
 
     #[test]
