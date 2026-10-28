@@ -24,24 +24,16 @@ use crate::PathEvent;
 use crate::PathEventKind;
 use crate::Watcher;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OsWatcherKind {
-    Native,
-    Poll,
-}
+/// macOS (FSEvents) watches cover their whole subtree; Linux (inotify) watches
+/// cover one directory.
+const RECURSIVE_WATCH: bool = cfg!(target_os = "macos");
 
-impl OsWatcherKind {
-    /// Poll watches and native macOS/Windows watches cover their whole subtree;
-    /// native Linux (inotify) watches cover one directory.
-    fn is_recursive(self) -> bool {
-        self == Self::Poll || cfg!(target_os = "macos")
-    }
-}
+/// How often a watch on a not-yet-existing (or skipped) path is retried.
+const PENDING_PATH_RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
 pub(crate) async fn watch(
     fs: Arc<dyn Fs>,
     native_watcher: Arc<OsWatcher>,
-    poll_watcher: Arc<OsWatcher>,
     executor: BackgroundExecutor,
     path: &Path,
     latency: Duration,
@@ -50,7 +42,7 @@ pub(crate) async fn watch(
     let pending_paths: Arc<Mutex<Vec<PathEvent>>> = Arc::default();
 
     let watcher: Arc<dyn Watcher> =
-        Arc::new(FsWatcher::new(native_watcher, poll_watcher, fs.clone(), executor.clone(), tx, pending_paths.clone()));
+        Arc::new(FsWatcher::new(native_watcher, fs.clone(), executor.clone(), tx, pending_paths.clone()));
 
     if let Err(e) = watcher.add(path) {
         log::warn!("Failed to watch {}:\n{e}", path.display());
@@ -69,11 +61,7 @@ pub(crate) async fn watch(
             }
         }
         watcher.add(&target).ok();
-        // Skipped for poll watchers: PollWatcher::watch() recursively scans
-        // at registration, blocking on large virtual filesystem mounts
-        if let Some(parent) = target.parent()
-            && !fs.requires_poll_watcher(parent)
-        {
+        if let Some(parent) = target.parent() {
             watcher.add(parent).log_err();
         }
     }
@@ -101,7 +89,6 @@ pub(crate) async fn watch(
 
 pub struct FsWatcher {
     native_watcher: Arc<OsWatcher>,
-    poll_watcher: Arc<OsWatcher>,
     fs: Arc<dyn Fs>,
     executor: BackgroundExecutor,
     tx: async_channel::Sender<()>,
@@ -119,7 +106,6 @@ struct FsWatcherRegistration {
 impl FsWatcher {
     pub(crate) fn new(
         native_watcher: Arc<OsWatcher>,
-        poll_watcher: Arc<OsWatcher>,
         fs: Arc<dyn Fs>,
         executor: BackgroundExecutor,
         tx: async_channel::Sender<()>,
@@ -127,7 +113,6 @@ impl FsWatcher {
     ) -> Self {
         Self {
             native_watcher,
-            poll_watcher,
             fs,
             executor,
             tx,
@@ -151,8 +136,6 @@ impl FsWatcher {
         }
         match register_existing_path(
             &self.native_watcher,
-            &self.poll_watcher,
-            self.fs.as_ref(),
             path.clone(),
             case_insensitive,
             self.tx.clone(),
@@ -180,7 +163,6 @@ impl FsWatcher {
 
         let task = self.executor.spawn(poll_path_until_created(
             self.native_watcher.clone(),
-            self.poll_watcher.clone(),
             self.fs.clone(),
             self.executor.clone(),
             path.clone(),
@@ -252,7 +234,7 @@ impl Watcher for FsWatcher {
 
 /// Whether a recursive registration on a strict ancestor of `path` already covers
 /// it. Both key spellings are probed so a folded registration still matches; only
-/// poll watches and native macOS/Windows watches are recursive.
+/// macOS watches are recursive.
 fn path_covered_by_recursive_registration(
     registrations: &HashMap<WatchKey, FsWatcherRegistration>,
     path: &SanitizedPath,
@@ -265,59 +247,23 @@ fn path_covered_by_recursive_registration(
     })
 }
 
-/// Detect whether a path requires polling instead of native file watching.
-///
-/// Returns `true` for filesystem types where inotify/FSEvents/ReadDirectoryChanges
-/// silently fail to deliver events: 9P, NFS, CIFS/SMB, FUSE (sshfs), etc.
-///
-/// Can be overridden with the `ED_FILE_WATCHER_MODE` environment variable:
-/// - `native` — always use native OS watcher
-/// - `poll` — always use polling
-/// - `auto` (default) — auto-detect based on filesystem type
-pub fn requires_poll_watcher(path: &Path) -> bool {
-    match std::env::var("ED_FILE_WATCHER_MODE").as_deref().unwrap_or("auto") {
-        "native" => return false,
-        "poll" => return true,
-        _ => {}
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        detect_requires_poll_watcher_linux(path)
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = path;
-        false
-    }
-}
-
 fn register_existing_path(
     native_watcher: &Arc<OsWatcher>,
-    poll_watcher: &Arc<OsWatcher>,
-    fs: &dyn Fs,
     path: Arc<Path>,
     case_insensitive: bool,
     tx: async_channel::Sender<()>,
     pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
 ) -> anyhow::Result<Option<FsWatcherRegistration>> {
-    let os_watcher = if fs.requires_poll_watcher(path.as_ref()) {
-        log::info!("Using poll watcher ({}ms interval) for {}", poll_interval().as_millis(), path.display());
-
-        poll_watcher
-    } else {
-        native_watcher
-    };
     let root_path = SanitizedPath::new_arc(path.as_ref());
     let path_for_callback = path.clone();
-    let Some(registration_id) = os_watcher.add(path, case_insensitive, move |event: &notify::Event| {
+    let Some(registration_id) = native_watcher.add(path, case_insensitive, move |event: &notify::Event| {
         log::trace!("watcher received event: {event:?}");
         push_notify_event(&tx, &pending_path_events, &root_path, case_insensitive, path_for_callback.as_ref(), event);
     })?
     else {
         return Ok(None);
     };
-    Ok(Some(FsWatcherRegistration { id: registration_id, os_watcher: os_watcher.clone() }))
+    Ok(Some(FsWatcherRegistration { id: registration_id, os_watcher: native_watcher.clone() }))
 }
 
 /// Whether the volume backing `path` does case-insensitive name lookups, used to
@@ -399,7 +345,6 @@ impl WatchKey {
 
 async fn poll_path_until_created(
     native_watcher: Arc<OsWatcher>,
-    poll_watcher: Arc<OsWatcher>,
     fs: Arc<dyn Fs>,
     executor: BackgroundExecutor,
     path: Arc<Path>,
@@ -409,7 +354,7 @@ async fn poll_path_until_created(
     pending_registrations: Arc<Mutex<HashMap<Arc<Path>, Task<()>>>>,
 ) {
     loop {
-        executor.timer(poll_interval()).await;
+        executor.timer(PENDING_PATH_RETRY_INTERVAL).await;
 
         if !pending_registrations.lock().contains_key(path.as_ref()) {
             return;
@@ -442,14 +387,10 @@ async fn poll_path_until_created(
             let path = path.clone();
             let tx = tx.clone();
             let pending_path_events = pending_path_events.clone();
-            let fs = fs.clone();
             let native_watcher = native_watcher.clone();
-            let poll_watcher = poll_watcher.clone();
             move || {
                 register_existing_path(
                     &native_watcher,
-                    &poll_watcher,
-                    fs.as_ref(),
                     path,
                     case_insensitive,
                     tx,
@@ -626,9 +567,9 @@ impl WatchPaths {
     }
 
     /// The nearest strict ancestor whose recursive backend watch covers `path`.
-    /// Only poll watches and native macOS watches are recursive.
-    fn covering_ancestor(&self, path: &SanitizedPath, recursive: bool) -> Option<WatchKey> {
-        if !recursive {
+    /// Only macOS watches are recursive.
+    fn covering_ancestor(&self, path: &SanitizedPath) -> Option<WatchKey> {
+        if !RECURSIVE_WATCH {
             return None;
         }
         path.as_path().ancestors().skip(1).find_map(|ancestor| {
@@ -702,8 +643,6 @@ impl<T: notify::Watcher + Send> WatchBackend for T {
 }
 
 pub struct OsWatcher {
-    kind: OsWatcherKind,
-    recursive: bool,
     state: Arc<Mutex<WatcherState>>,
 
     // Hold state across backend mutations. Callbacks don't acquire state or
@@ -717,16 +656,15 @@ pub struct OsWatcher {
 }
 
 impl OsWatcher {
-    /// Watches with notify's backend of `kind`, created lazily on first use so
+    /// Watches with notify's native backend, created lazily on first use so
     /// that a failure to start it can be reported by `ensure_backend`.
-    pub fn new(kind: OsWatcherKind, executor: BackgroundExecutor) -> Arc<Self> {
-        Self::with_backend(kind, executor, None)
+    pub fn new(executor: BackgroundExecutor) -> Arc<Self> {
+        Self::with_backend(executor, None)
     }
 
     /// Watches with the given backend in place of notify's; `event_sink` is how
     /// that backend reports events, standing in for notify's `EventHandler`.
     pub(crate) fn with_backend(
-        kind: OsWatcherKind,
         executor: BackgroundExecutor,
         backend: Option<Box<dyn WatchBackend>>,
     ) -> Arc<Self> {
@@ -742,13 +680,11 @@ impl OsWatcher {
             async move {
                 let mut rescan_history = RescanHistory::default();
                 while let Ok(first) = event_rx.recv().await {
-                    dispatch_batch(kind, &state, &mut rescan_history, first, &event_rx);
+                    dispatch_batch(&state, &mut rescan_history, first, &event_rx);
                 }
             }
         });
         Arc::new(Self {
-            kind,
-            recursive: kind.is_recursive(),
             state,
             backend: Mutex::new(backend),
             event_tx,
@@ -767,7 +703,7 @@ impl OsWatcher {
     }
 
     pub(crate) const fn is_recursive(&self) -> bool {
-        self.recursive
+        RECURSIVE_WATCH
     }
 
     fn add(
@@ -782,16 +718,16 @@ impl OsWatcher {
         let new_coverage = if state.paths.contains(&key) {
             self.rewatch_if_stale(&mut state, &path, &key)?;
             None
-        } else if let Some(ancestor) = state.paths.covering_ancestor(&path, self.recursive) {
+        } else if let Some(ancestor) = state.paths.covering_ancestor(&path) {
             Some(Coverage::CoveredBy(ancestor))
         } else {
-            if self.kind == OsWatcherKind::Native && state.is_native_watch_limit_cooldown_active() {
+            if state.is_native_watch_limit_cooldown_active() {
                 return Ok(None);
             }
 
             match self.watch(path.as_path()) {
                 Ok(()) => {}
-                Err(error) if self.kind == OsWatcherKind::Native && is_max_files_watch_error(&error) => {
+                Err(error) if is_max_files_watch_error(&error) => {
                     state.start_native_watch_limit_cooldown(path.as_path());
                     return Ok(None);
                 }
@@ -905,7 +841,7 @@ impl OsWatcher {
             else {
                 continue;
             };
-            let coverage = match state.paths.covering_ancestor(&covered_path, self.recursive) {
+            let coverage = match state.paths.covering_ancestor(&covered_path) {
                 Some(ancestor) => {
                     if let Some(covered) = state.paths.covered_by_mut(&ancestor) {
                         covered.insert((depth, covered_key.clone()));
@@ -933,13 +869,13 @@ impl OsWatcher {
     }
 
     fn watch_replacement(&self, state: &mut WatcherState, path: &SanitizedPath) -> bool {
-        if self.kind == OsWatcherKind::Native && state.is_native_watch_limit_cooldown_active() {
+        if state.is_native_watch_limit_cooldown_active() {
             return false;
         }
         match self.watch(path.as_path()) {
             Ok(()) => true,
             Err(error) => {
-                if self.kind == OsWatcherKind::Native && is_max_files_watch_error(&error) {
+                if is_max_files_watch_error(&error) {
                     state.start_native_watch_limit_cooldown(path.as_path());
                 }
                 log::error!("failed to restore watch for {path:?}; retaining its covering watch: {error:#}");
@@ -952,7 +888,7 @@ impl OsWatcher {
         self.ensure_backend()?;
         self.backend.lock().as_mut().expect("watcher backend initialized").watch(
             path,
-            if self.recursive { notify::RecursiveMode::Recursive } else { notify::RecursiveMode::NonRecursive },
+            if RECURSIVE_WATCH { notify::RecursiveMode::Recursive } else { notify::RecursiveMode::NonRecursive },
         )?;
         Ok(())
     }
@@ -976,46 +912,38 @@ impl OsWatcher {
         // watcher along with every path registered on it.
         let mut backend = self.backend.lock();
         if backend.is_none() {
-            *backend = Some(match self.kind {
-                OsWatcherKind::Native => {
-                    // CORE excludes Access events, which ed discards anyway. Without this,
-                    // the default mask subscribes to inotify OPEN/CLOSE_* on Linux, so every
-                    // file read in a watched directory would queue events, increasing the
-                    // risk of queue overflows (and thus full rescans) under read-heavy
-                    // workloads like grep or language server indexing.
-                    let config = notify::Config::default().with_event_kinds(notify::EventKindMask::CORE);
-                    Box::new(<notify::RecommendedWatcher as notify::Watcher>::new(self.event_sink(), config)?)
-                }
-                OsWatcherKind::Poll => {
-                    let config = notify::Config::default().with_poll_interval(*POLL_INTERVAL);
-                    Box::new(notify::PollWatcher::new(self.event_sink(), config)?)
-                }
-            });
+            // CORE excludes Access events, which ed discards anyway. Without this,
+            // the default mask subscribes to inotify OPEN/CLOSE_* on Linux, so every
+            // file read in a watched directory would queue events, increasing the
+            // risk of queue overflows (and thus full rescans) under read-heavy
+            // workloads like grep or language server indexing.
+            let config = notify::Config::default().with_event_kinds(notify::EventKindMask::CORE);
+            *backend = Some(Box::new(<notify::RecommendedWatcher as notify::Watcher>::new(self.event_sink(), config)?));
         }
         Ok(())
     }
 }
 
-fn dispatch(kind: OsWatcherKind, state: &Mutex<WatcherState>, event: notify::Result<notify::Event>) {
+fn dispatch(state: &Mutex<WatcherState>, event: notify::Result<notify::Event>) {
     let event = match event {
         Ok(event) => event,
         Err(error) => {
-            log::warn!("{kind:?} watcher error: {error}");
+            log::warn!("file watcher error: {error}");
             return;
         }
     };
 
-    log::trace!("handle {kind:?} watcher event: {event:?}");
+    log::trace!("handle file watcher event: {event:?}");
 
     let callbacks = {
         let mut state = state.lock();
         // Invalidate before callbacks can trigger a scan.
-        if !kind.is_recursive() && event.need_rescan() {
+        if !RECURSIVE_WATCH && event.need_rescan() {
             // Overflow may have dropped removal events.
             for path_state in state.paths.0.values_mut() {
                 path_state.stale = true;
             }
-        } else if !kind.is_recursive()
+        } else if !RECURSIVE_WATCH
             && matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_)))
         {
             for path in &event.paths {
@@ -1097,7 +1025,6 @@ impl RescanHistory {
 }
 
 fn dispatch_batch(
-    kind: OsWatcherKind,
     state: &Mutex<WatcherState>,
     rescan_history: &mut RescanHistory,
     first: notify::Result<notify::Event>,
@@ -1121,9 +1048,9 @@ fn dispatch_batch(
         if let Ok(event) = &event
             && let Some(report) = rescan_history.record(event)
         {
-            log::error!("{kind:?} filesystem watcher requested rescan: {report}");
+            log::error!("filesystem watcher requested rescan: {report}");
         }
-        dispatch(kind, state, event);
+        dispatch(state, event);
     }
 }
 
@@ -1141,15 +1068,6 @@ fn is_max_files_watch_error(error: &anyhow::Error) -> bool {
     error.downcast_ref::<notify::Error>().is_some_and(|error| matches!(&error.kind, notify::ErrorKind::MaxFilesWatch))
 }
 
-static POLL_INTERVAL: LazyLock<Duration> = LazyLock::new(|| {
-    let poll_ms: u64 = std::env::var("ED_FILE_WATCHER_POLL_MS")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(2000)
-        .clamp(500, 30000);
-    Duration::from_millis(poll_ms)
-});
-
 static NATIVE_WATCH_LIMIT_COOLDOWN: LazyLock<Duration> = LazyLock::new(|| {
     let cooldown_seconds: u64 = std::env::var("ED_NATIVE_WATCH_LIMIT_COOLDOWN_SECONDS")
         .ok()
@@ -1159,82 +1077,9 @@ static NATIVE_WATCH_LIMIT_COOLDOWN: LazyLock<Duration> = LazyLock::new(|| {
     Duration::from_secs(cooldown_seconds)
 });
 
-pub fn poll_interval() -> Duration {
-    *POLL_INTERVAL
-}
-
 #[cfg(target_os = "linux")]
 pub(crate) const fn case_insensitive_path(_path: &Path) -> bool {
     false
 }
 
-#[cfg(target_os = "linux")]
-fn detect_requires_poll_watcher_linux(path: &Path) -> bool {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
 
-    let c_path = match CString::new(path.as_os_str().as_bytes()) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statfs(c_path.as_ptr(), &raw mut stat) } != 0 {
-        return false;
-    }
-
-    const V9FS_MAGIC: u64 = 0x0102_1997;
-    const NFS_SUPER_MAGIC: u64 = 0x0000_6969;
-    const CIFS_MAGIC: u64 = 0xFF53_4D42;
-    const SMB_SUPER_MAGIC: u64 = 0x0000_517B;
-    const SMB2_MAGIC: u64 = 0xFE53_4D42;
-    const FUSE_SUPER_MAGIC: u64 = 0x6573_5546;
-
-    let fs_type = (stat.f_type as u64) & 0xFFFF_FFFF;
-    if fs_type == FUSE_SUPER_MAGIC && is_virtiofs(path) {
-        return false;
-    }
-
-    if fs_type == V9FS_MAGIC
-        || fs_type == NFS_SUPER_MAGIC
-        || fs_type == CIFS_MAGIC
-        || fs_type == SMB_SUPER_MAGIC
-        || fs_type == SMB2_MAGIC
-        || fs_type == FUSE_SUPER_MAGIC
-    {
-        log::info!(
-            "Detected network/virtual filesystem (type 0x{:x}) at {}, using poll watcher",
-            fs_type,
-            path.display()
-        );
-        return true;
-    }
-
-    false
-}
-
-#[cfg(target_os = "linux")]
-fn is_virtiofs(path: &Path) -> bool {
-    let Ok(mountinfo) = std::fs::read_to_string("/proc/self/mountinfo") else {
-        return false;
-    };
-
-    let mut best_mount = None;
-    for line in mountinfo.lines() {
-        let fields = line.split(' ').collect::<Vec<_>>();
-        let Some(separator) = fields.iter().position(|field| *field == "-") else {
-            continue;
-        };
-        let (Some(mount_point), Some(fs_type)) = (fields.get(4), fields.get(separator + 1)) else {
-            continue;
-        };
-
-        let mount_point =
-            mount_point.replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\");
-        if path.starts_with(&mount_point) && best_mount.is_none_or(|(length, _)| mount_point.len() > length) {
-            best_mount = Some((mount_point.len(), *fs_type));
-        }
-    }
-
-    best_mount.is_some_and(|(_, fs_type)| fs_type == "virtiofs" || fs_type == "fuse.virtiofs")
-}

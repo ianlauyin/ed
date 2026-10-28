@@ -237,6 +237,7 @@ impl WorktreeStore {
         client.add_entity_request_handler(Self::handle_restore_project_entry);
         client.add_entity_request_handler(Self::handle_expand_project_entry);
         client.add_entity_request_handler(Self::handle_expand_all_for_project_entry);
+        client.add_entity_request_handler(Self::handle_rescan_worktrees);
     }
 
     pub fn init_remote(client: &AnyProtoClient) {
@@ -1280,6 +1281,15 @@ impl WorktreeStore {
         Worktree::handle_expand_all_for_entry(worktree, envelope.payload, cx).await
     }
 
+    pub async fn handle_rescan_worktrees(
+        this: Entity<Self>,
+        _envelope: TypedEnvelope<proto::RescanWorktrees>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        this.update(&mut cx, |this, cx| this.rescan_worktrees(cx)).await?;
+        Ok(proto::Ack {})
+    }
+
     pub async fn handle_allocate_worktree_id(
         _this: Entity<Self>,
         _envelope: TypedEnvelope<proto::AllocateWorktreeId>,
@@ -1287,6 +1297,30 @@ impl WorktreeStore {
     ) -> Result<proto::AllocateWorktreeIdResponse> {
         let worktree_id = cx.update(|cx| WorktreeIdCounter::get(cx).next());
         Ok(proto::AllocateWorktreeIdResponse { worktree_id })
+    }
+
+    /// Rescans every worktree and reloads its git state, picking up changes the
+    /// file watcher never reported.
+    pub fn rescan_worktrees(&self, cx: &App) -> Task<Result<()>> {
+        match &self.state {
+            WorktreeStoreState::Local { .. } => {
+                let scans = self
+                    .worktrees()
+                    .filter_map(|worktree| worktree.read(cx).as_local().map(|worktree| worktree.rescan()))
+                    .collect::<Vec<_>>();
+                cx.background_spawn(async move {
+                    futures::future::join_all(scans).await;
+                    Ok(())
+                })
+            }
+            WorktreeStoreState::Remote { upstream_client, upstream_project_id, .. } => {
+                let request = upstream_client.request(proto::RescanWorktrees { project_id: *upstream_project_id });
+                cx.background_spawn(async move {
+                    request.await?;
+                    Ok(())
+                })
+            }
+        }
     }
 
     pub fn fs(&self) -> Option<Arc<dyn Fs>> {

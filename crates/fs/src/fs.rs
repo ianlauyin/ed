@@ -134,9 +134,6 @@ pub trait Fs: Send + Sync {
     fn path_exists(&self, path: &Path) -> bool;
     /// Whether the volume holding `path` compares file names case-sensitively.
     fn is_path_case_sensitive(&self, path: &Path) -> bool;
-    /// Whether `path` sits on a filesystem where native file watching does not
-    /// deliver events (network mounts and some FUSE mounts), so it must be polled.
-    fn requires_poll_watcher(&self, path: &Path) -> bool;
 
     async fn watch(
         &self,
@@ -388,7 +385,6 @@ pub struct RealFs {
     this: std::sync::Weak<Self>,
     executor: BackgroundExecutor,
     native_watcher: Arc<fs_watcher::OsWatcher>,
-    poll_watcher: Arc<fs_watcher::OsWatcher>,
     next_job_id: Arc<AtomicUsize>,
     job_event_subscribers: Arc<Mutex<Vec<JobEventSender>>>,
     trash: Arc<Mutex<SlotMap<TrashId, TrashedEntry>>>,
@@ -438,8 +434,7 @@ impl RealFs {
     pub fn new(executor: BackgroundExecutor) -> Arc<Self> {
         Arc::new_cyclic(|this| Self {
             this: this.clone(),
-            native_watcher: fs_watcher::OsWatcher::new(fs_watcher::OsWatcherKind::Native, executor.clone()),
-            poll_watcher: fs_watcher::OsWatcher::new(fs_watcher::OsWatcherKind::Poll, executor.clone()),
+            native_watcher: fs_watcher::OsWatcher::new(executor.clone()),
             executor,
             next_job_id: Arc::new(AtomicUsize::new(0)),
             job_event_subscribers: Arc::new(Mutex::new(Vec::new())),
@@ -815,10 +810,6 @@ impl Fs for RealFs {
         !fs_watcher::case_insensitive_path(path)
     }
 
-    fn requires_poll_watcher(&self, path: &Path) -> bool {
-        fs_watcher::requires_poll_watcher(path)
-    }
-
     async fn watch(
         &self,
         path: &Path,
@@ -828,7 +819,6 @@ impl Fs for RealFs {
         fs_watcher::watch(
             this,
             self.native_watcher.clone(),
-            self.poll_watcher.clone(),
             self.executor.clone(),
             path,
             latency,

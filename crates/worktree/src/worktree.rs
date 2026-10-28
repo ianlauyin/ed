@@ -199,7 +199,6 @@ pub struct LocalWorktree {
     next_entry_id: Arc<AtomicUsize>,
     settings: WorktreeSettings,
     scanning_enabled: bool,
-    force_defer_watch: bool,
 }
 
 pub struct PathPrefixScanRequest {
@@ -209,6 +208,8 @@ pub struct PathPrefixScanRequest {
 
 struct ScanRequest {
     relative_paths: Vec<Arc<RelPath>>,
+    /// Reload the whole tree and every repository's git state.
+    rescan: bool,
     done: SmallVec<[oneshot::Sender<()>; 1]>,
 }
 
@@ -617,7 +618,6 @@ impl Worktree {
                 library_name: None,
                 settings,
                 scanning_enabled,
-                force_defer_watch: false,
             };
             worktree.start_background_scanner(scan_requests_rx, path_prefixes_to_scan_rx, cx);
             Worktree::Local(worktree)
@@ -1243,7 +1243,6 @@ impl LocalWorktree {
         let next_entry_id = self.next_entry_id.clone();
         let fs = self.fs.clone();
         let scanning_enabled = self.scanning_enabled;
-        let force_defer_watch = self.force_defer_watch;
         let track_git_repositories = self.visible;
         let settings = self.settings.clone();
         let (scan_states_tx, mut scan_states_rx) = mpsc::unbounded();
@@ -1251,9 +1250,7 @@ impl LocalWorktree {
             let abs_path = snapshot.abs_path.as_path().to_path_buf();
             let background = cx.background_executor().clone();
             async move {
-                let defer_watch = force_defer_watch || (scanning_enabled && fs.requires_poll_watcher(&abs_path));
-
-                let (events, watcher) = if scanning_enabled && !defer_watch {
+                let (events, watcher) = if scanning_enabled {
                     fs.watch(&abs_path, FS_WATCH_LATENCY).await
                 } else {
                     (Box::pin(stream::pending()) as _, Arc::new(NullWatcher) as _)
@@ -1286,7 +1283,6 @@ impl LocalWorktree {
                     watcher,
                     track_git_repositories,
                     is_single_file,
-                    defer_watch,
                 };
 
                 scanner.run(events).await;
@@ -1855,7 +1851,15 @@ impl LocalWorktree {
 
     pub fn refresh_entries_for_paths(&self, paths: Vec<Arc<RelPath>>) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
-        self.scan_requests_tx.try_send(ScanRequest { relative_paths: paths, done: smallvec![tx] }).ok();
+        self.scan_requests_tx.try_send(ScanRequest { relative_paths: paths, rescan: false, done: smallvec![tx] }).ok();
+        rx
+    }
+
+    /// Rescans the whole worktree and reloads git state, for changes the file
+    /// watcher never reports (e.g. made by the host side of a VM mount).
+    pub fn rescan(&self) -> oneshot::Receiver<()> {
+        let (tx, rx) = oneshot::channel();
+        self.scan_requests_tx.try_send(ScanRequest { relative_paths: Vec::new(), rescan: true, done: smallvec![tx] }).ok();
         rx
     }
 
@@ -3666,7 +3670,6 @@ struct BackgroundScanner {
     /// Whether this is a single-file worktree (root is a file, not a directory).
     /// Used to determine if we should give up after repeated canonicalization failures.
     is_single_file: bool,
-    defer_watch: bool,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -3794,28 +3797,6 @@ impl BackgroundScanner {
 
         self.send_status_update(false, SmallVec::new(), &[]).await;
 
-        if self.defer_watch {
-            let (events, watcher) = self.fs.watch(root_abs_path.as_path(), FS_WATCH_LATENCY).await;
-            self.watcher = watcher;
-            fs_events_rx = Box::pin(events.map(|events| events.into_iter().collect()));
-
-            let state = self.state.lock().await;
-            for target in state.symlink_paths_by_target.keys() {
-                if !target.starts_with(root_abs_path.as_path()) {
-                    self.watcher.add(target).log_err();
-                }
-            }
-            for repo in state.snapshot.git_repositories.values() {
-                if !repo.common_dir_abs_path.starts_with(root_abs_path.as_path()) {
-                    self.watcher.add(&repo.common_dir_abs_path).log_err();
-                }
-                if !repo.repository_dir_abs_path.starts_with(root_abs_path.as_path()) {
-                    self.watcher.add(&repo.repository_dir_abs_path).log_err();
-                }
-            }
-            drop(state);
-        }
-
         // Process any any FS events that occurred while performing the initial scan.
         // For these events, update events cannot be as precise, because we didn't
         // have the previous state loaded yet.
@@ -3843,6 +3824,9 @@ impl BackgroundScanner {
                 // these before handling changes reported by the filesystem.
                 request = self.next_scan_request().fuse() => {
                     let Ok(request) = request else { break };
+                    if request.rescan {
+                        self.rescan_all().await;
+                    }
                     if !self.process_scan_request(request, false).await {
                         return;
                     }
@@ -3907,6 +3891,23 @@ impl BackgroundScanner {
                 }
             }
         }
+    }
+
+    /// Handles a rescan of the root (and of each repository's git directories,
+    /// which may live outside it) as if the watcher had lost sync.
+    async fn rescan_all(&self) {
+        let events = {
+            let state = self.state.lock().await;
+            let root = &state.snapshot.abs_path;
+            let root = self.fs.canonicalize(root.as_path()).await.unwrap_or_else(|_| root.as_path().to_path_buf());
+            let git_dirs = state.snapshot.git_repositories.values().map(|repo| repo.dot_git_abs_path.to_path_buf());
+            std::iter::once(root)
+                .chain(git_dirs)
+                .map(|path| PathEvent { path, kind: Some(PathEventKind::Rescan) })
+                .collect::<Vec<_>>()
+        };
+        log::info!("rescanning worktree on request: {events:?}");
+        self.process_events(events).await;
     }
 
     async fn process_scan_request(&self, mut request: ScanRequest, scanning: bool) -> bool {
@@ -5290,6 +5291,7 @@ impl BackgroundScanner {
         let mut request = self.scan_requests_rx.recv().await?;
         while let Ok(next_request) = self.scan_requests_rx.try_recv() {
             request.relative_paths.extend(next_request.relative_paths);
+            request.rescan |= next_request.rescan;
             request.done.extend(next_request.done);
         }
         Ok(request)

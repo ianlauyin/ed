@@ -480,6 +480,9 @@ actions!(
         OpenInTerminal,
         /// Reloads the active item.
         ReloadActiveItem,
+        /// Rescans all project files and reloads git state, for changes the file
+        /// watcher missed (e.g. made by the host of a VM-mounted folder).
+        ReloadProjectFiles,
         /// Reopens the most recently dismissed picker in the current window.
         ReopenLastPicker,
         /// Resets the active dock to its default size.
@@ -5565,6 +5568,14 @@ impl Workspace {
             .on_action(cx.listener(Self::save_all))
             .on_action(cx.listener(Self::send_keystrokes))
             .on_action(cx.listener(Self::add_folder_to_project))
+            .on_action(cx.listener(|workspace, _: &ReloadProjectFiles, window, cx| {
+                workspace.project.read(cx).worktree_store().read(cx).rescan_worktrees(cx).detach_and_prompt_err(
+                    "Failed to reload project files",
+                    window,
+                    cx,
+                    |_| None,
+                );
+            }))
             .on_action(cx.listener(Self::activate_pane_at_index))
             .on_action(cx.listener(Self::move_item_to_pane_at_index))
             .on_action(cx.listener(Self::move_focused_panel_to_next_position))

@@ -130,6 +130,15 @@ remote detection, command execution, and proxy startup are removed.
     Removing that ancestor first installs replacement watches for the surviving
     descendants (shallowest first); if a replacement fails, the ancestor's watch
     is kept until the descendants it still serves are removed.
+  - Only native watchers (FSEvents, inotify) are used; the upstream poll
+    watcher, filesystem-type detection, and `*_FILE_WATCHER_*` env overrides
+    are removed. Mounts whose native watcher misses changes made elsewhere
+    (e.g. a host commit on a VM's virtiofs/9p/NFS mount) are not tracked
+    automatically.
+  - `workspace::ReloadProjectFiles` covers that case: every worktree (on the
+    remote host for remote projects, via `RescanWorktrees`) rescans its root
+    and its repositories' git directories as if the watcher lost sync, so
+    entries, open buffers and git state catch up.
 - File formats and protocol data may describe other operating systems, paths,
   line endings, or remote hosts; these do not imply editor host support.
 
