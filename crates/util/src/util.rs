@@ -14,7 +14,6 @@ pub mod disambiguate;
 pub mod markdown;
 pub mod path_list;
 pub mod paths;
-pub mod serde;
 pub mod size;
 pub mod string;
 pub mod time;

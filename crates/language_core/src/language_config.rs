@@ -48,7 +48,6 @@ pub struct LanguageConfig {
     pub brackets: BracketPairConfig,
     /// If set to true, auto indentation uses last non empty line to determine
     /// the indentation level for a new line.
-    #[serde(default = "default_true")]
     pub auto_indent_using_last_non_empty_line: bool,
     // Whether indentation of pasted content should be adjusted based on the context.
     #[serde(default)]
@@ -158,7 +157,7 @@ impl Default for LanguageConfig {
             grammar: None,
             matcher: Arc::default(),
             brackets: Default::default(),
-            auto_indent_using_last_non_empty_line: default_true(),
+            auto_indent_using_last_non_empty_line: true,
             auto_indent_on_paste: None,
             increase_indent_pattern: Default::default(),
             decrease_indent_pattern: Default::default(),
@@ -419,7 +418,6 @@ pub struct BracketPair {
     /// True if `end` should be automatically inserted right after `start` characters.
     pub close: bool,
     /// True if selected text should be surrounded by `start` and `end` characters.
-    #[serde(default = "default_true")]
     pub surround: bool,
     /// True if an extra newline should be inserted while the cursor is in the middle
     /// of that bracket pair.
@@ -436,10 +434,6 @@ pub struct WrapCharactersConfig {
     /// after the prefix (i.e., between prefix and suffix).
     pub end_prefix: String,
     pub end_suffix: String,
-}
-
-pub fn default_true() -> bool {
-    true
 }
 
 pub fn deserialize_regex<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Regex>, D::Error> {

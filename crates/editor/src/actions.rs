@@ -2,7 +2,6 @@
 use gpui::Action;
 use gpui::actions;
 use project::project_settings::GoToDiagnosticSeverityFilter;
-use util::serde::default_true;
 
 use super::*;
 
@@ -25,14 +24,18 @@ pub struct SelectPrevious {
 }
 
 /// Moves the cursor to the beginning of the current line.
-#[derive(PartialEq, Clone, Deserialize, Default, Action)]
+#[derive(PartialEq, Clone, Deserialize, Action)]
 #[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct MoveToBeginningOfLine {
-    #[serde(default = "default_true")]
     pub stop_at_soft_wraps: bool,
-    #[serde(default)]
     pub stop_at_indent: bool,
+}
+
+impl Default for MoveToBeginningOfLine {
+    fn default() -> MoveToBeginningOfLine {
+        MoveToBeginningOfLine { stop_at_soft_wraps: true, stop_at_indent: false }
+    }
 }
 
 /// Selects from the cursor to the beginning of the current line.
@@ -74,12 +77,17 @@ pub struct MovePageDown {
 }
 
 /// Moves the cursor to the end of the current line.
-#[derive(PartialEq, Clone, Deserialize, Default, Action)]
+#[derive(PartialEq, Clone, Deserialize, Action)]
 #[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct MoveToEndOfLine {
-    #[serde(default = "default_true")]
     pub stop_at_soft_wraps: bool,
+}
+
+impl Default for MoveToEndOfLine {
+    fn default() -> MoveToEndOfLine {
+        MoveToEndOfLine { stop_at_soft_wraps: true }
+    }
 }
 
 /// Selects from the cursor to the end of the current line.
@@ -143,15 +151,12 @@ pub struct ConfirmCodeAction {
 /// Toggles comment markers for the selected lines.
 #[derive(PartialEq, Clone, Deserialize, Action)]
 #[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct ToggleComments {
-    #[serde(default)]
     pub advance_downwards: bool,
-    #[serde(default)]
     pub ignore_indent: bool,
     /// Whether to add comment markers to blank lines inside a multi-line
     /// selection. A line of only whitespace counts as blank. Defaults to true.
-    #[serde(default = "default_true")]
     pub comment_empty_lines: bool,
 }
 
@@ -357,21 +362,31 @@ pub struct GoToPreviousDiagnostic {
 }
 
 /// Adds a cursor above the current selection.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
+#[derive(PartialEq, Clone, Debug, Deserialize, Action)]
 #[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct AddSelectionAbove {
-    #[serde(default = "default_true")]
     pub skip_soft_wrap: bool,
 }
 
+impl Default for AddSelectionAbove {
+    fn default() -> AddSelectionAbove {
+        AddSelectionAbove { skip_soft_wrap: true }
+    }
+}
+
 /// Adds a cursor below the current selection.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
+#[derive(PartialEq, Clone, Debug, Deserialize, Action)]
 #[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct AddSelectionBelow {
-    #[serde(default = "default_true")]
     pub skip_soft_wrap: bool,
+}
+
+impl Default for AddSelectionBelow {
+    fn default() -> AddSelectionBelow {
+        AddSelectionBelow { skip_soft_wrap: true }
+    }
 }
 
 /// Inserts a snippet at the cursor.
@@ -920,13 +935,11 @@ pub struct GoToTypeDefinition {
 /// Finds all references to the symbol at cursor.
 #[derive(PartialEq, Clone, Deserialize, Action)]
 #[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct FindAllReferences {
-    #[serde(default = "default_true")]
     pub always_open_multibuffer: bool,
     /// Where to show the references. Falls back to the `lsp_results_location`
     /// setting when omitted. A single result is always opened directly.
-    #[serde(default)]
     pub open_results_in: Option<OpenResultsIn>,
 }
 

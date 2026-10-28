@@ -1859,7 +1859,9 @@ impl LocalWorktree {
     /// watcher never reports (e.g. made by the host side of a VM mount).
     pub fn rescan(&self) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
-        self.scan_requests_tx.try_send(ScanRequest { relative_paths: Vec::new(), rescan: true, done: smallvec![tx] }).ok();
+        self.scan_requests_tx
+            .try_send(ScanRequest { relative_paths: Vec::new(), rescan: true, done: smallvec![tx] })
+            .ok();
         rx
     }
 

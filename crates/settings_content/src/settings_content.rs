@@ -53,8 +53,6 @@ impl std::fmt::Display for PixelSetting {
 
 use std::hash::Hash;
 
-pub use util::serde::default_true;
-
 /// Determines when the mouse cursor should be hidden in response to keyboard
 /// input.
 ///

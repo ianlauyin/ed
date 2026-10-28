@@ -41,7 +41,6 @@ pub use language_config::Override;
 pub use language_config::SoftWrap;
 pub use language_config::TaskListConfig;
 pub use language_config::WrapCharactersConfig;
-pub use language_config::default_true;
 pub use language_config::deserialize_regex;
 pub use language_config::deserialize_regex_vec;
 pub use language_config::serialize_regex;

@@ -76,7 +76,12 @@ migrator, or Vim/Helix mode.
   (formatting, language servers, scanning, git) would need sync reintroduced.
 - JSON schemas are not generated: nothing derives `JsonSchema` and `schemars`
   is not a dependency. Actions still derive `Deserialize`, because the built-in
-  keymap builds actions from a name plus JSON input. The JSON language server
+  keymap builds actions from a name plus JSON input. Bindings may omit input,
+  so an action whose fields have non-`false` defaults uses struct-level
+  `#[serde(default)]` with a hand-written `Default`; `Default::default()` and
+  deserializing `{}` give the same action. Built-in data that is never omitted
+  (settings, task templates, language `config.toml`) states every such field
+  explicitly instead of relying on serde defaults. The JSON language server
   only gets the bundled `tsconfig.json`/`package.json` schemas and a
   trailing-comma schema for JSONC files; there are no settings, keymap, or
   per-action schemas, and no language-server configuration schema probing.

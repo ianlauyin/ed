@@ -1,4 +1,5 @@
 name = "Git Commit"
+auto_indent_using_last_non_empty_line = true
 path_suffixes = [
   "TAG_EDITMSG",
   "MERGE_MSG",
@@ -8,12 +9,12 @@ path_suffixes = [
 ]
 line_comments = ["# "]
 brackets = [
-  { start = "(", end = ")", close = true, newline = false },
-  { start = "`", end = "`", close = true, newline = false },
-  { start = "\"", end = "\"", close = true, newline = false },
-  { start = "'", end = "'", close = true, newline = false },
-  { start = "{", end = "}", close = true, newline = false },
-  { start = "[", end = "]", close = true, newline = false },
+  { start = "(", end = ")", close = true, newline = false, surround = true },
+  { start = "`", end = "`", close = true, newline = false, surround = true },
+  { start = "\"", end = "\"", close = true, newline = false, surround = true },
+  { start = "'", end = "'", close = true, newline = false, surround = true },
+  { start = "{", end = "}", close = true, newline = false, surround = true },
+  { start = "[", end = "]", close = true, newline = false, surround = true },
 ]
 rewrap_prefixes = [
     "[-*+]\\s+",

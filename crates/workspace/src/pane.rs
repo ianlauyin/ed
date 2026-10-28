@@ -88,7 +88,6 @@ use util::debug_panic;
 use util::markdown::MarkdownInlineCode;
 use util::maybe;
 use util::paths::PathStyle;
-use util::serde::default_true;
 use util::truncate_and_remove_front;
 
 use crate::CloseWindow;
@@ -328,7 +327,6 @@ split_structs!(
 #[serde(deny_unknown_fields, default)]
 pub struct ActivatePreviousItem {
     /// Whether to wrap from the first item to the last item.
-    #[serde(default = "default_true")]
     pub wrap_around: bool,
 }
 
@@ -344,7 +342,6 @@ impl Default for ActivatePreviousItem {
 #[serde(deny_unknown_fields, default)]
 pub struct ActivateNextItem {
     /// Whether to wrap from the last item to the first item.
-    #[serde(default = "default_true")]
     pub wrap_around: bool,
 }
 

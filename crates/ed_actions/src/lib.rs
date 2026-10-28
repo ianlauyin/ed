@@ -318,14 +318,17 @@ pub mod buffer_search {
     /// Opens the buffer search interface with the specified configuration.
     #[derive(PartialEq, Clone, Deserialize, Action)]
     #[action(namespace = buffer_search)]
-    #[serde(deny_unknown_fields)]
+    #[serde(deny_unknown_fields, default)]
     pub struct Deploy {
-        #[serde(default = "util::serde::default_true")]
         pub focus: bool,
-        #[serde(default)]
         pub replace_enabled: bool,
-        #[serde(default)]
         pub selection_search_enabled: bool,
+    }
+
+    impl Default for Deploy {
+        fn default() -> Deploy {
+            Deploy::find()
+        }
     }
 
     impl Deploy {

@@ -5,7 +5,6 @@ use collections::HashMap;
 use gpui::Rgba;
 use serde::Deserialize;
 use serde::Serialize;
-use util::serde::default_true;
 
 use crate::AllLanguageSettingsContent;
 use crate::DelayMs;
@@ -212,7 +211,6 @@ pub struct LspSettings {
     /// If the server supports sending tasks over LSP extensions,
     /// this setting can be used to enable or disable them in ed.
     /// Default: true
-    #[serde(default = "default_true")]
     pub enable_lsp_tasks: bool,
 }
 

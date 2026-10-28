@@ -1,3 +1,4 @@
 name = "Diff"
+auto_indent_using_last_non_empty_line = true
 path_suffixes = ["diff", "patch"]
 brackets = []

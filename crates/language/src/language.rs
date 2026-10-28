@@ -91,7 +91,6 @@ pub use language_core::TaskListConfig;
 pub use language_core::TextObject;
 pub use language_core::TextObjectConfig;
 pub use language_core::WrapCharactersConfig;
-pub use language_core::default_true;
 pub use language_core::deserialize_regex;
 pub use language_core::deserialize_regex_vec;
 use language_core::highlight_cache::MAX_TEXT_HIGHLIGHT_ENTRY_BYTES;

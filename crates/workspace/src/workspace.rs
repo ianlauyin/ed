@@ -239,7 +239,6 @@ use util::TryFutureExt;
 use util::paths::PathStyle;
 use util::paths::SanitizedPath;
 use util::rel_path::RelPath;
-use util::serde::default_true;
 use uuid::Uuid;
 pub use workspace_settings::AutosaveSetting;
 pub use workspace_settings::BottomDockLayout;
@@ -539,31 +538,33 @@ pub struct ActivatePane(pub usize);
 /// Moves an item to a specific pane by index.
 #[derive(Clone, Deserialize, PartialEq, Action)]
 #[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct MoveItemToPane {
-    #[serde(default = "default_1")]
     pub destination: usize,
-    #[serde(default = "default_true")]
     pub focus: bool,
-    #[serde(default)]
     pub clone: bool,
 }
 
-const fn default_1() -> usize {
-    1
+impl Default for MoveItemToPane {
+    fn default() -> MoveItemToPane {
+        MoveItemToPane { destination: 1, focus: true, clone: false }
+    }
 }
 
 /// Moves an item to a pane in the specified direction.
 #[derive(Clone, Deserialize, PartialEq, Action)]
 #[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, default)]
 pub struct MoveItemToPaneInDirection {
-    #[serde(default = "default_right")]
     pub direction: SplitDirection,
-    #[serde(default = "default_true")]
     pub focus: bool,
-    #[serde(default)]
     pub clone: bool,
+}
+
+impl Default for MoveItemToPaneInDirection {
+    fn default() -> MoveItemToPaneInDirection {
+        MoveItemToPaneInDirection { direction: SplitDirection::Right, focus: true, clone: false }
+    }
 }
 
 /// Creates a new file in a split of the desired direction.
@@ -571,10 +572,6 @@ pub struct MoveItemToPaneInDirection {
 #[action(namespace = workspace)]
 #[serde(deny_unknown_fields)]
 pub struct NewFileSplit(pub SplitDirection);
-
-const fn default_right() -> SplitDirection {
-    SplitDirection::Right
-}
 
 /// Saves all open files in the workspace.
 #[derive(Clone, PartialEq, Debug, Deserialize, Action)]

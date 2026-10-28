@@ -9,7 +9,6 @@ use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
 use util::ResultExt;
-use util::serde::default_true;
 use util::truncate_and_remove_front;
 
 use crate::ED_VARIABLE_NAME_PREFIX;
@@ -75,10 +74,8 @@ pub struct TaskTemplate {
     #[serde(default)]
     pub shell: Shell,
     /// Whether to show the task line in the task output.
-    #[serde(default = "default_true")]
     pub show_summary: bool,
     /// Whether to show the command line in the task output.
-    #[serde(default = "default_true")]
     pub show_command: bool,
     /// Which edited buffers to save before running the task.
     #[serde(default)]

@@ -10,7 +10,6 @@ test = false
 [dependencies]
 gpui.workspace = true
 serde.workspace = true
-util.workspace = true
 
 [lints]
 workspace = true
