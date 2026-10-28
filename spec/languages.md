@@ -10,14 +10,18 @@
   (`document_symbols: "on"`), but Markdown overrides this to tree-sitter
   (`"off"`) because there is no Markdown language server; headings make up the
   outline.
-- C, C++, Diff, Git Commit, Go Mod and Go Work are still registered languages
-  (file matching, comments, brackets, gopls for Go Mod/Work, Diff's
-  keep-trailing-whitespace settings, the Git Commit editor) but have no
-  grammar, so they get rough highlighting only and none of the
+- C, C++, Diff, Git Commit, Go Mod, Go Work and TOML are still registered
+  languages (file matching, comments, brackets, gopls for Go Mod/Work, tombi
+  for TOML, Diff's keep-trailing-whitespace settings, the Git Commit editor)
+  but have no grammar, so they get rough highlighting only and none of the
   structure-aware features.
+- TOML's language server is `tombi` (`tombi lsp`). It provides formatting
+  (the TOML formatter under `"auto"`), lint diagnostics, completions and schema
+  validation; configuration comes from the project's `tombi.toml` /
+  `[tool.tombi]`.
 - C/C++ have no built-in language server: clangd support (adapter, semantic
   token rules, inactive regions, switch source/header) is removed.
-- TOML, SQL, Dockerfile, JSDoc, Regex and the hidden Zed Keybind Context
+- SQL, Dockerfile, JSDoc, Regex and the hidden Zed Keybind Context
   languages are removed. Their files open as Plain Text and are still
   highlighted by the fallback below.
 - A buffer's language comes only from its file (name/extension, first
@@ -81,7 +85,7 @@
 - Language servers are never installed by ed and there is no setting for a
   server's binary path (`lsp.<server>.binary.path` is removed). A server starts
   from a user installation the adapter finds (`PATH`, or the project). Node-based
-  servers (css/html/json, yaml, bash) then fall back to
+  servers (css/html/json, yaml, bash, tombi) then fall back to
   `npx --yes --package <pkg> <bin>`, unpinned: npx prefers a version installed
   in the project, else the latest release from npm's cache, downloading it on
   first use. A missing server is reported through the existing failed-server

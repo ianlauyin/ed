@@ -25,6 +25,7 @@ mod npx;
 mod package_json;
 mod python;
 mod rust;
+mod tombi;
 mod tsgo;
 mod typescript;
 mod yaml;
@@ -48,6 +49,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let rust_context_provider = Arc::new(rust::RustContextProvider);
     let rust_lsp_adapter = Arc::new(rust::RustLspAdapter);
     let typescript_context = Arc::new(typescript::TypeScriptContextProvider::new(fs.clone()));
+    let tombi_lsp_adapter = Arc::new(tombi::TombiLspAdapter);
     let tsgo_lsp_adapter = Arc::new(tsgo::TsgoLspAdapter::new(fs));
     let yaml_lsp_adapter = Arc::new(yaml::YamlLspAdapter);
 
@@ -111,6 +113,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             manifest_name: Some(SharedString::new_static("Cargo.toml").into()),
             semantic_token_rules: Some(rust::semantic_token_rules()),
         },
+        LanguageInfo { name: "toml", adapters: vec![tombi_lsp_adapter], ..Default::default() },
         LanguageInfo {
             name: "tsx",
             adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone()],
