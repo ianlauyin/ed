@@ -5,14 +5,10 @@ use gpui::AppContext;
 use gpui::AsyncWindowContext;
 use gpui::Context;
 use gpui::Task;
-use gpui::WeakEntity;
 use task::ResolvedTask;
-use task::SaveStrategy;
 use task::SpawnInTerminal;
 use ui::Window;
-use util::TryFutureExt;
 
-use crate::SaveIntent;
 use crate::Toast;
 use crate::Workspace;
 use crate::notifications::NotificationId;
@@ -66,8 +62,6 @@ impl Workspace {
     ) {
         if self.terminal_provider.is_some() {
             let task = cx.spawn_in(window, async move |workspace, cx| {
-                Self::save_for_task(&workspace, spawn_in_terminal.save, cx).await;
-
                 let spawn_task = workspace.update_in(cx, |workspace, window, cx| {
                     workspace
                         .terminal_provider
@@ -107,27 +101,6 @@ impl Workspace {
                 }
             });
             self.scheduled_tasks.push(task);
-        }
-    }
-
-    pub async fn save_for_task(workspace: &WeakEntity<Self>, save_strategy: SaveStrategy, cx: &mut AsyncWindowContext) {
-        let save_action = match save_strategy {
-            SaveStrategy::All => {
-                let save_all = workspace.update_in(cx, |workspace, window, cx| {
-                    let task = workspace.save_all_internal(SaveIntent::SaveAll, true, window, cx);
-                    cx.background_spawn(async { task.await.map(|_| ()) })
-                });
-                save_all.ok()
-            }
-            SaveStrategy::Current => {
-                let save_current = workspace
-                    .update_in(cx, |workspace, window, cx| workspace.save_active_item(SaveIntent::SaveAll, window, cx));
-                save_current.ok()
-            }
-            SaveStrategy::None => None,
-        };
-        if let Some(save_action) = save_action {
-            save_action.log_err().await;
         }
     }
 

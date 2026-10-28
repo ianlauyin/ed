@@ -14,7 +14,6 @@ use std::ops::BitOr;
 use std::ops::BitOrAssign;
 use std::ops::Deref;
 use std::ops::Range as StdRange;
-use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
@@ -75,7 +74,6 @@ use pty_info::PtyProcessInfo;
 use serde::Deserialize;
 use serde::Serialize;
 use settings::Settings;
-use task::HideStrategy;
 use task::Shell;
 use task::SpawnInTerminal;
 use terminal_settings::AlternateScroll;
@@ -105,7 +103,6 @@ use crate::alacritty::AlacrittyTermLock;
 use crate::alacritty::HyperlinkMatch;
 use crate::alacritty::PtySender;
 use crate::alacritty::RegexSearches;
-use crate::alacritty::append_text_to_term;
 use crate::alacritty::apply_config;
 use crate::alacritty::clear_saved_screen;
 use crate::alacritty::content_text;
@@ -2733,36 +2730,6 @@ impl Terminal {
                 task.status.register_terminal_exit();
             }
         };
-
-        let (finished_successfully, task_line, command_line) = task_summary(task, exit_status);
-        let mut lines_to_show = Vec::new();
-        if task.spawned_task.show_summary {
-            lines_to_show.push(task_line.as_str());
-        }
-        if task.spawned_task.show_command {
-            lines_to_show.push(command_line.as_str());
-        }
-        let hide = task.spawned_task.hide;
-
-        if !lines_to_show.is_empty() {
-            // SAFETY: the invocation happens on non `TaskStatus::Running` tasks, once,
-            // after either `AlacTermEvent::Exit` or `AlacTermEvent::ChildExit` events that are spawned
-            // when ed task finishes and no more output is made.
-            // After the task summary is output once, no more text is appended to the terminal.
-            unsafe { append_text_to_term(&mut self.term.lock(), &lines_to_show) };
-        }
-
-        match hide {
-            HideStrategy::Never => {}
-            HideStrategy::Always => {
-                cx.emit(Event::CloseTerminal);
-            }
-            HideStrategy::OnSuccess => {
-                if finished_successfully {
-                    cx.emit(Event::CloseTerminal);
-                }
-            }
-        }
     }
 
     pub const fn vi_mode_enabled(&self) -> bool {
@@ -2787,30 +2754,6 @@ impl Terminal {
             self.path_style,
         )
     }
-}
-
-const TASK_DELIMITER: &str = "⏵ ";
-fn task_summary(task: &TaskState, exit_status: Option<ExitStatus>) -> (bool, String, String) {
-    let escaped_full_label = task.spawned_task.full_label.replace("\r\n", "\r").replace('\n', "\r");
-    let task_label = |suffix: &str| format!("{TASK_DELIMITER}Task `{escaped_full_label}` {suffix}");
-    let (success, task_line) = match exit_status {
-        Some(status) => {
-            let code = status.code();
-
-            let signal = status.signal();
-
-            match (code, signal) {
-                (Some(0), _) => (true, task_label("finished successfully")),
-                (Some(code), _) => (false, task_label(&format!("finished with exit code: {code}"))),
-                (None, Some(signal)) => (false, task_label(&format!("terminated by signal: {signal}"))),
-                (None, None) => (false, task_label("finished")),
-            }
-        }
-        None => (false, task_label("finished")),
-    };
-    let escaped_command_label = task.spawned_task.command_label.replace("\r\n", "\r").replace('\n', "\r");
-    let command_line = format!("{TASK_DELIMITER}Command: {escaped_command_label}");
-    (success, task_line, command_line)
 }
 
 /// Converts bare LFs into CRLFs so output captured from a pipe (rather than a

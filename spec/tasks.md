@@ -7,7 +7,10 @@ is the gutter run icon (runnables), which spawns the command in a terminal tab
 ("task output"). Anything else is run from a script in the terminal.
 
 The `tasks_ui` crate is removed. The `task` crate stays only as the shared
-template/variable/spawn types the run icon needs.
+template/variable/spawn types the run icon needs. A template is just label,
+command, args, env, cwd and runnable tags; there are no per-task knobs.
+`TaskTemplate` stays (de)serializable only because LSP runnables reach remote
+clients as JSON.
 
 ## Behaviour
 
@@ -21,6 +24,10 @@ template/variable/spawn types the run icon needs.
 - Clicking the icon (or `editor::SpawnNearestTask`) resolves the template with
   `$ED_*` variables and spawns it in the terminal panel. The icon shows
   running / passed / failed state.
+- A task always runs in the terminal dock with the default system shell (the
+  remote shell on a remote project), saves nothing first, and leaves its tab
+  open with no summary lines when it finishes. Running a task whose tab
+  already exists waits for that run to finish, then replaces the tab's output.
 - A task terminal tab has a rerun button (and `terminal::RerunTask`) that
   respawns that tab's own command in place; there is no global rerun. The tab
   keeps the task as requested; wrapping it in the shell happens on each spawn,

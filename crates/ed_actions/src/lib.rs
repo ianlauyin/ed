@@ -375,17 +375,6 @@ pub struct OpenRemote {
     pub create_new_window: Option<bool>,
 }
 
-/// Where to spawn the task in the UI.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RevealTarget {
-    /// In the central pane group, "main" editor area.
-    Center,
-    /// In the terminal dock, "regular" terminal items' place.
-    #[default]
-    Dock,
-}
-
 pub mod outline {
     use std::sync::OnceLock;
 

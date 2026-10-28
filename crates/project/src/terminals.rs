@@ -107,10 +107,7 @@ impl Project {
 
         // The terminal keeps the task as requested so a rerun wraps it in the shell afresh.
         let remote_shell = self.remote_client.as_ref().and_then(|remote_client| remote_client.read(cx).shell());
-        let shell = match remote_shell {
-            Some(remote_shell) if spawn_task.shell == Shell::System => Shell::Program(remote_shell),
-            _ => spawn_task.shell.clone(),
-        };
+        let shell = remote_shell.map_or(Shell::System, Shell::Program);
         let spawn_task = wrap_task_in_shell(&spawn_task, &shell);
         let terminal_mode =
             TerminalMode::task(SpawnInTerminal { command_label: spawn_task.command_label.clone(), ..original_task });

@@ -19,6 +19,7 @@ use rpc::proto::PeerId;
 use rpc::proto::{self};
 use serde::Deserialize;
 use serde::Serialize;
+use task::ShellKind;
 use task::TaskTemplate;
 use text::BufferId;
 use text::PointUtf16;
@@ -498,7 +499,7 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
             task_template.cwd = Some(cargo.workspace_root.unwrap_or(cargo.cwd).to_string_lossy().to_string());
             task_template.args.extend(cargo.cargo_args);
             if !cargo.executable_args.is_empty() {
-                let shell_kind = task_template.shell.shell_kind();
+                let shell_kind = ShellKind::system();
                 task_template.args.push("--".to_string());
                 task_template.args.extend(
                     cargo

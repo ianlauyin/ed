@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use anyhow::bail;
 use collections::HashMap;
-use collections::HashSet;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
@@ -13,77 +12,34 @@ use util::truncate_and_remove_front;
 
 use crate::ED_VARIABLE_NAME_PREFIX;
 use crate::ResolvedTask;
-use crate::RevealTarget;
-use crate::Shell;
 use crate::SpawnInTerminal;
 use crate::TaskContext;
 use crate::TaskId;
-use crate::VariableName;
-use crate::serde_helpers::non_empty_string_vec;
 
 /// A template definition of an ed task to run.
-/// May use the [`VariableName`] to get the corresponding substitutions into its fields.
+/// May use the [`VariableName`](crate::VariableName) to get the corresponding substitutions into its fields.
 ///
 /// Template itself is not ready to spawn a task, it needs to be resolved with a [`TaskContext`] first, that
 /// contains all relevant ed state in task variables.
 /// A single template may produce different tasks (or none) for different contexts.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub struct TaskTemplate {
     /// Human readable name of the task to display in the UI.
     pub label: String,
     /// Executable command to spawn.
     pub command: String,
     /// Arguments to the command.
-    #[serde(default)]
     pub args: Vec<String>,
     /// Env overrides for the command, will be appended to the terminal's environment from the settings.
-    #[serde(default)]
     pub env: HashMap<String, String>,
     /// Current working directory to spawn the command into, defaults to current project root.
-    #[serde(default)]
     pub cwd: Option<String>,
-    /// Whether to use a new terminal tab or reuse the existing one to spawn the process.
-    #[serde(default)]
-    pub use_new_terminal: bool,
-    /// Whether to allow multiple instances of the same task to be run, or rather wait for the existing ones to finish.
-    #[serde(default)]
-    pub allow_concurrent_runs: bool,
-    /// What to do with the terminal pane and tab, after the command was started:
-    /// * `always` — always show the task's pane, and focus the corresponding tab in it (default)
-    // * `no_focus` — always show the task's pane, add the task's tab in it, but don't focus it
-    // * `never` — do not alter focus, but still add/reuse the task's tab in its pane
-    #[serde(default)]
-    pub reveal: RevealStrategy,
-    /// Where to place the task's terminal item after starting the task.
-    /// * `dock` — in the terminal dock, "regular" terminal items' place (default).
-    /// * `center` — in the central pane group, "main" editor area.
-    #[serde(default)]
-    pub reveal_target: RevealTarget,
-    /// What to do with the terminal pane and tab, after the command had finished:
-    /// * `never` — do nothing when the command finishes (default)
-    /// * `always` — always hide the terminal tab, hide the pane also if it was the last tab in it
-    /// * `on_success` — hide the terminal tab on task success only, otherwise behaves similar to `always`.
-    #[serde(default)]
-    pub hide: HideStrategy,
-    /// Represents the tags which this template attaches to.
-    /// Adding this removes this task from other UI and gives you ability to run it by tag.
-    #[serde(default, deserialize_with = "non_empty_string_vec")]
+    /// The runnable tags (from `runnables.scm`) this template attaches to.
     pub tags: Vec<String>,
-    /// Which shell to use when spawning the task.
-    #[serde(default)]
-    pub shell: Shell,
-    /// Whether to show the task line in the task output.
-    pub show_summary: bool,
-    /// Whether to show the command line in the task output.
-    pub show_command: bool,
-    /// Which edited buffers to save before running the task.
-    #[serde(default)]
-    pub save: SaveStrategy,
 }
 
 /// What to do with the terminal pane and tab, after the command was started.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RevealStrategy {
     /// Always show the task's pane, and focus the corresponding tab in it.
@@ -95,91 +51,35 @@ pub enum RevealStrategy {
     Never,
 }
 
-/// What to do with the terminal pane and tab, after the command has finished.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HideStrategy {
-    /// Do nothing when the command finishes.
-    #[default]
-    Never,
-    /// Always hide the terminal tab, hide the pane also if it was the last tab in it.
-    Always,
-    /// Hide the terminal tab on task success only, otherwise behaves similar to `Always`.
-    OnSuccess,
-}
-
-/// Which edited buffers to save before running a task.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SaveStrategy {
-    /// Save all edited buffers.
-    All,
-    /// Save the current buffer.
-    Current,
-    #[default]
-    /// Don't save any buffers.
-    None,
-}
-
 /// A group of task templates, provided by a language.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TaskTemplates(pub Vec<TaskTemplate>);
 
 impl TaskTemplate {
     /// Replaces all `VariableName` task variables in the task template string fields.
     ///
     /// Every [`ResolvedTask`] gets a [`TaskId`], based on the `id_base` (to avoid collision with various task sources),
-    /// and hashes of its template and [`TaskContext`], see [`ResolvedTask`] fields' documentation for more details.
+    /// and hashes of its template and [`TaskContext`].
     pub fn resolve_task(&self, id_base: &str, cx: &TaskContext) -> Option<ResolvedTask> {
         if self.label.trim().is_empty() || self.command.trim().is_empty() {
             return None;
         }
 
-        let mut variable_names = HashMap::default();
-        let mut substituted_variables = HashSet::default();
-        let task_variables = cx
-            .task_variables
-            .0
-            .iter()
-            .map(|(key, value)| {
-                let key_string = key.to_string();
-                if !variable_names.contains_key(&key_string) {
-                    variable_names.insert(key_string.clone(), key.clone());
-                }
-                (key_string, value.as_str())
-            })
-            .collect::<HashMap<_, _>>();
+        let task_variables =
+            cx.task_variables.0.iter().map(|(key, value)| (key.to_string(), value.as_str())).collect::<HashMap<_, _>>();
         let truncated_variables = truncate_variables(&task_variables);
         let cwd = match self.cwd.as_deref() {
-            Some(cwd) => {
-                let substituted_cwd = substitute_all_template_variables_in_str(
-                    cwd,
-                    &task_variables,
-                    &variable_names,
-                    &mut substituted_variables,
-                )?;
-                Some(PathBuf::from(substituted_cwd))
-            }
+            Some(cwd) => Some(PathBuf::from(substitute_all_template_variables_in_str(cwd, &task_variables)?)),
             None => None,
         }
         .or(cx.cwd.clone());
-        let full_label = substitute_all_template_variables_in_str(
-            &self.label,
-            &task_variables,
-            &variable_names,
-            &mut substituted_variables,
-        )?;
+        let full_label = substitute_all_template_variables_in_str(&self.label, &task_variables)?;
 
         // Arbitrarily picked threshold below which we don't truncate any variables.
         const TRUNCATION_THRESHOLD: usize = 64;
 
         let human_readable_label = if full_label.len() > TRUNCATION_THRESHOLD {
-            substitute_all_template_variables_in_str(
-                &self.label,
-                &truncated_variables,
-                &variable_names,
-                &mut substituted_variables,
-            )?
+            substitute_all_template_variables_in_str(&self.label, &truncated_variables)?
         } else {
             #[allow(
                 clippy::redundant_clone,
@@ -198,18 +98,8 @@ impl TaskTemplate {
             string
         });
 
-        let command = substitute_all_template_variables_in_str(
-            &self.command,
-            &task_variables,
-            &variable_names,
-            &mut substituted_variables,
-        )?;
-        let args_with_substitutions = substitute_all_template_variables_in_vec(
-            &self.args,
-            &task_variables,
-            &variable_names,
-            &mut substituted_variables,
-        )?;
+        let command = substitute_all_template_variables_in_str(&self.command, &task_variables)?;
+        let args_with_substitutions = substitute_all_template_variables_in_vec(&self.args, &task_variables)?;
 
         let task_hash = to_hex_hash(self).context("hashing task template").log_err()?;
         let variables_hash = to_hex_hash(&task_variables).context("hashing task variables").log_err()?;
@@ -223,12 +113,7 @@ impl TaskTemplate {
             env.extend(self.env.clone());
 
             // Then we replace all task variables that could be set in environment variables
-            let mut env = substitute_all_template_variables_in_map(
-                &env,
-                &task_variables,
-                &variable_names,
-                &mut substituted_variables,
-            )?;
+            let mut env = substitute_all_template_variables_in_map(&env, &task_variables)?;
 
             // Last step: set the task variables as environment variables too
             env.extend(task_variables.into_iter().map(|(k, v)| (k, v.to_owned())));
@@ -237,7 +122,6 @@ impl TaskTemplate {
 
         Some(ResolvedTask {
             id: id.clone(),
-            substituted_variables,
             original_task: self.clone(),
             resolved_label: full_label.clone(),
             resolved: SpawnInTerminal {
@@ -253,61 +137,9 @@ impl TaskTemplate {
                 command: Some(command),
                 args: args_with_substitutions,
                 env,
-                use_new_terminal: self.use_new_terminal,
-                allow_concurrent_runs: self.allow_concurrent_runs,
-                reveal: self.reveal,
-                reveal_target: self.reveal_target,
-                hide: self.hide,
-                shell: self.shell.clone(),
-                show_summary: self.show_summary,
-                show_command: self.show_command,
-                show_rerun: true,
-                save: self.save,
+                ..SpawnInTerminal::default()
             },
         })
-    }
-
-    /// Validates that all `$ED_*` variables used in this template are known
-    /// variable names, returning a vector with all of the unique unknown
-    /// variables.
-    ///
-    /// Note that `$ED_CUSTOM_*` variables are never considered to be invalid
-    /// since those are provided dynamically by extensions.
-    pub fn unknown_variables(&self) -> Vec<String> {
-        let mut variables = HashSet::default();
-
-        Self::collect_unknown_variables(&self.label, &mut variables);
-        Self::collect_unknown_variables(&self.command, &mut variables);
-
-        self.args.iter().for_each(|arg| Self::collect_unknown_variables(arg, &mut variables));
-
-        self.env.values().for_each(|value| Self::collect_unknown_variables(value, &mut variables));
-
-        if let Some(cwd) = &self.cwd {
-            Self::collect_unknown_variables(cwd, &mut variables);
-        }
-
-        variables.into_iter().collect()
-    }
-
-    fn collect_unknown_variables(template: &str, unknown: &mut HashSet<String>) {
-        shellexpand::env_with_context_no_errors(template, |variable| {
-            // It's possible that the variable has a default defined, which is
-            // separated by a `:`, for example, `${ED_FILE:default_value} so we
-            // ensure that we're only looking at the variable name itself.
-            let colon_position = variable.find(':').unwrap_or(variable.len());
-            let variable_name = &variable[..colon_position];
-
-            if variable_name.starts_with(ED_VARIABLE_NAME_PREFIX)
-                && let without_prefix = &variable_name[ED_VARIABLE_NAME_PREFIX.len()..]
-                && !without_prefix.starts_with("CUSTOM_")
-                && variable_name.parse::<VariableName>().is_err()
-            {
-                unknown.insert(variable_name.to_string());
-            }
-
-            None::<&str>
-        });
     }
 }
 
@@ -327,28 +159,9 @@ fn to_hex_hash(object: impl Serialize) -> anyhow::Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-pub fn substitute_variables_in_str(template_str: &str, context: &TaskContext) -> Option<String> {
-    let mut variable_names = HashMap::default();
-    let mut substituted_variables = HashSet::default();
-    let task_variables = context
-        .task_variables
-        .0
-        .iter()
-        .map(|(key, value)| {
-            let key_string = key.to_string();
-            if !variable_names.contains_key(&key_string) {
-                variable_names.insert(key_string.clone(), key.clone());
-            }
-            (key_string, value.as_str())
-        })
-        .collect::<HashMap<_, _>>();
-    substitute_all_template_variables_in_str(template_str, &task_variables, &variable_names, &mut substituted_variables)
-}
 fn substitute_all_template_variables_in_str<A: AsRef<str>>(
     template_str: &str,
     task_variables: &HashMap<String, A>,
-    variable_names: &HashMap<String, VariableName>,
-    substituted_variables: &mut HashSet<VariableName>,
 ) -> Option<String> {
     let substituted_string = shellexpand::env_with_context(template_str, |var| {
         // Colons denote a default value in case the variable is not set. We
@@ -357,13 +170,10 @@ fn substitute_all_template_variables_in_str<A: AsRef<str>>(
         let colon_position = var.find(':').unwrap_or(var.len());
         let (variable_name, default) = var.split_at(colon_position);
         if let Some(name) = task_variables.get(variable_name) {
-            if let Some(substituted_variable) = variable_names.get(variable_name) {
-                substituted_variables.insert(substituted_variable.clone());
-            }
             // Got a task variable hit - use the variable value, ignore default
             return Ok(Some(name.as_ref().to_owned()));
         } else if variable_name.starts_with(ED_VARIABLE_NAME_PREFIX) {
-            // Unknown ZED variable - use default if available
+            // Unknown ED variable - use default if available
             if !default.is_empty() {
                 // Strip the colon and return the default value
                 return Ok(Some(default[1..].to_owned()));
@@ -391,13 +201,10 @@ fn substitute_all_template_variables_in_str<A: AsRef<str>>(
 fn substitute_all_template_variables_in_vec(
     template_strs: &[String],
     task_variables: &HashMap<String, &str>,
-    variable_names: &HashMap<String, VariableName>,
-    substituted_variables: &mut HashSet<VariableName>,
 ) -> Option<Vec<String>> {
     let mut expanded = Vec::with_capacity(template_strs.len());
     for variable in template_strs {
-        let new_value =
-            substitute_all_template_variables_in_str(variable, task_variables, variable_names, substituted_variables)?;
+        let new_value = substitute_all_template_variables_in_str(variable, task_variables)?;
 
         if !new_value.is_empty() || variable.is_empty() {
             expanded.push(new_value);
@@ -407,43 +214,14 @@ fn substitute_all_template_variables_in_vec(
     Some(expanded)
 }
 
-pub fn substitute_variables_in_map(
-    keys_and_values: &HashMap<String, String>,
-    context: &TaskContext,
-) -> Option<HashMap<String, String>> {
-    let mut variable_names = HashMap::default();
-    let mut substituted_variables = HashSet::default();
-    let task_variables = context
-        .task_variables
-        .0
-        .iter()
-        .map(|(key, value)| {
-            let key_string = key.to_string();
-            if !variable_names.contains_key(&key_string) {
-                variable_names.insert(key_string.clone(), key.clone());
-            }
-            (key_string, value.as_str())
-        })
-        .collect::<HashMap<_, _>>();
-    substitute_all_template_variables_in_map(
-        keys_and_values,
-        &task_variables,
-        &variable_names,
-        &mut substituted_variables,
-    )
-}
 fn substitute_all_template_variables_in_map(
     keys_and_values: &HashMap<String, String>,
     task_variables: &HashMap<String, &str>,
-    variable_names: &HashMap<String, VariableName>,
-    substituted_variables: &mut HashSet<VariableName>,
 ) -> Option<HashMap<String, String>> {
     let mut new_map: HashMap<String, String> = HashMap::default();
     for (key, value) in keys_and_values {
-        let new_value =
-            substitute_all_template_variables_in_str(value, task_variables, variable_names, substituted_variables)?;
-        let new_key =
-            substitute_all_template_variables_in_str(key, task_variables, variable_names, substituted_variables)?;
+        let new_value = substitute_all_template_variables_in_str(value, task_variables)?;
+        let new_key = substitute_all_template_variables_in_str(key, task_variables)?;
         new_map.insert(new_key, new_value);
     }
 

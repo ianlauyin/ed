@@ -1,35 +1,26 @@
 //! Baseline interface of Tasks in ed: all tasks in ed are intended to use those for implementing their own logic.
 
-mod serde_helpers;
 mod task_template;
 
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use anyhow::Context as _;
 use collections::HashMap;
-use collections::HashSet;
 use collections::hash_map;
-pub use ed_actions::RevealTarget;
 use gpui::SharedString;
-use serde::Deserialize;
 use serde::Serialize;
-pub use task_template::HideStrategy;
 pub use task_template::RevealStrategy;
-pub use task_template::SaveStrategy;
 pub use task_template::TaskTemplate;
 pub use task_template::TaskTemplates;
-pub use task_template::substitute_variables_in_map;
-pub use task_template::substitute_variables_in_str;
 pub use util::shell::Shell;
 pub use util::shell::ShellKind;
 pub use util::shell_builder::ShellBuilder;
 
 /// Task identifier, unique within the application.
 /// Based on it, task reruns and terminal tabs are managed.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TaskId(pub String);
 
 /// Contains all information needed by ed to spawn a new terminal tab for the given task.
@@ -52,49 +43,10 @@ pub struct SpawnInTerminal {
     pub cwd: Option<PathBuf>,
     /// Env overrides for the command, will be appended to the terminal's environment from the settings.
     pub env: HashMap<String, String>,
-    /// Whether to use a new terminal tab or reuse the existing one to spawn the process.
-    pub use_new_terminal: bool,
-    /// Whether to allow multiple instances of the same task to be run, or rather wait for the existing ones to finish.
+    /// Whether to replace a running instance of the task right away, rather than wait for it to finish.
     pub allow_concurrent_runs: bool,
     /// What to do with the terminal pane and tab, after the command was started.
     pub reveal: RevealStrategy,
-    /// Where to show tasks' terminal output.
-    pub reveal_target: RevealTarget,
-    /// What to do with the terminal pane and tab, after the command had finished.
-    pub hide: HideStrategy,
-    /// Which shell to use when spawning the task.
-    pub shell: Shell,
-    /// Whether to show the task summary line in the task output (success/failure).
-    pub show_summary: bool,
-    /// Whether to show the command line in the task output.
-    pub show_command: bool,
-    /// Whether to show the rerun button in the terminal tab.
-    pub show_rerun: bool,
-    /// Which edited buffers to save before running the task.
-    pub save: SaveStrategy,
-}
-
-impl SpawnInTerminal {
-    pub fn to_proto(&self) -> proto::SpawnInTerminal {
-        proto::SpawnInTerminal {
-            label: self.label.clone(),
-            command: self.command.clone(),
-            args: self.args.clone(),
-            env: self.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-            cwd: self.cwd.clone().map(|cwd| cwd.to_string_lossy().into_owned()),
-        }
-    }
-
-    pub fn from_proto(proto: proto::SpawnInTerminal) -> Self {
-        Self {
-            label: proto.label.clone(),
-            command: proto.command.clone(),
-            args: proto.args.clone(),
-            env: proto.env.into_iter().collect(),
-            cwd: proto.cwd.map(PathBuf::from),
-            ..Default::default()
-        }
-    }
 }
 
 /// A final form of the [`TaskTemplate`], that got resolved with a particular [`TaskContext`] and now is ready to spawn the actual task.
@@ -110,8 +62,6 @@ pub struct ResolvedTask {
     original_task: TaskTemplate,
     /// Full, unshortened label of the task after all resolutions are made.
     pub resolved_label: String,
-    /// Variables that were substituted during the task template resolution.
-    substituted_variables: HashSet<VariableName>,
     /// Further actions that need to take place after the resolved task is spawned,
     /// with all task variables resolved.
     pub resolved: SpawnInTerminal,
@@ -121,16 +71,6 @@ impl ResolvedTask {
     /// A task template before the resolution.
     pub const fn original_task(&self) -> &TaskTemplate {
         &self.original_task
-    }
-
-    /// Variables that were substituted during the task template resolution.
-    pub const fn substituted_variables(&self) -> &HashSet<VariableName> {
-        &self.substituted_variables
-    }
-
-    /// A human-readable label to display in the UI.
-    pub const fn display_label(&self) -> &str {
-        self.resolved.label.as_str()
     }
 }
 
@@ -320,24 +260,6 @@ pub struct TaskContext {
     /// This is the environment one would get when `cd`ing in a terminal
     /// into the project's root directory.
     pub project_env: HashMap<String, String>,
-}
-
-/// A shared reference to a [`TaskContext`], used to avoid cloning the context multiple times.
-#[derive(Clone, Debug, Default)]
-pub struct SharedTaskContext(Arc<TaskContext>);
-
-impl std::ops::Deref for SharedTaskContext {
-    type Target = TaskContext;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<TaskContext> for SharedTaskContext {
-    fn from(context: TaskContext) -> Self {
-        Self(Arc::new(context))
-    }
 }
 
 /// This is a new type representing a 'tag' on a 'runnable symbol', typically a test of main() function, found via treesitter.

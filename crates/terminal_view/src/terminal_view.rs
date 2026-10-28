@@ -868,10 +868,6 @@ impl TerminalView {
     }
 
     fn rerun_button(&self, task: &TaskState) -> Option<IconButton> {
-        if !task.spawned_task.show_rerun {
-            return None;
-        }
-
         let workspace = self.workspace.clone();
         let spawned_task = task.spawned_task.clone();
         Some(
@@ -896,7 +892,6 @@ fn rerun_in_terminal(
     cx: &mut App,
 ) {
     spawned_task.allow_concurrent_runs = true;
-    spawned_task.use_new_terminal = false;
     // Deferred: spawning replaces this view's terminal, which must not happen mid-update.
     window.defer(cx, move |window, cx| {
         workspace.update(cx, |workspace, cx| workspace.schedule_spawn_in_terminal(spawned_task, window, cx)).ok();

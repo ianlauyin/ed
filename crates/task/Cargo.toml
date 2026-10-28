@@ -22,4 +22,3 @@ serde_json.workspace = true
 sha2.workspace = true
 shellexpand.workspace = true
 util.workspace = true
-ed_actions.workspace = true

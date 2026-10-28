@@ -37,7 +37,6 @@ use project::Project;
 use settings::Settings;
 use settings::TerminalDockPosition;
 use task::RevealStrategy;
-use task::RevealTarget;
 use task::SpawnInTerminal;
 use task::TaskId;
 use terminal::Terminal;
@@ -597,13 +596,10 @@ impl TerminalPanel {
     ) -> Task<Result<WeakEntity<Terminal>>> {
         let task = task.clone();
 
-        if task.allow_concurrent_runs && task.use_new_terminal {
-            return self.spawn_in_new_terminal(task, window, cx);
-        }
-
         let mut terminals_for_task = self.terminals_for_task(&task.full_label, cx);
         let Some(existing) = terminals_for_task.pop() else {
-            return self.spawn_in_new_terminal(task, window, cx);
+            let reveal = task.reveal;
+            return self.add_terminal_task(task, reveal, window, cx);
         };
 
         let (existing_item_index, task_pane, existing_terminal) = existing;
@@ -618,18 +614,7 @@ impl TerminalPanel {
             cx.spawn_in(window, async move |terminal_panel, cx| {
                 wait_for_terminals_tasks(terminals_for_task, cx).await;
                 let task = terminal_panel.update_in(cx, |terminal_panel, window, cx| {
-                    if task.use_new_terminal {
-                        terminal_panel.spawn_in_new_terminal(task, window, cx)
-                    } else {
-                        terminal_panel.replace_terminal(
-                            task,
-                            task_pane,
-                            existing_item_index,
-                            existing_terminal,
-                            window,
-                            cx,
-                        )
-                    }
+                    terminal_panel.replace_terminal(task, task_pane, existing_item_index, existing_terminal, window, cx)
                 });
                 if let Ok(task) = task {
                     tx.send(task.await).ok();
@@ -638,27 +623,6 @@ impl TerminalPanel {
         );
 
         cx.spawn(async move |_, _| rx.await?)
-    }
-
-    fn spawn_in_new_terminal(
-        &mut self,
-        spawn_task: SpawnInTerminal,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<WeakEntity<Terminal>>> {
-        let reveal = spawn_task.reveal;
-        let reveal_target = spawn_task.reveal_target;
-        match reveal_target {
-            RevealTarget::Center => self
-                .workspace
-                .update(cx, |workspace, cx| {
-                    Self::add_center_terminal(workspace, window, cx, |project, cx| {
-                        project.create_terminal_task(spawn_task, cx)
-                    })
-                })
-                .unwrap_or_else(|e| Task::ready(Err(e))),
-            RevealTarget::Dock => self.add_terminal_task(spawn_task, reveal, window, cx),
-        }
     }
 
     /// Create a new Terminal in the current working directory or the user's home directory
@@ -984,57 +948,49 @@ impl TerminalPanel {
                 terminal_to_replace.set_terminal(new_terminal.clone(), window, cx);
             })?;
 
-            let reveal_target = terminal_panel.update(cx, |panel, _| {
-                if panel.center.panes().iter().any(|p| **p == task_pane) {
-                    RevealTarget::Dock
-                } else {
-                    RevealTarget::Center
-                }
-            })?;
+            // The task's tab may have been moved from the dock into the center pane group.
+            let in_dock =
+                terminal_panel.update(cx, |panel, _| panel.center.panes().iter().any(|p| **p == task_pane))?;
 
             match reveal {
-                RevealStrategy::Always => match reveal_target {
-                    RevealTarget::Center => {
-                        task_workspace.update_in(cx, |workspace, window, cx| {
-                            let did_activate = workspace.activate_item(&terminal_to_replace, true, true, window, cx);
+                RevealStrategy::Always if in_dock => {
+                    terminal_panel.update_in(cx, |terminal_panel, window, cx| {
+                        terminal_panel.activate_terminal_view(&task_pane, terminal_item_index, true, window, cx)
+                    })?;
 
-                            anyhow::ensure!(did_activate, "Failed to retrieve terminal pane");
+                    cx.spawn(async move |cx| {
+                        task_workspace
+                            .update_in(cx, |workspace, window, cx| workspace.focus_panel::<Self>(window, cx))
+                            .ok()
+                    })
+                    .detach();
+                }
+                RevealStrategy::Always => {
+                    task_workspace.update_in(cx, |workspace, window, cx| {
+                        let did_activate = workspace.activate_item(&terminal_to_replace, true, true, window, cx);
 
-                            anyhow::Ok(())
-                        })??;
-                    }
-                    RevealTarget::Dock => {
-                        terminal_panel.update_in(cx, |terminal_panel, window, cx| {
-                            terminal_panel.activate_terminal_view(&task_pane, terminal_item_index, true, window, cx)
-                        })?;
+                        anyhow::ensure!(did_activate, "Failed to retrieve terminal pane");
 
-                        cx.spawn(async move |cx| {
-                            task_workspace
-                                .update_in(cx, |workspace, window, cx| workspace.focus_panel::<Self>(window, cx))
-                                .ok()
-                        })
-                        .detach();
-                    }
-                },
-                RevealStrategy::NoFocus => match reveal_target {
-                    RevealTarget::Center => {
-                        task_workspace.update_in(cx, |workspace, window, cx| {
-                            workspace.active_pane().focus_handle(cx).focus(window, cx);
-                        })?;
-                    }
-                    RevealTarget::Dock => {
-                        terminal_panel.update_in(cx, |terminal_panel, window, cx| {
-                            terminal_panel.activate_terminal_view(&task_pane, terminal_item_index, false, window, cx)
-                        })?;
+                        anyhow::Ok(())
+                    })??;
+                }
+                RevealStrategy::NoFocus if in_dock => {
+                    terminal_panel.update_in(cx, |terminal_panel, window, cx| {
+                        terminal_panel.activate_terminal_view(&task_pane, terminal_item_index, false, window, cx)
+                    })?;
 
-                        cx.spawn(async move |cx| {
-                            task_workspace
-                                .update_in(cx, |workspace, window, cx| workspace.open_panel::<Self>(window, cx))
-                                .ok()
-                        })
-                        .detach();
-                    }
-                },
+                    cx.spawn(async move |cx| {
+                        task_workspace
+                            .update_in(cx, |workspace, window, cx| workspace.open_panel::<Self>(window, cx))
+                            .ok()
+                    })
+                    .detach();
+                }
+                RevealStrategy::NoFocus => {
+                    task_workspace.update_in(cx, |workspace, window, cx| {
+                        workspace.active_pane().focus_handle(cx).focus(window, cx);
+                    })?;
+                }
                 RevealStrategy::Never => {}
             }
 
