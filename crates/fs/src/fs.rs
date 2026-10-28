@@ -2,7 +2,6 @@ pub mod fs_watcher;
 mod git_clone_progress;
 
 use std::ffi::CString;
-use std::ffi::OsString;
 use std::io::Write;
 use std::io::{self};
 #[cfg(target_os = "macos")]
@@ -98,8 +97,7 @@ pub trait Fs: Send + Sync {
     async fn remove_dir(&self, path: &Path, options: RemoveOptions) -> Result<()>;
 
     /// Moves a file or directory to the system trash.
-    /// Returns a [`TrashedEntry`] that can be used to keep track of the
-    /// location of the trashed item in the system's trash.
+    /// Returns a [`TrashId`] that can be passed to [`Fs::restore`].
     async fn trash(&self, path: &Path, options: RemoveOptions) -> Result<TrashId>;
 
     /// Removes a file from the filesystem.
@@ -157,44 +155,6 @@ pub trait Fs: Send + Sync {
     async fn restore(&self, trash_id: TrashId) -> std::result::Result<PathBuf, TrashRestoreError>;
 }
 
-// We use our own type rather than `trash::TrashItem` directly to avoid carrying
-// over fields we don't need (e.g. `time_deleted`) and to insulate callers and
-// tests from changes to that crate's API surface.
-/// Represents a file or directory that has been moved to the system trash,
-/// retaining enough information to restore it to its original location.
-#[derive(Clone, PartialEq, Debug)]
-struct TrashedEntry {
-    /// Platform-specific identifier for the file/directory in the trash.
-    ///
-    /// * Freedesktop – Path to the `.trashinfo` file.
-    /// * macOS & Windows – Full path to the file/directory in the system's
-    ///   trash.
-    pub id: OsString,
-    /// Name of the file/directory at the time of trashing, including extension.
-    pub name: OsString,
-    /// Absolute path to the parent directory at the time of trashing.
-    pub original_parent: PathBuf,
-}
-
-impl From<trash::TrashItem> for TrashedEntry {
-    fn from(item: trash::TrashItem) -> Self {
-        Self { id: item.id, name: item.name, original_parent: item.original_parent }
-    }
-}
-
-impl TrashedEntry {
-    fn into_trash_item(self) -> trash::TrashItem {
-        trash::TrashItem {
-            id: self.id,
-            name: self.name,
-            original_parent: self.original_parent,
-            // `TrashedEntry` doesn't preserve `time_deleted` as we don't
-            // currently need it for restore, so we default it to 0 here.
-            time_deleted: 0,
-        }
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum TrashRestoreError {
     #[error("The specified `path` ({}) was not found in the system's trash.", path.display())]
@@ -213,9 +173,10 @@ pub enum TrashRestoreError {
 impl From<trash::Error> for TrashRestoreError {
     fn from(err: trash::Error) -> Self {
         match err {
-            trash::Error::RestoreCollision { path, .. } => Self::Collision { path },
-            trash::Error::Unknown { description } => Self::Unknown { description },
-            other => Self::Unknown { description: other.to_string() },
+            trash::Error::RestoreCollision { path } => TrashRestoreError::Collision { path },
+            trash::Error::NoLongerInTrash { path } => TrashRestoreError::NotFound { path },
+            trash::Error::Unknown { description } => TrashRestoreError::Unknown { description },
+            other => TrashRestoreError::Unknown { description: other.to_string() },
         }
     }
 }
@@ -387,7 +348,7 @@ pub struct RealFs {
     native_watcher: Arc<fs_watcher::OsWatcher>,
     next_job_id: Arc<AtomicUsize>,
     job_event_subscribers: Arc<Mutex<Vec<JobEventSender>>>,
-    trash: Arc<Mutex<SlotMap<TrashId, TrashedEntry>>>,
+    trash: Arc<Mutex<SlotMap<TrashId, trash::TrashItem>>>,
     is_case_sensitive: AtomicU8,
 }
 
@@ -638,10 +599,9 @@ impl Fs for RealFs {
         // its target and leave the link behind.
         let path = std::path::absolute(path).context("Could not make the path absolute")?;
 
-        let entry =
-            smol::unblock(move || trash::delete_with_info(path)).await.context("Could not trash file or dir")?.into();
+        let item = smol::unblock(move || trash::delete_with_info(path)).await.context("Could not trash file or dir")?;
 
-        Ok(self.trash.lock().insert(entry))
+        Ok(self.trash.lock().insert(item))
     }
 
     async fn open_sync(&self, path: &Path) -> Result<Box<dyn ReadSeek + Send + Sync>> {
@@ -816,14 +776,7 @@ impl Fs for RealFs {
         latency: Duration,
     ) -> (Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>, Arc<dyn Watcher>) {
         let this = self.this.upgrade().expect("RealFs is only constructed inside an Arc");
-        fs_watcher::watch(
-            this,
-            self.native_watcher.clone(),
-            self.executor.clone(),
-            path,
-            latency,
-        )
-        .await
+        fs_watcher::watch(this, self.native_watcher.clone(), self.executor.clone(), path, latency).await
     }
 
     fn open_repo(&self, dotgit_path: &Path, git_binary_path: Option<&Path>) -> Result<Arc<dyn GitRepository>> {
@@ -972,24 +925,23 @@ impl Fs for RealFs {
     }
 
     fn original_path_for_trash_id(&self, trash_id: TrashId) -> Option<PathBuf> {
-        self.trash.lock().get(trash_id).map(|entry| entry.original_parent.join(&entry.name))
+        self.trash.lock().get(trash_id).map(trash::TrashItem::original_path)
     }
 
     async fn restore(&self, trash_id: TrashId) -> std::result::Result<PathBuf, TrashRestoreError> {
-        let trashed_entry = self.trash.lock().get(trash_id).cloned().ok_or(TrashRestoreError::AlreadyRestored)?;
-
-        let restored_item_path = trashed_entry.original_parent.join(&trashed_entry.name);
+        let item = self.trash.lock().get(trash_id).cloned().ok_or(TrashRestoreError::AlreadyRestored)?;
+        let restored_item_path = item.original_path();
 
         let (tx, rx) = futures::channel::oneshot::channel();
         std::thread::Builder::new()
             .name("restore trashed item".to_string())
             .spawn(move || {
-                let res = trash::restore_all([trashed_entry.into_trash_item()]);
+                let res = trash::restore(item);
                 tx.send(res)
             })
             .expect("The OS can spawn a threads");
 
-        rx.await.expect("Restore all never panics")?;
+        rx.await.expect("restore never panics")?;
         self.trash.lock().remove(trash_id);
         Ok(restored_item_path)
     }

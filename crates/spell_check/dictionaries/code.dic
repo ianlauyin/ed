@@ -183,6 +183,7 @@ caf
 calc
 callout
 calltype
+canonicalize
 cartesian
 casefold
 cassandra
@@ -1724,6 +1725,7 @@ swf
 swp
 swt
 symfony
+symlink/S
 sympy
 sys
 sysdate

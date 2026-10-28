@@ -3,13 +3,9 @@ name = "fs"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
-path = "src/fs.rs"
 doctest = false
+path = "src/fs.rs"
 
 [dependencies]
 anyhow.workspace = true
@@ -20,22 +16,25 @@ git.workspace = true
 gpui.workspace = true
 libc.workspace = true
 log.workspace = true
+notify = "9.0.0-rc.4"
 parking_lot.workspace = true
 paths.workspace = true
-rope.workspace = true
 proto.workspace = true
-thiserror.workspace = true
+rope.workspace = true
 serde.workspace = true
 slotmap.workspace = true
 smol.workspace = true
 tempfile.workspace = true
 text.workspace = true
+thiserror.workspace = true
+trash.workspace = true
 util.workspace = true
-notify = "9.0.0-rc.4"
-trash = { git = "https://github.com/zed-industries/trash-rs", rev = "41c6c800d884a89351f3b8856d12894cccee261d" }
-
-[target.'cfg(unix)'.dependencies]
-rustix.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 unicode-normalization = "0.1"
+
+[target."cfg(unix)".dependencies]
+rustix.workspace = true
+
+[lints]
+workspace = true

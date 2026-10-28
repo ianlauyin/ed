@@ -171,7 +171,6 @@ use worktree::CreatedEntry;
 use worktree::Worktree;
 
 use crate::ProjectPanel;
-use crate::RemovalKind;
 
 enum Operation {
     Trash(ProjectPath),
@@ -876,17 +875,11 @@ impl Inner {
     where
         S: AsRef<str>,
     {
-        let prompt = ProjectPanel::build_removal_prompt(RemovalKind::Trash, names, dirty_buffers);
+        let prompt = ProjectPanel::build_removal_prompt(names, dirty_buffers);
         let answer = self
             .panel
             .update_in(cx, |_panel, window, cx| {
-                window.prompt(
-                    PromptLevel::Info,
-                    &prompt.message,
-                    prompt.detail,
-                    &[prompt.confirmation_label, "Cancel"],
-                    cx,
-                )
+                window.prompt(PromptLevel::Info, &prompt.message, None, &[prompt.confirmation_label, "Cancel"], cx)
             })?
             .await?;
 

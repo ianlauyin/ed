@@ -429,20 +429,11 @@ struct StickyDetails {
     sticky_index: usize,
 }
 
-/// Permanently deletes the selected file or directory.
+/// Moves the selected files or directories to the system trash. Undoable.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
 #[action(namespace = project_panel)]
 #[serde(deny_unknown_fields)]
 struct Delete {
-    #[serde(default)]
-    pub skip_prompt: bool,
-}
-
-/// Moves the selected file or directory to the system trash.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = project_panel)]
-#[serde(deny_unknown_fields)]
-struct Trash {
     #[serde(default)]
     pub skip_prompt: bool,
 }
@@ -736,36 +727,18 @@ fn get_item_color(is_sticky: bool, cx: &App) -> ItemColors {
     }
 }
 
-enum DeleteEntryOutcome {
-    /// Entry was successfully trashed, returning the `Change` that can be
-    /// recorded to the undo stack.
+enum TrashEntryOutcome {
+    /// Entry was trashed, returning the `Change` to record on the undo stack.
     Trashed(Change),
-    /// Entry was successfully deleted, or there was nothing to delete.
-    Deleted,
-    /// Deleting or trashing the entry failed at the OS level.
+    /// The entry or its worktree was already gone.
+    Missing,
+    /// Trashing the entry failed at the OS level.
     Failed,
-}
-
-/// Small wrapper around a pending task returned by either
-/// [`Project::trash_entry`] or [`Project::delete_entry`].
-///
-/// Since the two operations return different types, this enum lets
-/// [`ProjectPanel::remove`] collect and resolve both uniformly, while carrying
-/// the intention (trash vs delete).
-enum RemoveEntryTask {
-    Trash(Task<Result<TrashId>>),
-    Delete(Task<Result<()>>),
 }
 
 struct RemovalPrompt {
     message: String,
-    detail: Option<&'static str>,
     confirmation_label: &'static str,
-}
-
-enum RemovalKind {
-    Trash,
-    Delete,
 }
 
 impl ProjectPanel {
@@ -1253,7 +1226,6 @@ impl ProjectPanel {
                                     .when(has_history, |menu| menu.action("View History", Box::new(git::FileHistory)))
                             })
                             .when(!should_hide_rename, |menu| menu.separator().action("Rename", Box::new(Rename)))
-                            .when(!is_root, |menu| menu.action("Trash", Box::new(Trash { skip_prompt: false })))
                             .when(!is_root, |menu| menu.action("Delete", Box::new(Delete { skip_prompt: false })))
                             .when(is_root, |menu| {
                                 menu.separator()
@@ -2213,28 +2185,17 @@ impl ProjectPanel {
         }))
     }
 
-    async fn resolve_delete_entry(task: Option<RemoveEntryTask>, worktree_id: WorktreeId) -> DeleteEntryOutcome {
+    async fn resolve_trash_entry(task: Option<Task<Result<TrashId>>>, worktree_id: WorktreeId) -> TrashEntryOutcome {
         let Some(task) = task else {
-            // If there's no task to be awaited on, it means that the entry, or
-            // worktree, were likely already deleted.
-            return DeleteEntryOutcome::Deleted;
+            return TrashEntryOutcome::Missing;
         };
 
-        match task {
-            RemoveEntryTask::Trash(task) => match task.await {
-                Ok(trash_id) => DeleteEntryOutcome::Trashed(Change::Trashed(worktree_id, trash_id)),
-                Err(err) => {
-                    log::error!("Failed to trash an entry: {err:#}",);
-                    DeleteEntryOutcome::Failed
-                }
-            },
-            RemoveEntryTask::Delete(task) => match task.await {
-                Ok(()) => DeleteEntryOutcome::Deleted,
-                Err(err) => {
-                    log::error!("Failed to delete an entry: {err:#}",);
-                    DeleteEntryOutcome::Failed
-                }
-            },
+        match task.await {
+            Ok(trash_id) => TrashEntryOutcome::Trashed(Change::Trashed(worktree_id, trash_id)),
+            Err(err) => {
+                log::error!("Failed to trash an entry: {err:#}");
+                TrashEntryOutcome::Failed
+            }
         }
     }
 
@@ -2444,14 +2405,6 @@ impl ProjectPanel {
         self.rename_impl(None, window, cx);
     }
 
-    fn trash(&mut self, action: &Trash, window: &mut Window, cx: &mut Context<Self>) {
-        self.remove(true, action.skip_prompt, window, cx);
-    }
-
-    fn delete(&mut self, action: &Delete, window: &mut Window, cx: &mut Context<Self>) {
-        self.remove(false, action.skip_prompt, window, cx);
-    }
-
     fn restore_file(&mut self, action: &git::RestoreFile, window: &mut Window, cx: &mut Context<Self>) {
         maybe!({
             let selection = self.selection?;
@@ -2614,16 +2567,11 @@ impl ProjectPanel {
     /// function will apply markdown formatting and display truncation. The
     /// `dirty_buffers` parameter should be the number of those paths that have
     /// unsaved changes.
-    fn build_removal_prompt<S>(kind: RemovalKind, names: &[S], dirty_buffers: usize) -> RemovalPrompt
+    fn build_removal_prompt<S>(names: &[S], dirty_buffers: usize) -> RemovalPrompt
     where
         S: AsRef<str>,
     {
-        let (message_start, confirmation_label, detail) = match kind {
-            RemovalKind::Trash => ("Do you want to trash", "Trash", None),
-            RemovalKind::Delete => {
-                ("Are you sure you want to permanently delete", "Delete", Some("This cannot be undone."))
-            }
-        };
+        let message_start = "Do you want to delete";
 
         let mut message = match names {
             [name] => format!("{message_start} {}?", MarkdownInlineCode(name.as_ref())),
@@ -2657,15 +2605,11 @@ impl ProjectPanel {
             }
         }
 
-        RemovalPrompt { message, detail, confirmation_label }
+        RemovalPrompt { message, confirmation_label: "Delete" }
     }
 
-    // TODO(yara|dino): trashing and deleting are conceptually distinct, even
-    // more so with the fact that trashing can now be undone, whereas deleting
-    // cannot.
-    // Worth splitting them, and exploring dropping the trash confirmation now
-    // that trash is undoable.
-    fn remove(&self, trash: bool, skip_prompt: bool, window: &mut Window, cx: &mut Context<ProjectPanel>) {
+    /// Moves the selection to the system trash and records it for undo.
+    fn delete(&mut self, action: &Delete, window: &mut Window, cx: &mut Context<ProjectPanel>) {
         maybe!({
             let items_to_delete = self.disjoint_effective_entries_excluding_roots(cx);
             let project = self.project.read(cx);
@@ -2688,17 +2632,14 @@ impl ProjectPanel {
             if file_paths.is_empty() {
                 return None;
             }
-            let answer = if !skip_prompt {
+            let answer = if !action.skip_prompt {
                 let names = file_paths.iter().map(|(_, _, name)| name.as_str()).collect::<Vec<_>>();
-
-                let removal_kind = if trash { RemovalKind::Trash } else { RemovalKind::Delete };
-
-                let prompt = Self::build_removal_prompt(removal_kind, &names, dirty_buffers);
+                let prompt = ProjectPanel::build_removal_prompt(&names, dirty_buffers);
 
                 Some(window.prompt(
                     PromptLevel::Info,
                     &prompt.message,
-                    prompt.detail,
+                    None,
                     &[prompt.confirmation_label, "Cancel"],
                     cx,
                 ))
@@ -2721,34 +2662,24 @@ impl ProjectPanel {
                     panel.project.update(cx, |project, cx| {
                         file_paths
                             .into_iter()
-                            .map(|(entry_id, worktree_id, _)| {
-                                let task = if trash {
-                                    project.trash_entry(entry_id, cx).map(RemoveEntryTask::Trash)
-                                } else {
-                                    project.delete_entry(entry_id, cx).map(RemoveEntryTask::Delete)
-                                };
-
-                                (worktree_id, task)
-                            })
+                            .map(|(entry_id, worktree_id, _)| (worktree_id, project.trash_entry(entry_id, cx)))
                             .collect::<Vec<_>>()
                     })
                 })?;
 
                 for (worktree_id, task) in tasks {
-                    match Self::resolve_delete_entry(task, worktree_id).await {
-                        DeleteEntryOutcome::Deleted => {}
-                        DeleteEntryOutcome::Trashed(change) => changes.push(change),
-                        DeleteEntryOutcome::Failed => failed_count += 1,
+                    match ProjectPanel::resolve_trash_entry(task, worktree_id).await {
+                        TrashEntryOutcome::Missing => {}
+                        TrashEntryOutcome::Trashed(change) => changes.push(change),
+                        TrashEntryOutcome::Failed => failed_count += 1,
                     }
                 }
 
                 panel.update_in(cx, |panel, window, cx| {
-                    if trash {
-                        panel.undo_manager.record(changes).log_err();
-                    }
+                    panel.undo_manager.record(changes).log_err();
 
                     if failed_count > 0 {
-                        panel.show_remove_failure_toast(trash, total_count, failed_count, cx);
+                        panel.show_remove_failure_toast(total_count, failed_count, cx);
                     }
 
                     if let Some(next_selection) = next_selection {
@@ -2770,16 +2701,11 @@ impl ProjectPanel {
         });
     }
 
-    /// Displays a toast notification, informing that the application was not
-    /// able to delete/trash some of the files the user intended to
-    /// delete/trash.
-    fn show_remove_failure_toast(&self, trash: bool, total_count: usize, failed_count: usize, cx: &mut Context<Self>) {
-        let message = match (trash, total_count) {
-            (true, 1) => format!("Failed to trash {failed_count} of {total_count} file."),
-            (true, _) => format!("Failed to trash {failed_count} of {total_count} files."),
-            (false, 1) => format!("Failed to delete {failed_count} of {total_count} file."),
-            (false, _) => format!("Failed to delete {failed_count} of {total_count} files."),
-        };
+    /// Displays a toast notification, informing that some of the selected
+    /// files could not be moved to the trash.
+    fn show_remove_failure_toast(&self, total_count: usize, failed_count: usize, cx: &mut Context<Self>) {
+        let noun = if total_count == 1 { "file" } else { "files" };
+        let message = format!("Failed to move {failed_count} of {total_count} {noun} to the trash.");
 
         let toast = StatusToast::new(message, cx, |this, _| {
             this.icon(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error)).dismiss_button(true)
@@ -6540,7 +6466,6 @@ impl Render for ProjectPanel {
                         .on_action(cx.listener(Self::restore_file))
                         .on_action(cx.listener(Self::add_to_gitignore))
                         .on_action(cx.listener(Self::add_to_git_info_exclude))
-                        .map(|el| el.on_action(cx.listener(Self::trash)))
                         .map(|el| el.on_action(cx.listener(Self::undo)).on_action(cx.listener(Self::redo)))
                 })
                 .when(project.is_local(), |el| {

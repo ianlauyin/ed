@@ -29,6 +29,28 @@
   (`io::ErrorKind::AlreadyExists` locally, `ErrorCode::AlreadyExists` from a
   remote server), never the message text.
 
+## Deleting
+
+- There is a single `project_panel::Delete` action and a single "Delete"
+  context-menu item. It always moves entries to the system trash; the panel
+  never permanently deletes. Every successful delete is recorded on the
+  panel's undo stack, and undo restores it from the trash.
+- Backspace/Delete prompt first; Cmd-Backspace/Cmd-Delete skip the prompt
+  (`skip_prompt: true`).
+- Undo only works within the session: the mapping from undo entries to trashed
+  items is in memory. After a restart, items are restored from the OS trash.
+- Trashing uses the vendored `crates/trash` (macOS and Linux only). It merges
+  upstream `trash-rs` fixes with Zed's fork, which is needed because upstream
+  can't return the trashed item or restore on macOS:
+  - macOS: `NSFileManager.trashItemAtURL` (no Finder/AppleScript, so no
+    permission prompt and no "Put Back"); restore renames the item back.
+  - Linux: freedesktop Trash spec. The home trash is used for the home trash's
+    volume; other volumes use `.Trash/$uid` or `.Trash-$uid`, falling back to
+    the home trash when the volume's trash isn't writable.
+  - Moves never overwrite: the destination is claimed with an empty
+    placeholder before renaming, and an occupied restore path is a collision.
+    Cross-filesystem moves fall back to copy + remove, both ways.
+
 ## External libraries
 
 - A path inside a library (as recognized by a language's `LibraryProvider`)
