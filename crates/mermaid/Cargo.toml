@@ -1,14 +1,8 @@
 [package]
 name = "mermaid"
-description = "Pure Mermaid-to-SVG compiler: preprocessing, parsing, layout, and SVG emission."
 version = "0.0.0"
 edition.workspace = true
-license = "MIT"
-publish = false
-
-[lib]
-path = "src/lib.rs"
-doctest = false
+description = "Pure Mermaid-to-SVG compiler: preprocessing, parsing, layout, and SVG emission."
 
 [lints]
 workspace = true

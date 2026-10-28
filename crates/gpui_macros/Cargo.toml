@@ -4,16 +4,14 @@ version = "0.1.0"
 edition.workspace = true
 description = "Macros used by gpui"
 
-[lints]
-workspace = true
-
 [lib]
 path = "src/gpui_macros.rs"
 proc-macro = true
-doctest = true
-test = false
 
 [dependencies]
 proc-macro2.workspace = true
 quote.workspace = true
-syn = { workspace = true, default-features = true, features = ["full", "extra-traits"] }
+syn = { workspace = true, default-features = true, features = ["extra-traits", "full"] }
+
+[lints]
+workspace = true

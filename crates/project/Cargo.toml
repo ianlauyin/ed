@@ -3,12 +3,8 @@ name = "project"
 version = "0.1.0"
 edition.workspace = true
 
-[lints]
-workspace = true
-
 [lib]
 path = "src/project.rs"
-doctest = false
 
 [dependencies]
 aho-corasick.workspace = true
@@ -57,3 +53,6 @@ util.workspace = true
 watch.workspace = true
 which.workspace = true
 worktree.workspace = true
+
+[lints]
+workspace = true

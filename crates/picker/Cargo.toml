@@ -3,19 +3,15 @@ name = "picker"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/picker.rs"
-doctest = false
 
 [dependencies]
 anyhow.workspace = true
 db.workspace = true
-language.workspace = true
+ed_actions.workspace = true
 gpui.workspace = true
+language.workspace = true
 menu.workspace = true
 project.workspace = true
 serde.workspace = true
@@ -24,6 +20,8 @@ settings.workspace = true
 theme_settings.workspace = true
 ui.workspace = true
 ui_input.workspace = true
-workspace.workspace = true
-ed_actions.workspace = true
 util.workspace = true
+workspace.workspace = true
+
+[lints]
+workspace = true

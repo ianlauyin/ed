@@ -3,17 +3,15 @@ name = "fuzzy_nucleo"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/fuzzy_nucleo.rs"
-doctest = false
 
 [dependencies]
 fuzzy.workspace = true
-nucleo.workspace = true
 gpui.workspace = true
 gpui_util.workspace = true
+nucleo.workspace = true
 path.workspace = true
+
+[lints]
+workspace = true

@@ -3,16 +3,14 @@ name = "fuzzy"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/fuzzy.rs"
-doctest = false
 
 [dependencies]
 gpui.workspace = true
 gpui_util.workspace = true
-path.workspace = true
 log.workspace = true
+path.workspace = true
+
+[lints]
+workspace = true

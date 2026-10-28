@@ -1,16 +1,11 @@
 [package]
-description = "Shared protocol for the editor and remote server"
-edition.workspace = true
 name = "proto"
 version = "0.1.0"
-
-
-[lints]
-workspace = true
+edition.workspace = true
+description = "Shared protocol for the editor and remote server"
 
 [lib]
 path = "src/proto.rs"
-doctest = false
 
 [dependencies]
 anyhow.workspace = true
@@ -20,3 +15,6 @@ serde = { workspace = true, features = ["derive"] }
 [build-dependencies]
 prost-build.workspace = true
 protox.workspace = true
+
+[lints]
+workspace = true

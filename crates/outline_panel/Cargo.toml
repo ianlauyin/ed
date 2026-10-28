@@ -4,7 +4,6 @@ version = "0.1.0"
 edition.workspace = true
 
 [lib]
-doctest = false
 path = "src/outline_panel.rs"
 
 [dependencies]

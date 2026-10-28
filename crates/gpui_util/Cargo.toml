@@ -1,15 +1,11 @@
 [package]
 name = "gpui_util"
 version = "0.1.0"
-
 edition.workspace = true
 
-[lib]
-doctest = false
-
 [dependencies]
-log = { workspace = true, features = ["serde"] }
 anyhow.workspace = true
+log = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true

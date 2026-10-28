@@ -3,10 +3,8 @@ name = "path"
 version = "0.1.0"
 edition.workspace = true
 
-
 [lib]
 path = "src/path.rs"
-doctest = false
 
 [dependencies]
 anyhow.workspace = true

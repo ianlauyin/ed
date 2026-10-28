@@ -4,8 +4,6 @@ version = "0.1.0"
 edition.workspace = true
 
 [lib]
-doctest = false
-name = "git_ui"
 path = "src/git_ui.rs"
 
 [dependencies]

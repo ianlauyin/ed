@@ -3,32 +3,24 @@ name = "gpui_macos"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/gpui_macos.rs"
-doctest = false
-
-[features]
-runtime_shaders = ["gpui_apple/runtime_shaders"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-gpui.workspace = true
 anyhow.workspace = true
 block2.workspace = true
 collections.workspace = true
 dispatch2 = { workspace = true, features = ["block2", "objc2"] }
 futures.workspace = true
+gpui.workspace = true
 gpui_apple.workspace = true
 gpui_util.workspace = true
 image.workspace = true
 itertools.workspace = true
 log.workspace = true
 objc2.workspace = true
-objc2-app-kit = { workspace = true, features = ["objc2-quartz-core", "NSDragging", "NSEvent", "NSTextInputClient", "NSVisualEffectView"] }
-objc2-core-foundation = { workspace = true, features = ["std", "CFBase", "CFData", "CFNumber", "CFRunLoop", "CFString", "CFUUID"] }
+objc2-app-kit = { workspace = true, features = ["NSDragging", "NSEvent", "NSTextInputClient", "NSVisualEffectView", "objc2-quartz-core"] }
+objc2-core-foundation = { workspace = true, features = ["CFBase", "CFData", "CFNumber", "CFRunLoop", "CFString", "CFUUID", "std"] }
 objc2-core-graphics = { workspace = true, features = ["CGDirectDisplay", "CGError", "CGRemoteOperation"] }
 objc2-foundation = { workspace = true, features = ["NSKeyedArchiver", "NSRunLoop"] }
 objc2-quartz-core = { workspace = true, features = ["CADisplayLink"] }
@@ -41,3 +33,9 @@ uuid.workspace = true
 # The macOS test-only window implementation depends on test-only APIs from both
 # GPUI and the extracted renderer. A dependency does not inherit this crate's
 # `cfg(test)`, so dev-dependencies enable those APIs only for test builds.
+
+[features]
+runtime_shaders = ["gpui_apple/runtime_shaders"]
+
+[lints]
+workspace = true

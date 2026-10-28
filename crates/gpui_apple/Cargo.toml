@@ -3,20 +3,10 @@ name = "gpui_apple"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/gpui_apple.rs"
-doctest = false
-
-[features]
-default = ["runtime_shaders"]
-runtime_shaders = []
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-gpui.workspace = true
 anyhow.workspace = true
 async-task.workspace = true
 block2.workspace = true
@@ -24,17 +14,18 @@ collections.workspace = true
 derive_more.workspace = true
 dispatch2.workspace = true
 etagere.workspace = true
-image.workspace = true
 futures.workspace = true
+gpui.workspace = true
+image.workspace = true
 log.workspace = true
 objc2.workspace = true
-objc2-core-foundation = { workspace = true, features = ["std", "CFArray", "CFAttributedString", "CFBase", "CFCGTypes", "CFData", "CFDictionary", "CFLocale", "CFNumber", "CFPreferences", "CFString"] }
+objc2-core-foundation = { workspace = true, features = ["CFArray", "CFAttributedString", "CFBase", "CFCGTypes", "CFData", "CFDictionary", "CFLocale", "CFNumber", "CFPreferences", "CFString", "std"] }
 objc2-core-graphics = { workspace = true, features = ["CGBitmapContext", "CGColorSpace", "CGContext", "CGDataProvider", "CGFont", "CGImage"] }
-objc2-core-text = { workspace = true, features = ["objc2-core-graphics", "CTFont", "CTFontCollection", "CTFontDescriptor", "CTFontTraits", "CTLine", "CTRun", "CTStringAttributes"] }
-objc2-metal = { workspace = true, features = [
-    "std",
-    "block2",
-    "dispatch2",
+objc2-core-text = { workspace = true, features = ["CTFont", "CTFontCollection", "CTFontDescriptor", "CTFontTraits", "CTLine", "CTRun", "CTStringAttributes", "objc2-core-graphics"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSError", "NSNotification", "NSOperation", "NSProcessInfo", "NSRange", "NSString", "NSThread", "block2"] }
+objc2-metal = {
+  workspace = true,
+  features = [
     "MTLAllocation",
     "MTLBlitCommandEncoder",
     "MTLBuffer",
@@ -51,8 +42,11 @@ objc2-metal = { workspace = true, features = [
     "MTLResource",
     "MTLTexture",
     "MTLTypes",
-] }
-objc2-foundation = { workspace = true, features = ["NSArray", "NSError", "NSRange", "NSString", "NSThread", "NSNotification", "NSOperation", "NSProcessInfo", "block2"] }
+    "block2",
+    "dispatch2",
+    "std",
+  ]
+}
 objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "objc2-core-graphics", "objc2-metal"] }
 objc2-security.workspace = true
 parking_lot.workspace = true
@@ -61,3 +55,10 @@ thiserror.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.build-dependencies]
 cbindgen.workspace = true
+
+[features]
+default = ["runtime_shaders"]
+runtime_shaders = []
+
+[lints]
+workspace = true

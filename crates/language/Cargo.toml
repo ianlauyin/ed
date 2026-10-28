@@ -3,13 +3,8 @@ name = "language"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/language.rs"
-doctest = false
 
 [dependencies]
 anyhow.workspace = true
@@ -36,8 +31,8 @@ serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
 smallvec.workspace = true
-syntect.workspace = true
 sum_tree.workspace = true
+syntect.workspace = true
 task.workspace = true
 text.workspace = true
 theme.workspace = true
@@ -46,3 +41,6 @@ two-face.workspace = true
 unicase.workspace = true
 util.workspace = true
 watch.workspace = true
+
+[lints]
+workspace = true

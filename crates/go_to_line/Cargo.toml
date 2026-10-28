@@ -3,13 +3,8 @@ name = "go_to_line"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/go_to_line.rs"
-doctest = false
 
 [dependencies]
 editor.workspace = true
@@ -22,3 +17,6 @@ theme.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true
+
+[lints]
+workspace = true

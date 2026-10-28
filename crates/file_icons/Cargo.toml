@@ -3,16 +3,14 @@ name = "file_icons"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/file_icons.rs"
-doctest = false
 
 [dependencies]
 collections.workspace = true
 gpui.workspace = true
 settings_content.workspace = true
 util.workspace = true
+
+[lints]
+workspace = true

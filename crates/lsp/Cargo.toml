@@ -3,20 +3,15 @@ name = "lsp"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/lsp.rs"
-doctest = false
 
 [dependencies]
 anyhow.workspace = true
 async-channel = { workspace = true, features = ["std"] }
 collections.workspace = true
-futures-lite.workspace = true
 futures.workspace = true
+futures-lite.workspace = true
 gpui.workspace = true
 gpui_util.workspace = true
 log.workspace = true
@@ -25,3 +20,6 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 util.workspace = true
+
+[lints]
+workspace = true

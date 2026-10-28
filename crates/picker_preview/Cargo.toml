@@ -3,17 +3,10 @@ name = "picker_preview"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/picker_preview.rs"
-doctest = false
-test = false
 
 [dependencies]
-
 editor.workspace = true
 gpui.workspace = true
 language.workspace = true
@@ -23,3 +16,6 @@ project.workspace = true
 rope.workspace = true
 ui.workspace = true
 util.workspace = true
+
+[lints]
+workspace = true

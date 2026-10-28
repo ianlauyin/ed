@@ -3,16 +3,6 @@ name = "languages"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
-[lib]
-doctest = false
-
-[features]
-load-grammars = ["grammars/load-grammars"]
-
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -35,3 +25,9 @@ smol.workspace = true
 snippet.workspace = true
 task.workspace = true
 util.workspace = true
+
+[features]
+load-grammars = ["grammars/load-grammars"]
+
+[lints]
+workspace = true

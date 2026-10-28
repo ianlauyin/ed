@@ -4,9 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 
 [lib]
-doctest = false
 path = "src/notifications.rs"
-test = false
 
 [dependencies]
 component.workspace = true

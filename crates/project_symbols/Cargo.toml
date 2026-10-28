@@ -3,13 +3,8 @@ name = "project_symbols"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
 path = "src/project_symbols.rs"
-doctest = false
 
 [dependencies]
 anyhow.workspace = true
@@ -25,3 +20,6 @@ theme.workspace = true
 theme_settings.workspace = true
 util.workspace = true
 workspace.workspace = true
+
+[lints]
+workspace = true

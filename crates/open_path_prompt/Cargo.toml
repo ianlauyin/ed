@@ -4,6 +4,9 @@ version = "0.1.0"
 
 edition.workspace = true
 
+[lib]
+path = "src/open_path_prompt.rs"
+
 [dependencies]
 file_icons.workspace = true
 futures.workspace = true
@@ -19,7 +22,3 @@ workspace.workspace = true
 
 [lints]
 workspace = true
-
-[lib]
-path = "src/open_path_prompt.rs"
-doctest = false

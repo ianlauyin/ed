@@ -1,18 +1,11 @@
 [package]
 name = "remote"
-description = "Client-side subsystem for remote editing"
-edition.workspace = true
 version = "0.1.0"
-
-[lints]
-workspace = true
+edition.workspace = true
+description = "Client-side subsystem for remote editing"
 
 [lib]
 path = "src/remote.rs"
-doctest = false
-
-[features]
-default = []
 
 [dependencies]
 anyhow.workspace = true
@@ -30,3 +23,6 @@ smol.workspace = true
 thiserror.workspace = true
 util.workspace = true
 which.workspace = true
+
+[lints]
+workspace = true

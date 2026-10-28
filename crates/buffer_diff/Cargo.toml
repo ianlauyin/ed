@@ -3,20 +3,19 @@ name = "buffer_diff"
 version = "0.1.0"
 edition.workspace = true
 
-[lints]
-workspace = true
-
 [lib]
 path = "src/buffer_diff.rs"
-doctest = false
 
 [dependencies]
 clock.workspace = true
-imara-diff.workspace = true
 gpui.workspace = true
+imara-diff.workspace = true
 language.workspace = true
 log.workspace = true
 rope.workspace = true
 sum_tree.workspace = true
 text.workspace = true
 util.workspace = true
+
+[lints]
+workspace = true
