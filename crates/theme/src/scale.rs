@@ -1,4 +1,3 @@
-#![allow(missing_docs)]
 use gpui::App;
 use gpui::Hsla;
 use gpui::SharedString;

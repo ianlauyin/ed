@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::ops::Range;

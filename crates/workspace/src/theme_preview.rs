@@ -1,5 +1,3 @@
-#![allow(unused, dead_code)]
-use gpui::AnyElement;
 use gpui::App;
 use gpui::Entity;
 use gpui::EventEmitter;
@@ -8,19 +6,10 @@ use gpui::Focusable;
 use gpui::Hsla;
 use gpui::Task;
 use gpui::actions;
-use gpui::hsla;
 use strum::IntoEnumIterator;
 use theme::all_theme_colors;
-use ui::Avatar;
 use ui::ButtonLike;
-use ui::Checkbox;
-use ui::DecoratedIcon;
 use ui::ElevationIndex;
-use ui::Facepile;
-use ui::IconDecoration;
-use ui::Indicator;
-use ui::KeybindingHint;
-use ui::Switch;
 use ui::TintColor;
 use ui::Tooltip;
 use ui::prelude::*;
@@ -40,7 +29,7 @@ actions!(
 pub fn init(cx: &App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
         workspace.register_action(|workspace, _: &OpenThemePreview, window, cx| {
-            let theme_preview = cx.new(|cx| ThemePreview::new(window, cx));
+            let theme_preview = cx.new(|cx| ThemePreview::new(cx));
             workspace.add_item_to_active_pane(Box::new(theme_preview), None, true, window, cx)
         });
     })
@@ -56,8 +45,8 @@ enum ThemePreviewPage {
 impl ThemePreviewPage {
     pub const fn name(&self) -> &'static str {
         match self {
-            Self::Overview => "Overview",
-            Self::Typography => "Typography",
+            ThemePreviewPage::Overview => "Overview",
+            ThemePreviewPage::Typography => "Typography",
         }
     }
 }
@@ -68,14 +57,14 @@ struct ThemePreview {
 }
 
 impl ThemePreview {
-    pub fn new(window: &Window, cx: &Context<Self>) -> Self {
-        Self { current_page: ThemePreviewPage::Overview, focus_handle: cx.focus_handle() }
+    pub fn new(cx: &Context<ThemePreview>) -> ThemePreview {
+        ThemePreview { current_page: ThemePreviewPage::Overview, focus_handle: cx.focus_handle() }
     }
 
-    pub fn view(&self, page: ThemePreviewPage, window: &Window, cx: &mut Context<ThemePreview>) -> impl IntoElement {
+    pub fn view(&self, page: ThemePreviewPage, cx: &mut Context<ThemePreview>) -> impl IntoElement {
         match page {
-            ThemePreviewPage::Overview => self.render_overview_page(window, cx).into_any_element(),
-            ThemePreviewPage::Typography => self.render_typography_page(window, cx).into_any_element(),
+            ThemePreviewPage::Overview => self.render_overview_page(cx).into_any_element(),
+            ThemePreviewPage::Typography => self.render_typography_page().into_any_element(),
         }
     }
 }
@@ -87,7 +76,6 @@ impl Focusable for ThemePreview {
         self.focus_handle.clone()
     }
 }
-impl ThemePreview {}
 
 impl Item for ThemePreview {
     type Event = ();
@@ -106,24 +94,19 @@ impl Item for ThemePreview {
     fn clone_on_split(
         &self,
         _workspace_id: Option<crate::WorkspaceId>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Option<Entity<Self>>>
-    where
-        Self: Sized,
-    {
-        Task::ready(Some(cx.new(|cx| Self::new(window, cx))))
+        _: &mut Window,
+        cx: &mut Context<ThemePreview>,
+    ) -> Task<Option<Entity<ThemePreview>>> {
+        Task::ready(Some(cx.new(|cx| ThemePreview::new(cx))))
     }
 }
 
-const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/1714999?v=4";
-
 impl ThemePreview {
-    fn preview_bg(window: &Window, cx: &App) -> Hsla {
+    fn preview_bg(cx: &App) -> Hsla {
         cx.theme().colors().editor_background
     }
 
-    fn render_text(&self, layer: ElevationIndex, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_text(&self, layer: ElevationIndex, cx: &mut Context<ThemePreview>) -> impl IntoElement {
         let bg = layer.bg(cx);
 
         let label_with_contrast = |label: &str, fg: Hsla| {
@@ -284,8 +267,7 @@ impl ThemePreview {
             )
     }
 
-    fn render_colors(&self, layer: ElevationIndex, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let bg = layer.bg(cx);
+    fn render_colors(&self, cx: &mut Context<ThemePreview>) -> impl IntoElement {
         let all_colors = all_theme_colors(cx);
 
         v_flex().gap_1().child(Headline::new("Colors").size(HeadlineSize::Small).color(Color::Muted)).child(
@@ -303,7 +285,7 @@ impl ThemePreview {
                         )
                         .size(ButtonSize::None)
                         .style(ButtonStyle::Transparent)
-                        .tooltip(move |window, cx| {
+                        .tooltip(move |_, cx| {
                             let name = name.clone();
                             Tooltip::with_meta(name, None, format!("{:?}", color), cx)
                         }),
@@ -312,18 +294,18 @@ impl ThemePreview {
         )
     }
 
-    fn render_theme_layer(&self, layer: ElevationIndex, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_theme_layer(&self, layer: ElevationIndex, cx: &mut Context<ThemePreview>) -> impl IntoElement {
         v_flex()
             .p_4()
             .bg(layer.bg(cx))
             .text_color(cx.theme().colors().text)
             .gap_2()
-            .child(Headline::new(layer.clone().to_string()).size(HeadlineSize::Medium))
-            .child(self.render_text(layer, window, cx))
-            .child(self.render_colors(layer, window, cx))
+            .child(Headline::new(layer.to_string()).size(HeadlineSize::Medium))
+            .child(self.render_text(layer, cx))
+            .child(self.render_colors(cx))
     }
 
-    fn render_overview_page(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_overview_page(&self, cx: &mut Context<ThemePreview>) -> impl IntoElement {
         v_flex()
             .id("theme-preview-overview")
             .overflow_scroll()
@@ -333,13 +315,13 @@ impl ThemePreview {
                     .child(Headline::new("Theme Preview").size(HeadlineSize::Large))
                     .child(div().w_full().text_color(cx.theme().colors().text_muted).child("This view lets you preview a range of UI elements across a theme. Use it for testing out changes to the theme."))
                     )
-            .child(self.render_theme_layer(ElevationIndex::Background, window, cx))
-            .child(self.render_theme_layer(ElevationIndex::Surface, window, cx))
-            .child(self.render_theme_layer(ElevationIndex::EditorSurface, window, cx))
-            .child(self.render_theme_layer(ElevationIndex::ElevatedSurface, window, cx))
+            .child(self.render_theme_layer(ElevationIndex::Background, cx))
+            .child(self.render_theme_layer(ElevationIndex::Surface, cx))
+            .child(self.render_theme_layer(ElevationIndex::EditorSurface, cx))
+            .child(self.render_theme_layer(ElevationIndex::ElevatedSurface, cx))
     }
 
-    fn render_typography_page(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
+    fn render_typography_page(&self) -> impl IntoElement {
         v_flex()
             .id("theme-preview-typography")
             .overflow_scroll()
@@ -361,11 +343,11 @@ impl ThemePreview {
             )
     }
 
-    fn render_page_nav(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
-        h_flex().id("theme-preview-nav").items_center().gap_4().py_2().bg(Self::preview_bg(window, cx)).children(
+    fn render_page_nav(&self, cx: &Context<ThemePreview>) -> impl IntoElement {
+        h_flex().id("theme-preview-nav").items_center().gap_4().py_2().bg(ThemePreview::preview_bg(cx)).children(
             ThemePreviewPage::iter().map(|p| {
                 Button::new(ElementId::Name(p.name().into()), p.name())
-                    .on_click(cx.listener(move |this, _, window, cx| {
+                    .on_click(cx.listener(move |this, _, _, cx| {
                         this.current_page = p;
                         cx.notify();
                     }))
@@ -377,7 +359,7 @@ impl ThemePreview {
 }
 
 impl Render for ThemePreview {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl ui::IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<ThemePreview>) -> impl ui::IntoElement {
         v_flex()
             .id("theme-preview")
             .key_context("ThemePreview")
@@ -387,8 +369,8 @@ impl Render for ThemePreview {
             .max_h_full()
             .track_focus(&self.focus_handle)
             .px_2()
-            .bg(Self::preview_bg(window, cx))
-            .child(self.render_page_nav(window, cx))
-            .child(self.view(self.current_page, window, cx))
+            .bg(ThemePreview::preview_bg(cx))
+            .child(self.render_page_nav(cx))
+            .child(self.view(self.current_page, cx))
     }
 }

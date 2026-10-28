@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use gpui::HighlightStyle;
 use gpui::Hsla;
 use palette::FromColor;

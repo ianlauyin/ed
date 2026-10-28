@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use gpui::Hsla;
 use refineable::Refineable;
 

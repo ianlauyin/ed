@@ -1,13 +1,3 @@
-#![deny(missing_docs)]
-
-//! # Theme
-//!
-//! This crate provides the theme system for ed.
-//!
-//! ## Overview
-//!
-//! A theme is a collection of colors used to build a consistent appearance for UI components across the application.
-
 mod buffer_line_height;
 mod color_space;
 mod default_colors;

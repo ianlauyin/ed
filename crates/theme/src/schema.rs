@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use gpui::Hsla;
 use palette::FromColor;
 use serde::Deserialize;

@@ -1,24 +1,3 @@
-/*!
-
-Language Server Protocol types for Rust.
-
-Based on: <https://microsoft.github.io/language-server-protocol/specification>
-
-This library uses the URL crate for parsing URIs.  Note that there is
-some confusion on the meaning of URLs vs URIs:
-<http://stackoverflow.com/a/28865728/393898>.  According to that
-information, on the classical sense of "URLs", "URLs" are a subset of
-URIs, But on the modern/new meaning of URLs, they are the same as
-URIs.  The important take-away aspect is that the URL crate should be
-able to parse any URI, such as `urn:isbn:0451450523`.
-
-The URL crate is wrapped by Uri. Primarily to percent encode brackets to
-better fit the LSP specification.
-
-
-*/
-#![allow(non_upper_case_globals)]
-#![forbid(unsafe_code)]
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::str::FromStr;

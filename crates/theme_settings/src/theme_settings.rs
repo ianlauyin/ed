@@ -1,10 +1,3 @@
-#![deny(missing_docs)]
-
-//! # Theme Settings
-//!
-//! This crate provides theme settings integration for ed,
-//! bridging the theme system with the settings infrastructure.
-
 mod schema;
 mod settings;
 
