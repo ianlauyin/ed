@@ -20,6 +20,7 @@ control = { path = "crates/control" }
 db = { path = "crates/db" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 diagnostics = { path = "crates/diagnostics" }
+ed_actions = { path = "crates/ed_actions" }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
@@ -90,7 +91,7 @@ sum_tree = { path = "crates/sum_tree" }
 svg_preview = { path = "crates/svg_preview" }
 syntax_theme = { path = "crates/syntax_theme" }
 tab_switcher = { path = "crates/tab_switcher" }
-tabular_data_preview = { path = "crates/tabular_data_preview"}
+tabular_data_preview = { path = "crates/tabular_data_preview" }
 task = { path = "crates/task" }
 terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
@@ -107,7 +108,6 @@ util = { path = "crates/util" }
 watch = { path = "crates/watch" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
-ed_actions = { path = "crates/ed_actions" }
 
 # External crates
 aho-corasick = "1.1"
@@ -160,7 +160,10 @@ log = { version = "0.4", default-features = false, features = ["std"] }
 lru = "0.19"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+objc2-app-kit = {
+  version = "0.3.2",
+  default-features = false,
+  features = [
     "NSAlert",
     "NSApplication",
     "NSButton",
@@ -180,11 +183,15 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSWorkspace",
     "block2",
     "objc2-core-foundation",
-] }
+  ]
+}
 objc2-core-foundation = { version = "0.3.2", default-features = false }
-objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGColorSpace"] }
-objc2-core-text = { version = "0.3.2", default-features = false, features = ["std", "CTFont", "CTFontDescriptor"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = [
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["CGColorSpace", "std"] }
+objc2-core-text = { version = "0.3.2", default-features = false, features = ["CTFont", "CTFontDescriptor", "std"] }
+objc2-foundation = {
+  version = "0.3.2",
+  default-features = false,
+  features = [
     "NSArray",
     "NSAttributedString",
     "NSCoder",
@@ -206,10 +213,11 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "NSValue",
     "objc2-core-foundation",
     "std",
-] }
-objc2-security = { version = "0.3.2", default-features = false, features = ["std", "SecBase", "SecItem"] }
+  ]
+}
 objc2-metal = { version = "0.3.2", default-features = false }
-objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CALayer", "CAMetalLayer"] }
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["CALayer", "CAMetalLayer", "std"] }
+objc2-security = { version = "0.3.2", default-features = false, features = ["SecBase", "SecItem", "std"] }
 ordered-float = "5"
 palette = { version = "0.7.5", default-features = false, features = ["std"] }
 parking_lot = "0.12.1"
@@ -224,14 +232,18 @@ quote = "1.0.9"
 rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "sys_rng"] }
 raw-window-handle = "0.6"
 rayon = "1.8"
-regex = { version = "1.5", default-features = false, features = ["std", "perf"] }
-resvg = { version = "0.48.1", default-features = false, features = [
-    "text",
-    "system-fonts",
+regex = { version = "1.5", default-features = false, features = ["perf", "std"] }
+resvg = {
+  version = "0.48.1",
+  default-features = false,
+  features = [
     "memmap-fonts",
     "raster-images",
-] }
-rust-embed = { version = "8.11", features = ["include-exclude", "compression"] }
+    "system-fonts",
+    "text",
+  ]
+}
+rust-embed = { version = "8.11", features = ["compression", "include-exclude"] }
 rustc-hash = "2.1.0"
 rustix = { version = "1.1", features = ["fs"] }
 serde = { version = "1", features = ["rc"] }
@@ -240,25 +252,28 @@ sha2 = "0.10"
 shellexpand = "3.1"
 shlex = "2.0"
 slotmap = "1.0.6"
-smallvec = { version = "1.6", features = ["union", "const_new"] }
+smallvec = { version = "1.6", features = ["const_new", "union"] }
 smol = "2.0"
 spellbook = "0.4"
 strum = { version = "0.28", features = ["derive"] }
 syn = { version = "2.0", default-features = false, features = ["proc-macro"] }
-sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-onig"] }
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 taffy = { version = "=0.13.0", default-features = false }
 tempfile = "3.20.0"
 thiserror = "2.0.12"
-time = { version = "0.3", features = [
+time = {
+  version = "0.3",
+  features = [
+    "formatting",
+    "local-offset",
     "macros",
     "parsing",
     "serde",
     "serde-well-known",
-    "formatting",
-    "local-offset",
-] }
-toml = { version = "0.9", default-features = false, features = ["std", "serde", "parse"] }
+  ]
+}
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
 tree-sitter = "0.27.1"
 tree-sitter-bash = "0.25.1"
 tree-sitter-css = "0.23"
@@ -280,69 +295,6 @@ usvg = { version = "0.48.1", default-features = false }
 uuid = { version = "1.1", features = ["serde"] }
 vte = { version = "0.15.0", features = ["ansi"] }
 which = "8"
-
-[patch.crates-io]
-async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
-async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
-notify = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
-notify-types = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
-
-[profile.dev]
-split-debuginfo = "unpacked"
-incremental = true
-codegen-units = 16
-debug = "none"
-
-[profile.dev.package]
-# proc-macros start
-gpui_macros = { opt-level = 3 }
-derive_refineable = { opt-level = 3 }
-sqlez_macros = { opt-level = 3, codegen-units = 1 }
-ui_macros = { opt-level = 3 }
-quote = { opt-level = 3 }
-syn = { opt-level = 3 }
-proc-macro2 = { opt-level = 3 }
-# proc-macros end
-
-tree-sitter = { opt-level = 3 }
-taffy = { opt-level = 3 }
-resvg = { opt-level = 3 }
-serde_json = { opt-level = 3 }
-# Build single-source-file crates with cg=1 as it helps make `cargo build` of a whole workspace a bit faster
-activity_indicator = { codegen-units = 1 }
-assets = { codegen-units = 1 }
-breadcrumbs = { codegen-units = 1 }
-collections = { codegen-units = 1 }
-command_palette = { codegen-units = 1 }
-file_content = { codegen-units = 1 }
-file_icons = { codegen-units = 1 }
-image_viewer = { codegen-units = 1 }
-json_schema_store = { codegen-units = 1 }
-menu = { codegen-units = 1 }
-notifications = { codegen-units = 1 }
-outline = { codegen-units = 1 }
-paths = { codegen-units = 1 }
-project_symbols = { codegen-units = 1 }
-refineable = { codegen-units = 1 }
-session = { codegen-units = 1 }
-snippet = { codegen-units = 1 }
-theme_selector = { codegen-units = 1 }
-time_format = { codegen-units = 1 }
-ui_input = { codegen-units = 1 }
-ed_actions = { codegen-units = 1 }
-
-[profile.release]
-debug = "line-tables-only"
-split-debuginfo = "packed"
-strip = true
-lto = "thin"
-codegen-units = 1
-
-[profile.release.package]
-ed = { codegen-units = 16 }
-
-[workspace.lints.rust]
-unused_crate_dependencies = "warn"
 
 [workspace.lints.clippy]
 # nursery
@@ -388,3 +340,66 @@ too_many_arguments = "allow"
 
 # We often have large enum variants yet we rarely actually bother with splitting them up.
 large_enum_variant = "allow"
+
+[workspace.lints.rust]
+unused_crate_dependencies = "warn"
+
+[patch.crates-io]
+async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
+notify = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
+notify-types = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
+
+[profile.dev]
+debug = "none"
+split-debuginfo = "unpacked"
+incremental = true
+codegen-units = 16
+
+[profile.dev.package]
+derive_refineable = { opt-level = 3 }
+# proc-macros start
+gpui_macros = { opt-level = 3 }
+proc-macro2 = { opt-level = 3 }
+quote = { opt-level = 3 }
+sqlez_macros = { opt-level = 3, codegen-units = 1 }
+syn = { opt-level = 3 }
+ui_macros = { opt-level = 3 }
+# proc-macros end
+
+# Build single-source-file crates with cg=1 as it helps make `cargo build` of a whole workspace a bit faster
+activity_indicator = { codegen-units = 1 }
+assets = { codegen-units = 1 }
+breadcrumbs = { codegen-units = 1 }
+collections = { codegen-units = 1 }
+command_palette = { codegen-units = 1 }
+ed_actions = { codegen-units = 1 }
+file_content = { codegen-units = 1 }
+file_icons = { codegen-units = 1 }
+image_viewer = { codegen-units = 1 }
+json_schema_store = { codegen-units = 1 }
+menu = { codegen-units = 1 }
+notifications = { codegen-units = 1 }
+outline = { codegen-units = 1 }
+paths = { codegen-units = 1 }
+project_symbols = { codegen-units = 1 }
+refineable = { codegen-units = 1 }
+resvg = { opt-level = 3 }
+serde_json = { opt-level = 3 }
+session = { codegen-units = 1 }
+snippet = { codegen-units = 1 }
+taffy = { opt-level = 3 }
+theme_selector = { codegen-units = 1 }
+time_format = { codegen-units = 1 }
+tree-sitter = { opt-level = 3 }
+ui_input = { codegen-units = 1 }
+
+[profile.release]
+debug = "line-tables-only"
+split-debuginfo = "packed"
+strip = true
+lto = "thin"
+codegen-units = 1
+
+[profile.release.package]
+ed = { codegen-units = 16 }

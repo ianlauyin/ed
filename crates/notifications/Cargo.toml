@@ -3,21 +3,17 @@ name = "notifications"
 version = "0.1.0"
 edition.workspace = true
 
-
-[lints]
-workspace = true
-
 [lib]
-path = "src/notifications.rs"
 doctest = false
+path = "src/notifications.rs"
 test = false
 
 [dependencies]
 component.workspace = true
+ed_actions.workspace = true
 gpui.workspace = true
 ui.workspace = true
 workspace.workspace = true
-ed_actions.workspace = true
 
-[package.metadata.cargo-shear]
-ignored = ["component"]
+[lints]
+workspace = true
