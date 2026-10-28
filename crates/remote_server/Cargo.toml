@@ -29,7 +29,6 @@ language.workspace = true
 languages.workspace = true
 log.workspace = true
 lsp.workspace = true
-net.workspace = true
 paths.workspace = true
 project.workspace = true
 remote.workspace = true

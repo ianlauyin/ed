@@ -59,7 +59,6 @@ markdown_preview = { path = "crates/markdown_preview" }
 menu = { path = "crates/menu" }
 mermaid = { path = "crates/mermaid" }
 multi_buffer = { path = "crates/multi_buffer" }
-net = { path = "crates/net" }
 notifications = { path = "crates/notifications" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
