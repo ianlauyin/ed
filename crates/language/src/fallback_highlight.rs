@@ -18,8 +18,10 @@ use smallvec::SmallVec;
 use syntect::parsing::ParseState;
 use syntect::parsing::Scope;
 use syntect::parsing::ScopeStack;
+use syntect::parsing::SyntaxDefinition;
 use syntect::parsing::SyntaxReference;
 use syntect::parsing::SyntaxSet;
+use syntect::parsing::SyntaxSetBuilder;
 use text::BufferSnapshot as TextBufferSnapshot;
 use text::Point;
 use text::ToPoint as _;
@@ -40,6 +42,28 @@ const CHECKPOINT_INTERVAL: u32 = 16;
 const MAX_INJECTION_LEN: usize = 64 * 1024;
 
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(two_face::syntax::extra_newlines);
+
+/// Locally patched copies of bundled syntaxes, looked up before
+/// [`SYNTAX_SET`]. They live in a separate set because rebuilding the bundled
+/// one takes hundreds of milliseconds, while loading it takes a few.
+static PATCHED_SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
+    let mut builder = SyntaxSetBuilder::new();
+    let toml = SyntaxDefinition::load_from_str(include_str!("fallback_syntaxes/TOML.sublime-syntax"), true, None)
+        .expect("patched TOML syntax is valid");
+    builder.add(toml);
+    builder.build()
+});
+
+/// A syntax together with the set it must be parsed with.
+#[derive(Clone, Copy)]
+struct Syntax {
+    set: &'static SyntaxSet,
+    reference: &'static SyntaxReference,
+}
+
+fn find_syntax(find: impl Fn(&'static SyntaxSet) -> Option<&'static SyntaxReference>) -> Option<Syntax> {
+    [&*PATCHED_SYNTAX_SET, &*SYNTAX_SET].into_iter().find_map(|set| Some(Syntax { set, reference: find(set)? }))
+}
 
 /// Theme capture names that TextMate scopes are mapped to.
 const CAPTURE_NAMES: &[&str] = &[
@@ -198,7 +222,7 @@ struct Cache {
 }
 
 pub struct FallbackHighlighter {
-    syntax: &'static SyntaxReference,
+    syntax: Syntax,
     cache: Mutex<Cache>,
 }
 
@@ -213,24 +237,25 @@ impl FallbackHighlighter {
         if language.is_some_and(|language| language.grammar().is_some()) {
             return None;
         }
-        let syntax_set = &*SYNTAX_SET;
         let syntax = file_name
             .and_then(|file_name| {
-                syntax_set.find_syntax_by_extension(file_name).or_else(|| {
-                    let (_, extension) = file_name.rsplit_once('.')?;
-                    syntax_set.find_syntax_by_extension(extension)
+                find_syntax(|set| {
+                    set.find_syntax_by_extension(file_name).or_else(|| {
+                        let (_, extension) = file_name.rsplit_once('.')?;
+                        set.find_syntax_by_extension(extension)
+                    })
                 })
             })
             .or_else(|| {
                 let name = language?.name();
-                syntax_set.find_syntax_by_token(name.as_ref())
+                find_syntax(|set| set.find_syntax_by_token(name.as_ref()))
             })
             .or_else(|| {
                 let first_line_end = text.line_len(0).min(256);
                 let first_line = text.text_for_range(Point::zero()..Point::new(0, first_line_end)).collect::<String>();
-                syntax_set.find_syntax_by_first_line(&first_line)
+                find_syntax(|set| set.find_syntax_by_first_line(&first_line))
             })?;
-        if syntax.name == syntax_set.find_syntax_plain_text().name {
+        if syntax.reference.name == SYNTAX_SET.find_syntax_plain_text().name {
             return None;
         }
         Some(Self::new(syntax, text))
@@ -239,10 +264,10 @@ impl FallbackHighlighter {
     /// Highlights with the bundled syntax of the given name, regardless of the
     /// buffer's language or file.
     pub(crate) fn for_syntax_name(name: &str, text: &TextBufferSnapshot) -> Option<Self> {
-        Some(Self::new(SYNTAX_SET.find_syntax_by_name(name)?, text))
+        Some(Self::new(find_syntax(|set| set.find_syntax_by_name(name))?, text))
     }
 
-    fn new(syntax: &'static SyntaxReference, text: &TextBufferSnapshot) -> Self {
+    fn new(syntax: Syntax, text: &TextBufferSnapshot) -> Self {
         Self {
             syntax,
             cache: Mutex::new(Cache {
@@ -255,7 +280,7 @@ impl FallbackHighlighter {
     }
 
     pub fn syntax_name(&self) -> &str {
-        &self.syntax.name
+        &self.syntax.reference.name
     }
 
     /// Returns highlight runs covering `range`, or `None` if the buffer cannot
@@ -344,7 +369,7 @@ impl Cache {
     }
 
     /// Tokenizes lines until every row up to `target_row` is up to date.
-    fn tokenize_through(&mut self, syntax: &'static SyntaxReference, text: &TextBufferSnapshot, target_row: u32) {
+    fn tokenize_through(&mut self, syntax: Syntax, text: &TextBufferSnapshot, target_row: u32) {
         let row_count = text.max_point().row + 1;
         while self.frontier <= target_row && self.frontier < row_count {
             let first_stale_row = self.frontier;
@@ -355,7 +380,9 @@ impl Cache {
                 .enumerate()
                 .rev()
                 .find_map(|(row, line)| Some((row as u32, line.checkpoint.as_deref()?.clone())))
-                .unwrap_or_else(|| (0, Checkpoint { parse: ParseState::new(syntax), scopes: ScopeStack::new() }));
+                .unwrap_or_else(|| {
+                    (0, Checkpoint { parse: ParseState::new(syntax.reference), scopes: ScopeStack::new() })
+                });
 
             self.frontier = loop {
                 if row >= row_count {
@@ -379,7 +406,7 @@ impl Cache {
                 }
 
                 let checkpoint = (row % CHECKPOINT_INTERVAL == 0).then(|| Box::new(state.clone()));
-                let runs = tokenize_line(&mut self.line_text, text, row, &mut state);
+                let runs = tokenize_line(syntax.set, &mut self.line_text, text, row, &mut state);
                 let line = Line { runs, checkpoint, dirty: false };
                 if let Some(existing) = self.lines.get_mut(row as usize) {
                     *existing = line;
@@ -393,6 +420,7 @@ impl Cache {
 }
 
 fn tokenize_line(
+    syntax_set: &SyntaxSet,
     line_text: &mut String,
     text: &TextBufferSnapshot,
     row: u32,
@@ -406,7 +434,7 @@ fn tokenize_line(
     line_text.clear();
     line_text.extend(text.text_for_range(Point::new(row, 0)..Point::new(row, line_len)));
     line_text.push('\n');
-    let Ok(ops) = state.parse.parse_line(line_text, &SYNTAX_SET) else {
+    let Ok(ops) = state.parse.parse_line(line_text, syntax_set) else {
         return runs;
     };
 
@@ -450,10 +478,8 @@ pub(crate) fn highlight_injection(
     if content_range.len() > MAX_INJECTION_LEN {
         return runs;
     }
-    let syntax_set = &*SYNTAX_SET;
-    let Some(syntax) = syntax_set
-        .find_syntax_by_token(language_name)
-        .filter(|syntax| syntax.name != syntax_set.find_syntax_plain_text().name)
+    let Some(syntax) = find_syntax(|set| set.find_syntax_by_token(language_name))
+        .filter(|syntax| syntax.reference.name != SYNTAX_SET.find_syntax_plain_text().name)
     else {
         return runs;
     };
@@ -464,11 +490,11 @@ pub(crate) fn highlight_injection(
 
     let start_row = content_range.start.to_point(text).row;
     let end_row = range.end.to_point(text).row;
-    let mut state = Checkpoint { parse: ParseState::new(syntax), scopes: ScopeStack::new() };
+    let mut state = Checkpoint { parse: ParseState::new(syntax.reference), scopes: ScopeStack::new() };
     let mut line_text = String::new();
     let highlight_map = HIGHLIGHT_MAP.read();
     for row in start_row..=end_row {
-        let line_runs = tokenize_line(&mut line_text, text, row, &mut state);
+        let line_runs = tokenize_line(syntax.set, &mut line_text, text, row, &mut state);
         let line_start = text.point_to_offset(Point::new(row, 0));
         if line_start + (text.line_len(row) as usize) < range.start {
             continue;
@@ -547,6 +573,21 @@ mod tests {
         let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
         assert!(runs.iter().any(|(text, _)| text == "^"), "{runs:?}");
         assert!(runs.iter().any(|(text, _)| text == r"\s"), "{runs:?}");
+    }
+
+    #[test]
+    fn test_highlights_multiline_toml_inline_table() {
+        let theme = theme();
+        set_theme(&theme);
+        let source = "a = {\n  version = \"1\", # c\n  b = [\n    \"x\",\n  ],\n}\nk = 1\n";
+        let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), source);
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("Cargo.toml"), buffer.snapshot()).unwrap();
+        let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
+        assert!(runs.contains(&("version".into(), "tag".into())), "{runs:?}");
+        assert!(runs.contains(&("\"1\"".into(), "string".into())), "{runs:?}");
+        assert!(runs.contains(&("# c".into(), "comment".into())), "{runs:?}");
+        assert!(runs.contains(&("}".into(), "punctuation".into())), "{runs:?}");
+        assert!(runs.contains(&("k".into(), "tag".into())), "{runs:?}");
     }
 
     #[test]
@@ -648,6 +689,9 @@ mod tests {
         let start = std::time::Instant::now();
         LazyLock::force(&SYNTAX_SET);
         eprintln!("load syntaxes: {:?}", start.elapsed());
+        let start = std::time::Instant::now();
+        LazyLock::force(&PATCHED_SYNTAX_SET);
+        eprintln!("load patched syntaxes: {:?}", start.elapsed());
         let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), snapshot).unwrap();
         let start = std::time::Instant::now();
         highlighter.highlight_runs(snapshot, 0..snapshot.len());

@@ -257,7 +257,7 @@ smol = "2.0"
 spellbook = "0.4"
 strum = { version = "0.28", features = ["derive"] }
 syn = { version = "2.0", default-features = false, features = ["proc-macro"] }
-syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-onig"] }
+syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-onig", "yaml-load"] }
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 taffy = { version = "=0.13.0", default-features = false }
 tempfile = "3.20.0"

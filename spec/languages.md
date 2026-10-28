@@ -36,6 +36,11 @@
   detected by its file name like any other file.
   TextMate scopes are mapped onto the theme's syntax captures (keyword,
   string, comment, ...); accuracy is "good enough", not tree-sitter quality.
+  - A few bundled syntaxes are replaced by patched copies vendored in
+    `crates/language/src/fallback_syntaxes`, loaded as a small separate set
+    that is looked up first (rebuilding the bundled set is too slow). TOML is
+    patched for TOML 1.1 inline tables: spanning lines, comments and a
+    trailing comma, as tombi formats them.
   - Tokenization is lazy (only up to the rows being shown) and incremental:
     an edit re-tokenizes from the nearest checkpoint until the parser state
     converges with the state recorded before the edit.
