@@ -78,10 +78,6 @@ impl ShellBuilder {
                         combined_command.insert_str(0, "begin; ");
                         combined_command.push_str("; end </dev/null");
                     }
-                    ShellKind::Csh | ShellKind::Tcsh | ShellKind::Rc => {
-                        combined_command.insert(0, '(');
-                        combined_command.push_str("\n) </dev/null");
-                    }
                 }
             }
 
@@ -108,10 +104,6 @@ impl ShellBuilder {
                     ShellKind::Fish => {
                         combined_command.insert_str(0, "begin; ");
                         combined_command.push_str("; end </dev/null");
-                    }
-                    ShellKind::Csh | ShellKind::Tcsh | ShellKind::Rc => {
-                        combined_command.insert(0, '(');
-                        combined_command.push_str("\n) </dev/null");
                     }
                 }
             }
@@ -150,5 +142,32 @@ impl ShellBuilder {
 
     pub const fn kind(&self) -> ShellKind {
         self.kind
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_redirected(program: &str, quote: bool) -> Vec<String> {
+        let builder = ShellBuilder::new(&Shell::Program(program.into())).non_interactive().redirect_stdin_to_dev_null();
+        let command = Some("echo".to_string());
+        let args = ["a b".to_string()];
+        let (_, args) = if quote { builder.build(command, &args) } else { builder.build_no_quote(command, &args) };
+        args
+    }
+
+    #[test]
+    fn test_build_redirect_stdin() {
+        assert_eq!(build_redirected("/bin/zsh", true), ["-c", "exec </dev/null\necho 'a b'"]);
+        assert_eq!(build_redirected("/opt/homebrew/bin/fish", true), ["-c", "begin; echo 'a b'; end </dev/null"]);
+        // Unsupported shells are treated as POSIX.
+        assert_eq!(build_redirected("/bin/tcsh", true), ["-c", "exec </dev/null\necho 'a b'"]);
+    }
+
+    #[test]
+    fn test_build_no_quote_redirect_stdin() {
+        assert_eq!(build_redirected("/bin/zsh", false), ["-c", "exec </dev/null\necho a b"]);
+        assert_eq!(build_redirected("fish", false), ["-c", "begin; echo a b; end </dev/null"]);
     }
 }
