@@ -51,6 +51,9 @@ repository's `$PATH`; if none is found, the repository is not opened.
   single top-right button that toggles filling the panel. `git::Commit` /
   `git::Amend` from outside the editor open the panel and focus its commit
   editor (amend loads the last commit message) instead of opening a modal.
+- Removing untracked files uses "Delete" wording everywhere (menu items,
+  prompts, errors, `git::DeleteUntrackedFiles`), matching the project panel,
+  even though files are moved to the system trash. Never say "Trash".
 
 ## Commit view
 

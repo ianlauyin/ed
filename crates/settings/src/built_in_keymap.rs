@@ -791,7 +791,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             // KeyBindingSpec::new("ctrl-g shift-up", "git::ForcePush"),
             // KeyBindingSpec::new("ctrl-g d", "git::Diff"),
             // KeyBindingSpec::new("ctrl-g backspace", "git::RestoreTrackedFiles"),
-            // KeyBindingSpec::new("ctrl-g shift-backspace", "git::TrashUntrackedFiles"),
+            // KeyBindingSpec::new("ctrl-g shift-backspace", "git::DeleteUntrackedFiles"),
             KeyBindingSpec::new("cmd-ctrl-y", "git::StageAll"),
             KeyBindingSpec::new("cmd-ctrl-shift-y", "git::UnstageAll"),
             KeyBindingSpec::new("cmd-enter", "git::Commit"),

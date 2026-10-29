@@ -42,7 +42,7 @@ use git::StashTracked;
 use git::ToggleCommitEditor;
 use git::ToggleFillCommitEditor;
 use git::ToggleStaged;
-use git::TrashUntrackedFiles;
+use git::DeleteUntrackedFiles;
 use git::UnstageAll;
 use git::ViewFile;
 use git::commit::ParsedCommitMessage;
@@ -245,8 +245,8 @@ where
 
 #[derive(strum::EnumIter, strum::VariantNames)]
 #[strum(serialize_all = "title_case")]
-enum TrashCancel {
-    Trash,
+enum DeleteCancel {
+    Delete,
     Cancel,
 }
 
@@ -386,7 +386,7 @@ fn git_panel_context_menu(
                 "Discard Tracked Changes",
                 RestoreTrackedFiles.boxed_clone(),
             )
-            .action_disabled_when(!has_new_changes, "Trash Untracked Files", TrashUntrackedFiles.boxed_clone())
+            .action_disabled_when(!has_new_changes, "Delete Untracked Files", DeleteUntrackedFiles.boxed_clone())
     })
 }
 
@@ -2532,7 +2532,7 @@ impl GitPanel {
                 let (message, confirm_text) = if entry.status.is_deleted() {
                     ("Are you sure you want to restore ", "Restore File")
                 } else if entry.status.is_created() {
-                    ("Trash ", "Trash")
+                    ("Do you want to delete ", "Delete")
                 } else {
                     ("Are you sure you want to discard changes to ", "Discard Changes")
                 };
@@ -2551,15 +2551,7 @@ impl GitPanel {
                     cx,
                 ))
             } else {
-                let (message, confirm_text) = match (tracked.len(), untracked.len()) {
-                    (0, 0) => return Some(()),
-                    (tracked_count, 0) => (format!("Discard changes to {tracked_count} files?"), "Discard"),
-                    (0, untracked_count) => (format!("Trash {untracked_count} files?"), "Trash"),
-                    (tracked_count, untracked_count) => (
-                        format!("Discard changes to {tracked_count} files and trash {untracked_count} files?"),
-                        "Discard and Trash",
-                    ),
-                };
+                let (message, confirm_text) = bulk_revert_prompt(tracked.len(), untracked.len())?;
 
                 Some(window.prompt(PromptLevel::Warning, &message, None, &[confirm_text, "Cancel"], cx))
             };
@@ -2707,7 +2699,7 @@ impl GitPanel {
         .detach();
     }
 
-    fn clean_all(&mut self, _: &TrashUntrackedFiles, window: &mut Window, cx: &mut Context<Self>) {
+    fn clean_all(&mut self, _: &DeleteUntrackedFiles, window: &mut Window, cx: &mut Context<Self>) {
         let workspace = self.workspace.clone();
         let Some(active_repo) = self.active_repository.clone() else {
             return;
@@ -2736,11 +2728,11 @@ impl GitPanel {
             util::write_str!(details, "\nand {} more…", to_delete.len() - 5);
         }
 
-        let prompt = prompt("Trash these files?", Some(&details), window, cx);
+        let prompt = prompt("Do you want to delete these files?", Some(&details), window, cx);
         cx.spawn_in(window, async move |this, cx| {
             match prompt.await? {
-                TrashCancel::Trash => {}
-                TrashCancel::Cancel => return Ok(()),
+                DeleteCancel::Delete => {}
+                DeleteCancel::Cancel => return Ok(()),
             }
             let tasks = workspace.update(cx, |workspace, cx| {
                 to_delete
@@ -2762,11 +2754,11 @@ impl GitPanel {
             let errors: Vec<anyhow::Error> = results.into_iter().filter_map(|r| r.err()).collect();
             let failed_count = errors.len();
             if let Some(first_error) = errors.into_iter().next() {
-                return Err(anyhow::anyhow!("Failed to trash {failed_count} of {total_count} files: {first_error:#}"));
+                return Err(anyhow::anyhow!("Failed to delete {failed_count} of {total_count} files: {first_error:#}"));
             }
             Ok(())
         })
-        .detach_and_prompt_err("Failed to trash files", window, cx, |e| Some(format!("{e}")));
+        .detach_and_prompt_err("Failed to delete files", window, cx, |e| Some(format!("{e}")));
     }
 
     fn change_all_files_stage(&self, stage: bool, cx: &Context<Self>) {
@@ -5822,16 +5814,7 @@ impl GitPanel {
             (SelectionTargetKind::Multiple, false) => &format!("Stage {file_count} {file_label}"),
         };
 
-        let restore_title = match (target_kind, all_created, all_deleted) {
-            (SelectionTargetKind::Directory, true, _) => "Trash Folder",
-            (SelectionTargetKind::Directory, false, _) => "Discard Changes",
-            (SelectionTargetKind::File, true, _) => "Trash File",
-            (SelectionTargetKind::File, _, true) => "Restore File",
-            (SelectionTargetKind::File, _, _) => "Discard Changes",
-            (SelectionTargetKind::Multiple, true, _) => &format!("Trash {file_count} {file_label}"),
-            (SelectionTargetKind::Multiple, _, true) => &format!("Restore {file_count} {file_label}"),
-            (SelectionTargetKind::Multiple, _, _) => &format!("Discard Changes to {file_count} {file_label}"),
-        };
+        let restore_title = restore_title(target_kind, all_created, all_deleted, file_count);
         let is_bulk = matches!(target_kind, SelectionTargetKind::Multiple);
         let is_file_or_bulk = !matches!(target_kind, SelectionTargetKind::Directory);
         let has_tracked = !all_created;
@@ -5846,7 +5829,7 @@ impl GitPanel {
             context_menu
                 .context(self.focus_handle.clone())
                 .action(stage_title, ToggleStaged.boxed_clone())
-                .action(restore_title, RestoreFile::default().boxed_clone())
+                .action(restore_title.as_str(), RestoreFile::default().boxed_clone())
                 .separator()
                 .action("Unstaged Changes", ViewUnstagedChanges.boxed_clone())
                 .action("Staged Changes", ViewStagedChanges.boxed_clone())
@@ -7162,4 +7145,63 @@ impl Component for PanelRepoFooter {
 
 pub(crate) fn commit_title_exceeds_limit(title: &str, max_length: usize) -> bool {
     max_length > 0 && title.chars().count() > max_length
+}
+
+/// Label of the context-menu entry that reverts the selection. Untracked
+/// entries are deleted (moved to the system trash), matching the project panel.
+fn restore_title(target_kind: SelectionTargetKind, all_created: bool, all_deleted: bool, file_count: usize) -> String {
+    let file_label = if file_count == 1 { "File" } else { "Files" };
+    match (target_kind, all_created, all_deleted) {
+        (SelectionTargetKind::Directory, true, _) => "Delete Folder".into(),
+        (SelectionTargetKind::Directory, false, _) => "Discard Changes".into(),
+        (SelectionTargetKind::File, true, _) => "Delete File".into(),
+        (SelectionTargetKind::File, _, true) => "Restore File".into(),
+        (SelectionTargetKind::File, _, _) => "Discard Changes".into(),
+        (SelectionTargetKind::Multiple, true, _) => format!("Delete {file_count} {file_label}"),
+        (SelectionTargetKind::Multiple, _, true) => format!("Restore {file_count} {file_label}"),
+        (SelectionTargetKind::Multiple, _, _) => format!("Discard Changes to {file_count} {file_label}"),
+    }
+}
+
+/// Message and confirm label for reverting several entries at once, or `None`
+/// when there is nothing to revert.
+fn bulk_revert_prompt(tracked_count: usize, untracked_count: usize) -> Option<(String, &'static str)> {
+    match (tracked_count, untracked_count) {
+        (0, 0) => None,
+        (tracked_count, 0) => Some((format!("Discard changes to {tracked_count} files?"), "Discard")),
+        (0, untracked_count) => Some((format!("Do you want to delete {untracked_count} files?"), "Delete")),
+        (tracked_count, untracked_count) => Some((
+            format!("Discard changes to {tracked_count} files and delete {untracked_count} files?"),
+            "Discard and Delete",
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_restore_title() {
+        assert_eq!(restore_title(SelectionTargetKind::Directory, true, false, 3), "Delete Folder");
+        assert_eq!(restore_title(SelectionTargetKind::Directory, false, false, 3), "Discard Changes");
+        assert_eq!(restore_title(SelectionTargetKind::File, true, false, 1), "Delete File");
+        assert_eq!(restore_title(SelectionTargetKind::File, false, true, 1), "Restore File");
+        assert_eq!(restore_title(SelectionTargetKind::File, false, false, 1), "Discard Changes");
+        assert_eq!(restore_title(SelectionTargetKind::Multiple, true, false, 2), "Delete 2 Files");
+        assert_eq!(restore_title(SelectionTargetKind::Multiple, true, false, 1), "Delete 1 File");
+        assert_eq!(restore_title(SelectionTargetKind::Multiple, false, true, 2), "Restore 2 Files");
+        assert_eq!(restore_title(SelectionTargetKind::Multiple, false, false, 2), "Discard Changes to 2 Files");
+    }
+
+    #[test]
+    fn test_bulk_revert_prompt() {
+        assert_eq!(bulk_revert_prompt(0, 0), None);
+        assert_eq!(bulk_revert_prompt(2, 0), Some(("Discard changes to 2 files?".into(), "Discard")));
+        assert_eq!(bulk_revert_prompt(0, 3), Some(("Do you want to delete 3 files?".into(), "Delete")));
+        assert_eq!(
+            bulk_revert_prompt(2, 3),
+            Some(("Discard changes to 2 files and delete 3 files?".into(), "Discard and Delete"))
+        );
+    }
 }

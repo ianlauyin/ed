@@ -89,8 +89,8 @@ actions!(
         StashApply,
         /// Restores all tracked files to their last committed state.
         RestoreTrackedFiles,
-        /// Moves all untracked files to trash.
-        TrashUntrackedFiles,
+        /// Deletes all untracked files (moves them to the system trash).
+        DeleteUntrackedFiles,
         /// Undoes the last commit, keeping changes in the working directory.
         Uncommit,
         /// Pushes commits to the remote repository.
