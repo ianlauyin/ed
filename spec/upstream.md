@@ -41,12 +41,15 @@ from upstream in layout as well as in behaviour.
 
 ## Sync status
 
-- Reviewed up to upstream `e96ffb0fd3` (2026-10-23, #66028): every commit in
-  `7dc397b61b..e96ffb0fd3` was either ported or declined below. The next review
-  starts at `git log e96ffb0fd3..upstream/main`.
+- Reviewed up to upstream `02d47bf64f` (2026-10-28, #66048): every commit in
+  `7dc397b61b..02d47bf64f` was either ported or declined below. The next review
+  starts at `git log 02d47bf64f..upstream/main`.
 - Ported in the 2026-10-23 pass: #65856, #65829, #65995, #65998, #65939,
   #65769, #65956, #65997 (security bumps, lockfile only), #65795, #60894,
   #64344, #65660, #59224, #65189, #64744.
+- Ported in the 2026-10-29 pass: #66042, #66060, #56003, #66161, #66180,
+  #55294, #66157, #66181, #66206, #65728, #66127, #66119, #65972, #66167,
+  #66173, #66016, #66132, #47296, #66066.
 
 ### Declined
 
@@ -56,7 +59,12 @@ upstream change depends on them or the need changes.
 - UI/behaviour fixes not wanted: #66017 (scrollbar settings not applying to
   open scrollbars), #65852 and #65968 (cache resolved fonts, warn only for
   explicitly requested fonts), #65252 and #65253 (LSP dynamic registrations
-  honouring document selectors/patterns; large `lsp_store` change).
+  honouring document selectors/patterns; large `lsp_store` change), #63477
+  and #66237 (frame pacing in Low Power Mode and consistent frame limits;
+  large `window.rs` changes plus Linux/Windows power code), #64562
+  (tree-sitter-go fork), #66166 (Metal shader working directory, only
+  matters for corgi builds), #66158 (`crash-context` patch; not in the fork's
+  tree).
 - Features not wanted: #65559 (git panel discard keeps staged changes),
   #65776 (project panel sort by extension), #65950 (Taffy 0.13 → 0.15),
   #64394 (Display P3 colour space), #44262 (built-in Pyrefly server),
@@ -68,11 +76,20 @@ upstream change depends on them or the need changes.
   helpers / `PathStyle` normalization ahead of upstream's `join_path`),
   #65805 (`ScrollWheelEvent` → `ScrollEvent` rename, for iOS), #65970
   (web-aware `Modifiers::secondary`), #65821 (proptest bump), #65593 and
-  #65929 (version bumps).
+  #65929 (version bumps), #66147 and #66152 (text layout cleanups; the fork
+  still uses the hash-based layout cache), #66156 (gpui cleanups), #65942
+  (drop `block`), #65994 (require macOS 12 / SDK 26), #66185 (tree-sitter
+  bump and extension grammar imports), #66048 (`github_releases` crate),
+  #65966 and #66209 (`PathStyle::join` / repository identity path
+  follow-ups), #66253 (version bump).
 - Removed platforms or areas: #63102 (Windows trust paths), #65722 (Go test
   cwd on Windows), #63068, #65806, #65975, #64239, #65658, #65858 (iOS),
   #53198, #66025, #65371 (debugger), #65470 (agent lazy markdown; its
   `gpui::list` and `markdown` changes only serve the agent thread view),
+  #66089, #66097, #66142, #66199, #65771 (Windows/WSL paths, pwsh, Windows
+  remotes, remote workspace grouping mostly in the sidebar), #66062, #66143,
+  #66235 (agent credentials, askpass GPG wrapper, npm registry agents),
+  #66190, #64579, #64058, #66159 (wgpu, OpenHarmony, Wayland, Windows),
   #65381, #65702 (extensions), #65280 and the Node/Wasmtime parts of #65956
   (managed Node, Wasm extensions), plus all agent/ACP, sidebar,
   language-model, collab, Linux/Windows backend and CI commits.
