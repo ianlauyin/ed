@@ -100,7 +100,7 @@ upstream change depends on them or the need changes.
 ### Things to do on the next pass
 
 1. `git fetch upstream main`, then list `git log --reverse
-   e96ffb0fd3..upstream/main`. Drop commits whose PR number is already in the
+   02d47bf64f..upstream/main`. Drop commits whose PR number is already in the
    fork's log (`git log --format=%s | grep -oE '\(#[0-9]+\)'`) or in Declined.
 2. Drop commits that only touch crates the fork removed (compare
    `git show --name-only` against `ls crates`), then sort the rest into
