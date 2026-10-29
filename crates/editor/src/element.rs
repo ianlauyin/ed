@@ -7583,10 +7583,8 @@ pub fn layout_line(
     window: &mut Window,
     cx: &mut App,
 ) -> LineWithInvisibles {
-    let language_aware = LanguageAwareStyling {
-        tree_sitter: true,
-        diagnostics: snapshot.display_snapshot.diagnostics_visible(),
-    };
+    let language_aware =
+        LanguageAwareStyling { tree_sitter: true, diagnostics: snapshot.display_snapshot.diagnostics_visible() };
     let chunks = snapshot.highlighted_chunks(row..row + DisplayRow(1), language_aware, style);
     LineWithInvisibles::from_chunks(
         chunks,

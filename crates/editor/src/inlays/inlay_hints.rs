@@ -489,10 +489,7 @@ impl Editor {
     }
 
     pub(crate) fn can_accept_inlay_hint(&self, cx: &App) -> bool {
-        self.lsp_data_enabled()
-            && !self.read_only(cx)
-            && self.project().is_some()
-            && self.inlay_hints.is_some()
+        self.lsp_data_enabled() && !self.read_only(cx) && self.project().is_some() && self.inlay_hints.is_some()
     }
 
     pub(crate) fn inlay_hint_visibility_changed(&mut self, cx: &mut Context<Self>) {

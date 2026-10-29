@@ -385,9 +385,7 @@ impl Editor {
         let max_severity =
             ProjectSettings::get_global(cx).diagnostics.inline.max_severity.unwrap_or(self.diagnostics_max_severity);
 
-        if !self.inline_diagnostics_enabled()
-            || !self.diagnostics_enabled()
-            || max_severity == DiagnosticSeverity::Off
+        if !self.inline_diagnostics_enabled() || !self.diagnostics_enabled() || max_severity == DiagnosticSeverity::Off
         {
             self.inline_diagnostics_update = Task::ready(());
             self.inline_diagnostics.clear();
