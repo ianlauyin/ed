@@ -31,6 +31,8 @@ pub enum KeychainOperation {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum KeychainError {
+    #[error("Keychain access was cancelled.")]
+    UserCanceled { operation: KeychainOperation },
     #[error("keychain {operation:?} failed with OSStatus {status}")]
     Security { operation: KeychainOperation, status: i32 },
     #[error("invalid keychain response: {0}")]
@@ -62,6 +64,7 @@ pub fn write_credentials(server: &str, account: &str, password: &[u8]) -> Result
     check_status(operation, status)
 }
 
+/// Reads credentials by server, returning `None` when no item exists.
 pub fn read_credentials(server: &str) -> Result<Option<(String, Vec<u8>)>, KeychainError> {
     let server = CFString::from_str(server);
     // SAFETY: Reading immutable constants exported by Core Foundation and Security.
@@ -114,7 +117,7 @@ pub fn delete_credentials(server: &str) -> Result<(), KeychainError> {
 }
 
 fn read_status(status: i32) -> Result<bool, KeychainError> {
-    if status == errSecItemNotFound || status == errSecUserCanceled {
+    if status == errSecItemNotFound {
         Ok(false)
     } else {
         check_status(KeychainOperation::Read, status)?;
@@ -123,5 +126,11 @@ fn read_status(status: i32) -> Result<bool, KeychainError> {
 }
 
 const fn check_status(operation: KeychainOperation, status: i32) -> Result<(), KeychainError> {
-    if status == errSecSuccess { Ok(()) } else { Err(KeychainError::Security { operation, status }) }
+    if status == errSecSuccess {
+        Ok(())
+    } else if status == errSecUserCanceled {
+        Err(KeychainError::UserCanceled { operation })
+    } else {
+        Err(KeychainError::Security { operation, status })
+    }
 }
