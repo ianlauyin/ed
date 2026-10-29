@@ -1,4 +1,3 @@
-use gpui::AnyElement;
 use gpui::AnyView;
 use gpui::Hsla;
 use gpui::IntoElement;
@@ -16,7 +15,7 @@ use crate::prelude::*;
 ///
 /// let chip = Chip::new("This Chip");
 /// ```
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct Chip {
     label: SharedString,
     label_color: Color,
@@ -127,36 +126,5 @@ impl RenderOnce for Chip {
             )
             .id(self.label.clone())
             .when_some(self.tooltip, |this, tooltip| this.tooltip(tooltip))
-    }
-}
-
-impl Component for Chip {
-    fn scope() -> ComponentScope {
-        ComponentScope::DataDisplay
-    }
-
-    fn description() -> &'static str {
-        "A small, compact label container used to display tags, statuses, \
-        or other short informative pieces of metadata, optionally with an icon."
-    }
-
-    fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
-        let chip_examples = vec![
-            single_example("Default", Chip::new("Chip Example").into_any_element()),
-            single_example(
-                "Customized Label Color",
-                Chip::new("Chip Example").label_color(Color::Accent).into_any_element(),
-            ),
-            single_example(
-                "Customized Label Size",
-                Chip::new("Chip Example").label_size(LabelSize::Large).label_color(Color::Accent).into_any_element(),
-            ),
-            single_example(
-                "Customized Background Color",
-                Chip::new("Chip Example").bg_color(cx.theme().colors().text_accent.opacity(0.1)).into_any_element(),
-            ),
-        ];
-
-        example_group(chip_examples).vertical().into_any_element()
     }
 }

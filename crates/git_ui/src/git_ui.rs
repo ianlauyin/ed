@@ -14,9 +14,6 @@ use git::repository::Upstream;
 use git::repository::UpstreamTracking;
 use git::repository::UpstreamTrackingStatus;
 use git::status::FileStatus;
-use git::status::StatusCode;
-use git::status::UnmergedStatus;
-use git::status::UnmergedStatusCode;
 use gpui::App;
 use gpui::ClipboardItem;
 use gpui::Context;
@@ -1166,7 +1163,7 @@ pub(crate) fn render_split_button_chevron_trigger(id: impl Into<ElementId>, menu
 }
 
 /// A visual representation of a file's Git status.
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct GitStatusIcon {
     status: FileStatus,
 }
@@ -1196,38 +1193,6 @@ impl RenderOnce for GitStatusIcon {
 }
 
 // View this component preview using `workspace: open component-preview`
-impl Component for GitStatusIcon {
-    fn scope() -> ComponentScope {
-        ComponentScope::VersionControl
-    }
-
-    fn description() -> &'static str {
-        "An icon that visually represents the git status of a file, \
-        using a distinct glyph and color for modified, added, deleted, and conflicted states."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        const fn tracked_file_status(code: StatusCode) -> FileStatus {
-            FileStatus::Tracked(git::status::TrackedStatus { index_status: code, worktree_status: code })
-        }
-
-        let modified = tracked_file_status(StatusCode::Modified);
-        let added = tracked_file_status(StatusCode::Added);
-        let deleted = tracked_file_status(StatusCode::Deleted);
-        let conflict =
-            UnmergedStatus { first_head: UnmergedStatusCode::Updated, second_head: UnmergedStatusCode::Updated }.into();
-
-        v_flex()
-            .gap_6()
-            .children(vec![example_group(vec![
-                single_example("Modified", GitStatusIcon::new(modified).into_any_element()),
-                single_example("Added", GitStatusIcon::new(added).into_any_element()),
-                single_example("Deleted", GitStatusIcon::new(deleted).into_any_element()),
-                single_example("Conflicted", GitStatusIcon::new(conflict).into_any_element()),
-            ])])
-            .into_any_element()
-    }
-}
 
 struct GitCloneModal {
     panel: Entity<GitPanel>,

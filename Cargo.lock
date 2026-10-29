@@ -647,18 +647,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "component"
-version = "0.1.0"
-dependencies = [
- "collections",
- "gpui",
- "inventory",
- "parking_lot",
- "strum",
- "theme",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -915,32 +903,6 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "documented"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c278cf01d971a2ce2e4a97f2af1c13706e111c2c05636a88f93520b61c75b3cb"
-dependencies = [
- "documented-macros",
- "phf",
- "thiserror",
-]
-
-[[package]]
-name = "documented-macros"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3605d4f0b4326a3a1909b6d258b47478c0d47bb668ad2cb7d4a6e2d22e852f5c"
-dependencies = [
- "convert_case 0.11.0",
- "itertools 0.15.0",
- "optfield",
- "proc-macro2",
- "quote",
- "strum",
  "syn 2.0.117",
 ]
 
@@ -1597,7 +1559,6 @@ dependencies = [
  "async-channel",
  "buffer_diff",
  "collections",
- "component",
  "db",
  "ed_actions",
  "editor",
@@ -2923,7 +2884,6 @@ dependencies = [
 name = "notifications"
 version = "0.1.0"
 dependencies = [
- "component",
  "ed_actions",
  "gpui",
  "ui",
@@ -3206,17 +3166,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "optfield"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "969ccca8ffc4fb105bd131a228107d5c9dd89d9d627edf3295cbe979156f9712"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3370,31 +3319,7 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
 dependencies = [
- "phf_macros",
  "phf_shared",
-]
-
-[[package]]
-name = "phf_generator"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
-dependencies = [
- "fastrand",
- "phf_shared",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "812f032b54b1e759ccd5f8b6677695d5268c588701effba24601f6932f8269ef"
-dependencies = [
- "phf_generator",
- "phf_shared",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -5357,8 +5282,6 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 name = "ui"
 version = "0.1.0"
 dependencies = [
- "component",
- "documented",
  "gpui",
  "gpui_util",
  "icons",
@@ -5376,7 +5299,6 @@ dependencies = [
 name = "ui_input"
 version = "0.1.0"
 dependencies = [
- "component",
  "gpui",
  "ui",
 ]
@@ -6157,7 +6079,6 @@ dependencies = [
  "any_vec",
  "anyhow",
  "collections",
- "component",
  "db",
  "dirs",
  "ed_actions",

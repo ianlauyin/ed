@@ -12,8 +12,6 @@ name = "ui"
 path = "src/ui.rs"
 
 [dependencies]
-component.workspace = true
-documented.workspace = true
 gpui.workspace = true
 icons.workspace = true
 itertools.workspace = true

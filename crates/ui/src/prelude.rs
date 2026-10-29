@@ -1,10 +1,5 @@
 //! The prelude of this crate. When building UI in ed you almost always want to import this.
 
-pub use component::Component;
-pub use component::ComponentScope;
-pub use component::example_group;
-pub use component::example_group_with_title;
-pub use component::single_example;
 pub use gpui::AbsoluteLength;
 pub use gpui::AnyElement;
 pub use gpui::App;
@@ -27,7 +22,6 @@ pub use gpui::px;
 pub use gpui::relative;
 pub use gpui::rems;
 pub use theme::ActiveTheme;
-pub use ui_macros::RegisterComponent;
 
 pub use crate::Button;
 pub use crate::ButtonCommon;

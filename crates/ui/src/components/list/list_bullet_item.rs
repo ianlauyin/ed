@@ -1,16 +1,11 @@
-use component::Component;
-use component::ComponentScope;
-use component::example_group;
-use component::single_example;
 use gpui::IntoElement;
 use gpui::ParentElement;
 use gpui::SharedString;
 
-use crate::ButtonLink;
 use crate::ListItem;
 use crate::prelude::*;
 
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct ListBulletItem {
     label: SharedString,
     label_color: Option<Color>,
@@ -66,42 +61,5 @@ impl RenderOnce for ListBulletItem {
                     }),
             )
             .into_any_element()
-    }
-}
-
-impl Component for ListBulletItem {
-    fn scope() -> ComponentScope {
-        ComponentScope::DataDisplay
-    }
-
-    fn description() -> &'static str {
-        "A list item with a dash indicator for unordered lists."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        let basic_examples = vec![
-            single_example("Simple", ListBulletItem::new("First bullet item").into_any_element()),
-            single_example(
-                "Multiple Lines",
-                v_flex()
-                    .child(ListBulletItem::new("First item"))
-                    .child(ListBulletItem::new("Second item"))
-                    .child(ListBulletItem::new("Third item"))
-                    .into_any_element(),
-            ),
-            single_example(
-                "Long Text",
-                ListBulletItem::new("A longer bullet item that demonstrates text wrapping behavior").into_any_element(),
-            ),
-            single_example(
-                "With Link",
-                ListBulletItem::new("")
-                    .child(Label::new("Create an ed account by"))
-                    .child(ButtonLink::new("visiting the website", "https://zed.dev"))
-                    .into_any_element(),
-            ),
-        ];
-
-        v_flex().gap_6().child(example_group(basic_examples).vertical()).into_any_element()
     }
 }

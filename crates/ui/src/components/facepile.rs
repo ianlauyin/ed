@@ -2,8 +2,6 @@ use gpui::AnyElement;
 use gpui::StyleRefinement;
 use smallvec::SmallVec;
 
-use super::Avatar;
-use crate::component_prelude::*;
 use crate::prelude::*;
 
 /// An element that displays a collection of (usually) faces stacked
@@ -28,7 +26,7 @@ use crate::prelude::*;
 ///         Avatar::new(url).into_any_element()).collect()
 /// );
 /// ```
-#[derive(IntoElement, Documented, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct Facepile {
     base: Div,
     faces: SmallVec<[AnyElement; 2]>,
@@ -84,40 +82,3 @@ pub const EXAMPLE_FACES: [&str; 6] = [
     "https://avatars.githubusercontent.com/u/482957?s=60&v=4",
     "https://avatars.githubusercontent.com/u/1714999?s=60&v=4",
 ];
-
-impl Component for Facepile {
-    fn scope() -> ComponentScope {
-        ComponentScope::Images
-    }
-
-    fn description() -> &'static str {
-        "Displays a collection of avatars or initials in a compact format. \
-        Often used to represent active collaborators or a subset of contributors."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        v_flex()
-            .gap_6()
-            .children(vec![example_group_with_title(
-                "Facepile Examples",
-                vec![
-                    single_example(
-                        "Default",
-                        Facepile::new(EXAMPLE_FACES.iter().map(|&url| Avatar::new(url).into_any_element()).collect())
-                            .into_any_element(),
-                    ),
-                    single_example(
-                        "Custom Size",
-                        Facepile::new(
-                            EXAMPLE_FACES
-                                .iter()
-                                .map(|&url| Avatar::new(url).size(px(24.)).into_any_element())
-                                .collect(),
-                        )
-                        .into_any_element(),
-                    ),
-                ],
-            )])
-            .into_any_element()
-    }
-}

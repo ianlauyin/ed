@@ -48,7 +48,7 @@ impl Clone for Source {
     }
 }
 
-#[derive(Clone, Debug, IntoElement, RegisterComponent)]
+#[derive(Clone, Debug, IntoElement)]
 pub struct KeyBinding {
     source: Source,
     size: Option<AbsoluteLength>,
@@ -537,41 +537,4 @@ fn keystroke_text(modifiers: &Modifiers, key: &str, platform_style: PlatformStyl
     text.push_str(key);
 
     text
-}
-
-impl Component for KeyBinding {
-    fn scope() -> ComponentScope {
-        ComponentScope::Typography
-    }
-
-    fn name() -> &'static str {
-        "KeyBinding"
-    }
-
-    fn description() -> &'static str {
-        "A component that displays a key binding, supporting macOS shortcuts."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        fn keybinding(input: &str) -> KeyBinding {
-            let keystrokes: Rc<[KeybindingKeystroke]> = input
-                .split_whitespace()
-                .filter_map(|chunk| Keystroke::parse(chunk).ok())
-                .map(KeybindingKeystroke::from_keystroke)
-                .collect::<Vec<_>>()
-                .into();
-            KeyBinding::from_keystrokes(keystrokes)
-        }
-
-        v_flex()
-            .gap_6()
-            .children(vec![example_group_with_title(
-                "Platform Styles",
-                vec![single_example(
-                    "Mac Style",
-                    keybinding("cmd-s").platform_style(PlatformStyle::Mac).into_any_element(),
-                )],
-            )])
-            .into_any_element()
-    }
 }

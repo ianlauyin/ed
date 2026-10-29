@@ -1,4 +1,3 @@
-use documented::Documented;
 use gpui::AnyElement;
 use gpui::Hsla;
 use gpui::ImageSource;
@@ -20,7 +19,7 @@ use crate::prelude::*;
 ///     .grayscale(true)
 ///     .border_color(gpui::red());
 /// ```
-#[derive(IntoElement, Documented, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct Avatar {
     image: Img,
     size: Option<AbsoluteLength>,
@@ -90,41 +89,5 @@ impl RenderOnce for Avatar {
                     .into_any_element()
             }))
             .children(self.indicator.map(|indicator| div().child(indicator)))
-    }
-}
-
-impl Component for Avatar {
-    fn scope() -> ComponentScope {
-        ComponentScope::Images
-    }
-
-    fn description() -> &'static str {
-        Avatar::DOCS
-    }
-
-    fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
-        let example_avatar = "https://avatars.githubusercontent.com/u/1714999?v=4";
-
-        v_flex()
-                .gap_6()
-                .children(vec![
-                    example_group(vec![
-                        single_example("Default", Avatar::new(example_avatar).into_any_element()),
-                        single_example(
-                            "Grayscale",
-                            Avatar::new(example_avatar)
-                                .grayscale(true)
-                                .into_any_element(),
-                        ),
-                        single_example(
-                            "Border",
-                            Avatar::new(example_avatar)
-                                .border_color(cx.theme().colors().border)
-                                .into_any_element(),
-                        ).description("Can be used to create visual space by setting the border color to match the background, which creates the appearance of a gap around the avatar."),
-                    ]),
-
-                ])
-                .into_any_element()
     }
 }

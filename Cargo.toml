@@ -15,7 +15,6 @@ call_hierarchy = { path = "crates/call_hierarchy" }
 clock = { path = "crates/clock" }
 collections = { path = "crates/collections" }
 command_palette = { path = "crates/command_palette" }
-component = { path = "crates/component" }
 control = { path = "crates/control" }
 db = { path = "crates/db" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
@@ -134,7 +133,6 @@ derive_more = { version = "2.1", features = ["deref", "deref_mut", "from_str"] }
 diffy = "0.4.2"
 dirs = "6.0"
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
-documented = "0.10"
 emojis = "0.9"
 encoding_rs = "0.8"
 etagere = "0.2"

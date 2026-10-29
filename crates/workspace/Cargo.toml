@@ -17,7 +17,6 @@ any_vec.workspace = true
 anyhow.workspace = true
 time.workspace = true
 collections.workspace = true
-component.workspace = true
 db.workspace = true
 dirs.workspace = true
 futures-lite.workspace = true

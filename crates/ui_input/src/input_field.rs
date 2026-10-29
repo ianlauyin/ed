@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use component::example_group;
-use component::single_example;
 use gpui::App;
 use gpui::FocusHandle;
 use gpui::Focusable;
@@ -21,7 +19,6 @@ pub struct InputFieldStyle {
 /// An Input Field component that can be used to create text fields like search inputs, form fields, etc.
 ///
 /// It wraps a single line [`Editor`] and allows for common field properties like labels, placeholders, icons, etc.
-#[derive(RegisterComponent)]
 pub struct InputField {
     /// An optional label for the text field.
     ///
@@ -220,32 +217,5 @@ impl Render for InputField {
             .when_some(self.error.clone(), |this, error| {
                 this.child(Label::new(error).size(LabelSize::Small).color(Color::Error))
             })
-    }
-}
-
-impl Component for InputField {
-    fn scope() -> ComponentScope {
-        ComponentScope::Input
-    }
-
-    fn description() -> &'static str {
-        "A single-line text field used for search inputs, \
-        form fields, and similar inputs, supporting labels, placeholders, \
-        leading icons, and masked content."
-    }
-
-    fn preview(window: &mut Window, cx: &mut App) -> AnyElement {
-        let input_small = cx.new(|cx| InputField::new(window, cx, "placeholder").label("Small Label"));
-
-        let input_regular = cx
-            .new(|cx| InputField::new(window, cx, "placeholder").label("Regular Label").label_size(LabelSize::Default));
-
-        v_flex()
-            .gap_6()
-            .children(vec![example_group(vec![
-                single_example("Small Label (Default)", div().child(input_small).into_any_element()),
-                single_example("Regular Label", div().child(input_regular).into_any_element()),
-            ])])
-            .into_any_element()
     }
 }
