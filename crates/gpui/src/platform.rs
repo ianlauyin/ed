@@ -392,10 +392,6 @@ pub trait Platform: 'static {
 
     fn write_to_find_pasteboard(&self, item: ClipboardItem);
 
-    fn write_credentials(&self, url: &str, username: &str, password: &[u8]) -> Task<Result<()>>;
-    fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>>;
-    fn delete_credentials(&self, url: &str) -> Task<Result<()>>;
-
     fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout>;
     fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper>;
     fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>);

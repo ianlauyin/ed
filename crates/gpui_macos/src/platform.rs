@@ -49,7 +49,6 @@ use gpui::WindowKind;
 use gpui::WindowParams;
 use gpui::WindowingRequest;
 use gpui::popup::PopupNotSupportedError;
-use gpui_apple::keychain;
 use gpui_apple::thermal::ThermalObserver;
 use gpui_apple::thermal::{self};
 use gpui_util::ResultExt;
@@ -1124,23 +1123,6 @@ impl Platform for MacPlatform {
     fn write_to_find_pasteboard(&self, item: ClipboardItem) {
         let state = self.0.lock();
         state.find_pasteboard.write(item);
-    }
-
-    fn write_credentials(&self, url: &str, username: &str, password: &[u8]) -> Task<Result<()>> {
-        let url = url.to_string();
-        let username = username.to_string();
-        let password = password.to_vec();
-        self.background_executor().spawn(async move { Ok(keychain::write_credentials(&url, &username, &password)?) })
-    }
-
-    fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
-        let url = url.to_string();
-        self.background_executor().spawn(async move { Ok(keychain::read_credentials(&url)?) })
-    }
-
-    fn delete_credentials(&self, url: &str) -> Task<Result<()>> {
-        let url = url.to_string();
-        self.background_executor().spawn(async move { Ok(keychain::delete_credentials(&url)?) })
     }
 }
 

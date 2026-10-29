@@ -234,15 +234,6 @@ impl Platform for HeadlessPlatform {
         None
     }
     fn write_to_find_pasteboard(&self, _item: ClipboardItem) {}
-    fn write_credentials(&self, _url: &str, _username: &str, _password: &[u8]) -> Task<Result<()>> {
-        Task::ready(Err(anyhow!("credential storage is unavailable on the remote server")))
-    }
-    fn read_credentials(&self, _url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
-        Task::ready(Ok(None))
-    }
-    fn delete_credentials(&self, _url: &str) -> Task<Result<()>> {
-        Task::ready(Ok(()))
-    }
     fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
         Box::new(HeadlessKeyboardLayout)
     }

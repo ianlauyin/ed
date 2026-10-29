@@ -56,6 +56,8 @@ remote detection, command execution, and proxy startup are removed.
 - The askpass crate, password dialogs, credential forwarding over RPC, and
   askpass helper modes are removed. Remote connection progress and cancellation
   remain available.
+- GPUI has no credential storage API; the platform layer never touches the
+  macOS Keychain.
 - The remote servers modal lists only hosts added manually in the editor; ssh
   config `Host` entries are never read or suggested.
 - No accessibility support: GPUI has no AccessKit integration, never registers

@@ -1284,21 +1284,6 @@ impl App {
         self.platform.write_to_find_pasteboard(item)
     }
 
-    /// Writes credentials to the platform keychain.
-    pub fn write_credentials(&self, url: &str, username: &str, password: &[u8]) -> Task<Result<()>> {
-        self.platform.write_credentials(url, username, password)
-    }
-
-    /// Reads credentials from the platform keychain.
-    pub fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
-        self.platform.read_credentials(url)
-    }
-
-    /// Deletes credentials from the platform keychain.
-    pub fn delete_credentials(&self, url: &str) -> Task<Result<()>> {
-        self.platform.delete_credentials(url)
-    }
-
     /// Directs the platform's default browser to open the given URL.
     pub fn open_url(&self, url: &str) {
         self.platform.open_url(url);
