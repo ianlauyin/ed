@@ -1768,14 +1768,16 @@ impl GitRepository for RealGitRepository {
         self.executor
             .spawn(async move {
                 let git = git?;
+                // `%gs` is the reflog subject, which external renames (`git stash store -m`) update;
+                // the stash commit's own subject (`%s`) never changes.
                 let output =
-                    git.build_command(&["stash", "list", "--pretty=format:%gd%x00%H%x00%ct%x00%s"]).output().await?;
+                    git.build_command(&["stash", "list", "--pretty=format:%gd%x00%H%x00%ct%x00%gs"]).output().await?;
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     stdout.parse()
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    anyhow::bail!("git status failed: {stderr}");
+                    anyhow::bail!("git stash list failed: {stderr}");
                 }
             })
             .boxed()
