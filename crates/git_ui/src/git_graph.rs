@@ -2608,20 +2608,28 @@ impl GitGraph {
                     .w_full()
                     .p_2()
                     .gap_2()
-                    .child(div().absolute().top_2().right_2().child(
-                        IconButton::new("close-detail", IconName::Close).icon_size(IconSize::Small).on_click(
-                            cx.listener(move |this, _, _, cx| {
-                                this.selected_entry_idx = None;
-                                this.selected_commit_diff = None;
-                                this.selected_commit_diff_stats = None;
-                                this.selected_commit_message = None;
-                                this._selected_commit_message_task = None;
-                                this.changed_files_expanded_dirs.clear();
-                                this._commit_diff_task = None;
-                                cx.notify();
-                            }),
+                    .child(
+                        div().absolute().top_2().right_2().child(
+                            IconButton::new("close-detail", IconName::Close)
+                                .tooltip({
+                                    let focus_handle = self.focus_handle.clone();
+                                    move |_window, cx: &mut App| {
+                                        Tooltip::for_action_in("Close Details Panel", &Cancel, &focus_handle, cx)
+                                    }
+                                })
+                                .icon_size(IconSize::Small)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.selected_entry_idx = None;
+                                    this.selected_commit_diff = None;
+                                    this.selected_commit_diff_stats = None;
+                                    this.selected_commit_message = None;
+                                    this._selected_commit_message_task = None;
+                                    this.changed_files_expanded_dirs.clear();
+                                    this._commit_diff_task = None;
+                                    cx.notify();
+                                })),
                         ),
-                    ))
+                    )
                     .child(
                         div().absolute().top_2().left_2().child(
                             Disclosure::new("toggle-commit-metadata", !self.commit_details_metadata_collapsed)
@@ -3169,9 +3177,9 @@ impl GitGraph {
         let viewport_range =
             first_visible_row.min(loaded_commit_count.saturating_sub(1))..last_visible_row.min(loaded_commit_count);
 
-        let head_branch_name: Option<SharedString> = self.get_repository(cx).and_then(|repo| {
-            repo.read(cx).branch.as_ref().map(|branch| SharedString::from(branch.name().to_string()))
-        });
+        let head_branch_name: Option<SharedString> = self
+            .get_repository(cx)
+            .and_then(|repo| repo.read(cx).branch.as_ref().map(|branch| SharedString::from(branch.name().to_string())));
 
         let theme = cx.theme();
         let accent_colors = theme.accents().clone();
@@ -3469,12 +3477,17 @@ impl GitGraph {
                 h_flex()
                     .w_full()
                     .gap_1()
-                    .child(Disclosure::new("toggle-commit-message", !collapsed).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            this.commit_details_message_collapsed = !this.commit_details_message_collapsed;
-                            cx.notify();
-                        },
-                    )))
+                    .child(
+                        Disclosure::new("toggle-commit-message", !collapsed)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.commit_details_message_collapsed = !this.commit_details_message_collapsed;
+                                cx.notify();
+                            }))
+                            .tooltip({
+                                let label = if collapsed { "Show Commit Message" } else { "Hide Commit Message" };
+                                move |_window, cx: &mut App| Tooltip::simple(label, cx)
+                            }),
+                    )
                     .child(Label::new("Message").size(LabelSize::Small).color(Color::Muted)),
             )
             .when(!collapsed, |this| {
