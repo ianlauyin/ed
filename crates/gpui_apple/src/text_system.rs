@@ -433,7 +433,11 @@ impl AppleTextSystemState {
 
         {
             let mut text = text;
-            let mut break_ligature = true;
+            // CoreText merges adjacent runs that end up in equal fonts, so every other run that
+            // inserts text is set a hair larger to keep ligatures from forming across them. The first
+            // run keeps its exact size: SF tracks by exact point size, so a nudged size draws wider
+            // or narrower than AppKit sets the same text.
+            let mut break_ligature = false;
             for run in font_runs {
                 let text_run;
                 (text_run, text) = text.split_at(run.len);
@@ -468,7 +472,9 @@ impl AppleTextSystemState {
                         Some(&font),
                     );
                 }
-                break_ligature = !break_ligature;
+                if length > 0 {
+                    break_ligature = !break_ligature;
+                }
             }
         }
         // Retrieve the glyphs from the shaped line, converting UTF16 offsets to UTF8 offsets.
