@@ -240,7 +240,7 @@ pub struct TextSystem {
     font_ids_by_font: RwLock<FxHashMap<Font, Result<FontId>>>,
     font_metrics: RwLock<FxHashMap<FontId, FontMetrics>>,
     raster_bounds: RwLock<FxHashMap<RenderGlyphParams, Bounds<DevicePixels>>>,
-    wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<LineWrapper>>>,
+    wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<CharWidthCache>>>,
     font_runs_pool: Mutex<Vec<Vec<FontRun>>>,
     fallback_font_stack: SmallVec<[Font; 2]>,
     font_generation: Arc<AtomicUsize>,
@@ -505,8 +505,8 @@ impl TextSystem {
     pub fn line_wrapper(self: &Arc<Self>, font: Font, font_size: Pixels) -> LineWrapperHandle {
         let lock = &mut self.wrapper_pool.lock();
         let font_id = self.resolve_font(&font);
-        let wrappers = lock.entry(FontIdWithSize { font_id, font_size }).or_default();
-        let wrapper = wrappers.pop().unwrap_or_else(|| LineWrapper::new(font_id, font_size, self.clone()));
+        let char_widths = lock.entry(FontIdWithSize { font_id, font_size }).or_default().pop().unwrap_or_default();
+        let wrapper = LineWrapper::new(font_id, font_size, self.clone(), char_widths);
 
         LineWrapperHandle { wrapper: Some(wrapper), text_system: self.clone() }
     }
@@ -975,7 +975,7 @@ impl Drop for LineWrapperHandle {
         state
             .get_mut(&FontIdWithSize { font_id: wrapper.font_id, font_size: wrapper.font_size })
             .unwrap()
-            .push(wrapper);
+            .push(wrapper.into_char_widths());
     }
 }
 
