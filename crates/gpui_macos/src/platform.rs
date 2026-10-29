@@ -62,6 +62,7 @@ use objc2::MainThreadOnly;
 use objc2::class;
 use objc2::define_class;
 use objc2::msg_send;
+use objc2::rc::Retained;
 use objc2::runtime::AnyClass;
 use objc2::runtime::AnyObject;
 use objc2::runtime::NSObject;
@@ -841,11 +842,16 @@ impl Platform for MacPlatform {
     fn prompt_for_paths(&self, options: PathPromptOptions) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
         use objc2_foundation::NSString;
 
-        let marker = self.1;
         let (done_tx, done_rx) = oneshot::channel();
         self.foreground_executor()
             .spawn(async move {
-                let panel = NSOpenPanel::openPanel(marker);
+                // AppKit can return nil despite the nonnull annotation on objc2's binding, which
+                // would panic. Switch back to NSOpenPanel::openPanel once objc2-app-kit 0.4 fixes it.
+                let panel: Option<Retained<NSOpenPanel>> = unsafe { msg_send![class!(NSOpenPanel), openPanel] };
+                let Some(panel) = panel else {
+                    _ = done_tx.send(Err(anyhow!("macOS could not create the open dialog")));
+                    return;
+                };
                 panel.setCanChooseDirectories(options.directories);
                 panel.setCanChooseFiles(options.files);
                 panel.setAllowsMultipleSelection(options.multiple);
@@ -894,10 +900,14 @@ impl Platform for MacPlatform {
         let url = NSURL::from_directory_path(directory);
         let suggested_name = suggested_name.map(NSString::from_str);
         let (done_tx, done_rx) = oneshot::channel();
-        let marker = self.1;
         self.foreground_executor()
             .spawn(async move {
-                let panel = NSSavePanel::savePanel(marker);
+                // Like openPanel, savePanel may return nil despite its nonnull annotation.
+                let panel: Option<Retained<NSSavePanel>> = unsafe { msg_send![class!(NSSavePanel), savePanel] };
+                let Some(panel) = panel else {
+                    _ = done_tx.send(Err(anyhow!("macOS could not create the save dialog")));
+                    return;
+                };
                 panel.setDirectoryURL(url.as_deref());
 
                 if let Some(suggested_name) = suggested_name {
