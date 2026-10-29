@@ -46,7 +46,6 @@ use util::ResultExt as _;
 
 use crate::DraggedDock;
 use crate::Event;
-use crate::FocusFollowsMouse;
 use crate::ModalLayer;
 use crate::Pane;
 use crate::Workspace;
@@ -277,7 +276,6 @@ pub struct Dock {
     is_open: bool,
     active_panel_index: Option<usize>,
     focus_handle: FocusHandle,
-    focus_follows_mouse: FocusFollowsMouse,
     restoration: DockRestoreState,
     zoom_layer_open: bool,
     modal_layer: Entity<ModalLayer>,
@@ -421,7 +419,6 @@ impl Dock {
                 active_panel_index: None,
                 is_open: false,
                 focus_handle: focus_handle.clone(),
-                focus_follows_mouse: WorkspaceSettings::get_global(cx).focus_follows_mouse,
                 _subscriptions: [focus_subscription, zoom_subscription],
                 restoration: DockRestoreState::Restoring { pending: None },
                 zoom_layer_open: false,
@@ -1092,7 +1089,7 @@ impl Render for Dock {
                 .id("dock-panel")
                 .key_context(dispatch_context)
                 .track_focus(&self.focus_handle(cx))
-                .focus_follows_mouse(self.focus_follows_mouse, cx)
+                .focus_follows_mouse(WorkspaceSettings::get_global(cx).focus_follows_mouse, cx)
                 .flex()
                 .overflow_hidden()
                 .map(|this| match self.position().axis() {
