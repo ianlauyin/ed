@@ -2,7 +2,7 @@
 //! in editor given a given motion (e.g. it handles converting a "move left" command into coordinates in editor). It is exposed mostly for use by vim crate.
 
 use std::ops::Range;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use gpui::Pixels;
 use gpui::WindowTextSystem;
@@ -38,7 +38,7 @@ pub enum FindRange {
 /// TextLayoutDetails encompasses everything we need to move vertically
 /// taking into account variable width characters.
 pub struct TextLayoutDetails {
-    pub(crate) text_system: Arc<WindowTextSystem>,
+    pub(crate) text_system: Rc<WindowTextSystem>,
     pub(crate) editor_style: EditorStyle,
     pub(crate) rem_size: Pixels,
     pub scroll_anchor: SharedScrollAnchor,

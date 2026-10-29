@@ -212,3 +212,6 @@ backtraces still work through sync CFI.
   family follows CSS font matching (stretch, then style, then weight), with
   Core Text's normalized weights mapped to CSS weights as font-kit did, so the
   same face is chosen for a given weight and style.
+- Each window owns its `WindowTextSystem` (`Rc`, not `Send`). Its line layout
+  cache uses `RefCell`s with no locks, and is keyed by the text itself; there is
+  no hash-keyed layout API.
