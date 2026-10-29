@@ -170,7 +170,7 @@ impl ProjectEnvironment {
                 let shell = shell.clone();
                 let tx = self.environment_error_messages_tx.clone();
                 cx.spawn(async move |cx| {
-                    let mut shell_env = match cx
+                    let shell_env = match cx
                         .background_spawn(load_directory_shell_environment(shell, abs_path.clone(), tx))
                         .await
                     {
@@ -181,15 +181,13 @@ impl ProjectEnvironment {
                         }
                     };
 
-                    if let Some(shell_env) = shell_env.as_mut() {
+                    if let Some(shell_env) = shell_env.as_ref() {
                         let path = shell_env.get("PATH").map(|path| path.as_str()).unwrap_or_default();
                         log::debug!(
                             "using project environment variables shell launched in {:?}. PATH={:?}",
                             abs_path,
                             path
                         );
-
-                        shell_env.insert(ED_ENVIRONMENT_ORIGIN_MARKER.to_string(), "worktree-shell".to_string());
                     }
 
                     shell_env
@@ -231,9 +229,6 @@ impl ProjectEnvironment {
         self.environment_error_messages.pop_front()
     }
 }
-
-/// Marks environments captured from a worktree shell, so processes can tell where it came from.
-const ED_ENVIRONMENT_ORIGIN_MARKER: &str = "ED_ENVIRONMENT";
 
 async fn load_directory_shell_environment(
     shell: Shell,
