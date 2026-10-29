@@ -841,7 +841,7 @@ fn prompt_and_open_paths(app_state: Arc<AppState>, options: PathPromptOptions, c
             })
             .ok();
     } else {
-        let task = Workspace::new_local(Vec::new(), app_state.clone(), None, None, None, OpenMode::Activate, cx);
+        let task = Workspace::new_local(Vec::new(), app_state.clone(), None, None, OpenMode::Activate, cx);
         cx.spawn(async move |cx| {
             let OpenResult { window, .. } = task.await?;
             window.update(cx, |multi_workspace, window, cx| {
@@ -1677,7 +1677,6 @@ impl Workspace {
         abs_paths: Vec<PathBuf>,
         app_state: Arc<AppState>,
         requesting_window: Option<WindowHandle<MultiWorkspace>>,
-        env: Option<HashMap<String, String>>,
         init: Option<Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>>,
         open_mode: OpenMode,
         cx: &mut App,
@@ -1685,7 +1684,6 @@ impl Workspace {
         let project_handle = Project::local(
             app_state.languages.clone(),
             app_state.fs.clone(),
-            env,
             project::LocalProjectFlags::default(),
             cx,
         );
@@ -2718,8 +2716,7 @@ impl Workspace {
         if self.project.read(cx).is_local() {
             Task::ready(Ok(callback(self, window, cx)))
         } else {
-            let env = self.project.read(cx).cli_environment(cx);
-            let task = Self::new_local(Vec::new(), self.app_state.clone(), None, env, None, OpenMode::Activate, cx);
+            let task = Self::new_local(Vec::new(), self.app_state.clone(), None, None, OpenMode::Activate, cx);
             cx.spawn_in(window, async move |_vh, cx| {
                 let OpenResult { window: multi_workspace_window, .. } = task.await?;
                 multi_workspace_window.update(cx, |multi_workspace, window, cx| {
@@ -7010,7 +7007,6 @@ pub async fn restore_multiworkspace(
                 app_state.clone(),
                 None,
                 None,
-                None,
                 OpenMode::Add,
                 cx,
             )
@@ -7038,7 +7034,7 @@ pub async fn restore_multiworkspace(
                 let paths = key.path_list().paths().to_vec();
                 match cx
                     .update(|cx| {
-                        Workspace::new_local(paths, app_state.clone(), None, None, None, OpenMode::Activate, cx)
+                        Workspace::new_local(paths, app_state.clone(), None, None, OpenMode::Activate, cx)
                     })
                     .await
                 {
@@ -7207,7 +7203,7 @@ pub async fn get_any_active_multi_workspace(
     // find an existing workspace to focus and show call controls
     let active_window = activate_any_workspace_window(&mut cx);
     if active_window.is_none() {
-        cx.update(|cx| Workspace::new_local(vec![], app_state.clone(), None, None, None, OpenMode::Activate, cx))
+        cx.update(|cx| Workspace::new_local(vec![], app_state.clone(), None, None, OpenMode::Activate, cx))
             .await?;
     }
     activate_any_workspace_window(&mut cx).context("could not open ed")
@@ -7322,7 +7318,6 @@ pub struct OpenOptions {
     pub add_dirs_to_sidebar: bool,
     pub requesting_window: Option<WindowHandle<MultiWorkspace>>,
     pub open_mode: OpenMode,
-    pub env: Option<HashMap<String, String>>,
 }
 
 impl Default for OpenOptions {
@@ -7334,7 +7329,6 @@ impl Default for OpenOptions {
             add_dirs_to_sidebar: true,
             requesting_window: None,
             open_mode: OpenMode::default(),
-            env: None,
         }
     }
 }
@@ -7364,7 +7358,6 @@ pub fn open_workspace_by_id(
     let project_handle = Project::local(
         app_state.languages.clone(),
         app_state.fs.clone(),
-        None,
         project::LocalProjectFlags::default(),
         cx,
     );
@@ -7559,7 +7552,6 @@ pub fn open_paths(
                         abs_paths,
                         app_state.clone(),
                         open_options.requesting_window,
-                        open_options.env,
                         None,
                         open_options.open_mode,
                         cx,
@@ -7592,7 +7584,6 @@ pub fn open_new(
         Vec::new(),
         app_state,
         open_options.requesting_window,
-        open_options.env,
         Some(Box::new(init)),
         addition,
         cx,

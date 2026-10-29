@@ -27,7 +27,6 @@ use worktree::Worktree;
 use crate::worktree_store::WorktreeStore;
 
 pub struct ProjectEnvironment {
-    cli_environment: Option<HashMap<String, String>>,
     #[allow(clippy::type_complexity)]
     local_environments: HashMap<(Shell, Arc<Path>), Shared<Task<Option<HashMap<String, String>>>>>,
     #[allow(clippy::type_complexity)]
@@ -48,7 +47,6 @@ impl EventEmitter<ProjectEnvironmentEvent> for ProjectEnvironment {}
 
 impl ProjectEnvironment {
     pub fn new(
-        cli_environment: Option<HashMap<String, String>>,
         worktree_store: WeakEntity<WorktreeStore>,
         remote_client: Option<WeakEntity<RemoteClient>>,
         is_remote_project: bool,
@@ -65,7 +63,6 @@ impl ProjectEnvironment {
             }
         });
         Self {
-            cli_environment,
             local_environments: HashMap::default(),
             remote_environments: HashMap::default(),
             environment_error_messages: VecDeque::default(),
@@ -77,27 +74,12 @@ impl ProjectEnvironment {
         }
     }
 
-    /// Returns the inherited CLI environment, if this project was opened from the ed CLI.
-    pub(crate) fn get_cli_environment(&self) -> Option<HashMap<String, String>> {
-        if let Some(mut env) = self.cli_environment.clone() {
-            set_origin_marker(&mut env, EnvironmentOrigin::Cli);
-            Some(env)
-        } else {
-            None
-        }
-    }
-
     pub fn buffer_environment(
         &mut self,
         buffer: &Entity<Buffer>,
         worktree_store: &Entity<WorktreeStore>,
         cx: &mut Context<Self>,
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
-        if let Some(cli_environment) = self.get_cli_environment() {
-            log::debug!("using project environment variables from CLI");
-            return Task::ready(Some(cli_environment)).shared();
-        }
-
         let Some(worktree) = buffer
             .read(cx)
             .file()
@@ -114,11 +96,6 @@ impl ProjectEnvironment {
         worktree: Entity<Worktree>,
         cx: &mut App,
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
-        if let Some(cli_environment) = self.get_cli_environment() {
-            log::debug!("using project environment variables from CLI");
-            return Task::ready(Some(cli_environment)).shared();
-        }
-
         let worktree = worktree.read(cx);
         let mut abs_path = worktree.abs_path();
         if worktree.is_single_file() {
@@ -179,21 +156,14 @@ impl ProjectEnvironment {
         self.local_directory_environment(&Shell::System, abs_path, cx)
     }
 
-    /// Returns the project environment, if possible.
-    /// If the project was opened from the CLI, then the inherited CLI environment is returned.
-    /// If it wasn't opened from the CLI, and an absolute path is given, then a shell is spawned in
-    /// that directory, to get environment variables as if the user has `cd`'d there.
+    /// Returns the project environment by spawning a shell in `abs_path`, to get environment
+    /// variables as if the user has `cd`'d there.
     pub fn local_directory_environment(
         &mut self,
         shell: &Shell,
         abs_path: Arc<Path>,
         cx: &mut App,
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
-        if let Some(cli_environment) = self.get_cli_environment() {
-            log::debug!("using project environment variables from CLI");
-            return Task::ready(Some(cli_environment)).shared();
-        }
-
         self.local_environments
             .entry((shell.clone(), abs_path.clone()))
             .or_insert_with(|| {
@@ -219,7 +189,7 @@ impl ProjectEnvironment {
                             path
                         );
 
-                        set_origin_marker(shell_env, EnvironmentOrigin::WorktreeShell);
+                        shell_env.insert(ED_ENVIRONMENT_ORIGIN_MARKER.to_string(), "worktree-shell".to_string());
                     }
 
                     shell_env
@@ -262,25 +232,8 @@ impl ProjectEnvironment {
     }
 }
 
-fn set_origin_marker(env: &mut HashMap<String, String>, origin: EnvironmentOrigin) {
-    env.insert(ED_ENVIRONMENT_ORIGIN_MARKER.to_string(), origin.into());
-}
-
+/// Marks environments captured from a worktree shell, so processes can tell where it came from.
 const ED_ENVIRONMENT_ORIGIN_MARKER: &str = "ED_ENVIRONMENT";
-
-enum EnvironmentOrigin {
-    Cli,
-    WorktreeShell,
-}
-
-impl From<EnvironmentOrigin> for String {
-    fn from(val: EnvironmentOrigin) -> Self {
-        match val {
-            EnvironmentOrigin::Cli => "cli".into(),
-            EnvironmentOrigin::WorktreeShell => "worktree-shell".into(),
-        }
-    }
-}
 
 async fn load_directory_shell_environment(
     shell: Shell,

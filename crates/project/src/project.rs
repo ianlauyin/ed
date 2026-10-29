@@ -1035,7 +1035,6 @@ impl Project {
     pub fn local(
         languages: Arc<LanguageRegistry>,
         fs: Arc<dyn Fs>,
-        env: Option<HashMap<String, String>>,
         flags: LocalProjectFlags,
         cx: &mut App,
     ) -> Entity<Self> {
@@ -1048,7 +1047,7 @@ impl Project {
 
             let weak_self = cx.weak_entity();
 
-            let environment = cx.new(|cx| ProjectEnvironment::new(env, worktree_store.downgrade(), None, false, cx));
+            let environment = cx.new(|cx| ProjectEnvironment::new(worktree_store.downgrade(), None, false, cx));
             let manifest_tree = ManifestTree::new(worktree_store.clone(), cx);
 
             let buffer_store = cx.new(|cx| BufferStore::local(worktree_store.clone(), cx));
@@ -1166,7 +1165,7 @@ impl Project {
             cx.subscribe(&buffer_store, Self::on_buffer_store_event).detach();
 
             let environment = cx.new(|cx| {
-                ProjectEnvironment::new(None, worktree_store.downgrade(), Some(remote.downgrade()), false, cx)
+                ProjectEnvironment::new(worktree_store.downgrade(), Some(remote.downgrade()), false, cx)
             });
 
             let lsp_store = cx.new(|cx| {
@@ -1343,11 +1342,6 @@ impl Project {
     #[inline]
     pub const fn environment(&self) -> &Entity<ProjectEnvironment> {
         &self.environment
-    }
-
-    #[inline]
-    pub fn cli_environment(&self, cx: &App) -> Option<HashMap<String, String>> {
-        self.environment.read(cx).get_cli_environment()
     }
 
     #[inline]
