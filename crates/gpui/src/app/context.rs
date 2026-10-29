@@ -29,7 +29,7 @@ use crate::Global;
 use crate::KeystrokeObserver;
 use crate::Priority;
 use crate::Reservation;
-use crate::SubscriberSet;
+use crate::SingleSubscriberSet;
 use crate::Subscription;
 use crate::Task;
 use crate::WeakEntity;
@@ -137,15 +137,13 @@ impl<'a, T: 'static> Context<'a, T> {
     where
         T: 'static,
     {
-        let (subscription, activate) = self.app.release_listeners.insert(
+        self.app.release_listeners.insert(
             self.entity_state.entity_id,
             Box::new(move |this, cx| {
                 let this = this.downcast_mut().expect("invalid entity type");
                 on_release(this, cx);
             }),
-        );
-        activate();
-        subscription
+        )
     }
 
     /// Register a callback to be run on the release of another entity
@@ -160,7 +158,7 @@ impl<'a, T: 'static> Context<'a, T> {
     {
         let entity_id = entity.entity_id();
         let this = self.weak_entity();
-        let (subscription, activate) = self.app.release_listeners.insert(
+        self.app.release_listeners.insert(
             entity_id,
             Box::new(move |entity, cx| {
                 let entity = entity.downcast_mut().expect("invalid entity type");
@@ -168,9 +166,7 @@ impl<'a, T: 'static> Context<'a, T> {
                     this.update(cx, |this, cx| on_release(this, entity, cx));
                 }
             }),
-        );
-        activate();
-        subscription
+        )
     }
 
     /// Register a callback to for updates to the given global
@@ -181,7 +177,7 @@ impl<'a, T: 'static> Context<'a, T> {
         let handle = self.weak_entity();
         let (subscription, activate) = self
             .global_observers
-            .insert(TypeId::of::<G>(), Box::new(move |cx| handle.update(cx, |view, cx| f(view, cx)).is_ok()));
+            .insert_pending(TypeId::of::<G>(), Box::new(move |cx| handle.update(cx, |view, cx| f(view, cx)).is_ok()));
         self.defer(move |_| activate());
         subscription
     }
@@ -383,11 +379,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window
+        window
             .bounds_observers
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()));
-        activate();
-        subscription
+            .insert(Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()))
     }
 
     /// Register a callback to be invoked when the window is activated or deactivated.
@@ -397,11 +391,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window
+        window
             .activation_observers
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()));
-        activate();
-        subscription
+            .insert(Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()))
     }
 
     /// Registers a callback to be invoked when the window's visibility changes
@@ -412,14 +404,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, WindowVisibility, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window.visibility_observers.insert(
-            (),
-            Box::new(move |visibility, window, cx| {
-                view.update(cx, |view, cx| callback(view, visibility, window, cx)).is_ok()
-            }),
-        );
-        activate();
-        subscription
+        window.visibility_observers.insert(Box::new(move |visibility, window, cx| {
+            view.update(cx, |view, cx| callback(view, visibility, window, cx)).is_ok()
+        }))
     }
 
     /// Registers a callback to be invoked when the window appearance changes.
@@ -429,11 +416,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window
+        window
             .appearance_observers
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()));
-        activate();
-        subscription
+            .insert(Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()))
     }
 
     /// Registers a callback invoked when the window moves to another display
@@ -445,11 +430,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window
+        window
             .display_observers
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()));
-        activate();
-        subscription
+            .insert(Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()))
     }
 
     /// Registers a callback to be invoked when the window button layout changes.
@@ -459,11 +442,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window
+        window
             .button_layout_observers
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()));
-        activate();
-        subscription
+            .insert(Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()))
     }
 
     /// Registers a callback for [`App::observe_keystrokes`] that updates this entity.
@@ -472,12 +453,10 @@ impl<'a, T: 'static> Context<'a, T> {
         mut f: impl FnMut(&mut T, &KeystrokeEvent, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         fn inner(
-            keystroke_observers: &SubscriberSet<(), KeystrokeObserver>,
+            keystroke_observers: &SingleSubscriberSet<KeystrokeObserver>,
             handler: KeystrokeObserver,
         ) -> Subscription {
-            let (subscription, activate) = keystroke_observers.insert((), handler);
-            activate();
-            subscription
+            keystroke_observers.insert(handler)
         }
 
         let view = self.weak_entity();
@@ -501,11 +480,9 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window
+        window
             .pending_input_observers
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()));
-        activate();
-        subscription
+            .insert(Box::new(move |window, cx| view.update(cx, |view, cx| callback(view, window, cx)).is_ok()))
     }
 
     /// Register a listener to be called when the given focus handle receives focus.
@@ -591,7 +568,7 @@ impl<'a, T: 'static> Context<'a, T> {
         let view = self.weak_entity();
         let (subscription, activate) = window
             .focus_lost_listeners
-            .insert((), Box::new(move |window, cx| view.update(cx, |view, cx| listener(view, window, cx)).is_ok()));
+            .insert_pending(Box::new(move |window, cx| view.update(cx, |view, cx| listener(view, window, cx)).is_ok()));
         self.defer(|_| activate());
         subscription
     }
@@ -661,7 +638,7 @@ impl<'a, T: 'static> Context<'a, T> {
     ) -> Subscription {
         let window_handle = window.handle;
         let view = self.weak_entity();
-        let (subscription, activate) = self.global_observers.insert(
+        let (subscription, activate) = self.global_observers.insert_pending(
             TypeId::of::<G>(),
             Box::new(move |cx| {
                 // If the entity has been dropped, remove this observer.

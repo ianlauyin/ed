@@ -95,6 +95,7 @@ use crate::Render;
 use crate::RenderImage;
 use crate::RenderablePromptHandle;
 use crate::Reservation;
+use crate::SingleSubscriberSet;
 use crate::SubscriberSet;
 use crate::Subscription;
 use crate::SvgRenderer;
@@ -524,22 +525,22 @@ pub struct App {
 
     pub(crate) observers: SubscriberSet<EntityId, Handler>,
     pub(crate) event_listeners: SubscriberSet<EntityId, (TypeId, Listener)>,
-    pub(crate) keystroke_observers: SubscriberSet<(), KeystrokeObserver>,
-    pub(crate) keystroke_interceptors: SubscriberSet<(), KeystrokeObserver>,
-    pub(crate) keyboard_layout_observers: SubscriberSet<(), Handler>,
+    pub(crate) keystroke_observers: SingleSubscriberSet<KeystrokeObserver>,
+    pub(crate) keystroke_interceptors: SingleSubscriberSet<KeystrokeObserver>,
+    pub(crate) keyboard_layout_observers: SingleSubscriberSet<Handler>,
     missing_glyph_callback: Rc<MissingGlyphCallbackSlot>,
-    pub(crate) thermal_state_observers: SubscriberSet<(), Handler>,
-    pub(crate) display_observers: SubscriberSet<(), DisplayHandler>,
+    pub(crate) thermal_state_observers: SingleSubscriberSet<Handler>,
+    pub(crate) display_observers: SingleSubscriberSet<DisplayHandler>,
     /// The connected displays, as of the platform's last display change
     /// notification.
     displays: HashMap<DisplayId, DisplayState>,
-    pub(crate) system_sleep_observers: SubscriberSet<(), Handler>,
-    pub(crate) system_wake_observers: SubscriberSet<(), Handler>,
+    pub(crate) system_sleep_observers: SingleSubscriberSet<Handler>,
+    pub(crate) system_wake_observers: SingleSubscriberSet<Handler>,
     pub(crate) release_listeners: SubscriberSet<EntityId, ReleaseListener>,
     pub(crate) global_observers: SubscriberSet<TypeId, Handler>,
-    pub(crate) quit_observers: SubscriberSet<(), QuitHandler>,
-    pub(crate) restart_observers: SubscriberSet<(), Handler>,
-    pub(crate) window_closed_observers: SubscriberSet<(), WindowClosedHandler>,
+    pub(crate) quit_observers: SingleSubscriberSet<QuitHandler>,
+    pub(crate) restart_observers: SingleSubscriberSet<Handler>,
+    pub(crate) window_closed_observers: SingleSubscriberSet<WindowClosedHandler>,
 
     /// Per-App element arena. This isolates element allocations between different
     /// App instances (important for tests where multiple Apps run concurrently).
@@ -632,21 +633,21 @@ impl App {
                 current_window_by_entity: FxHashMap::default(),
                 event_listeners: SubscriberSet::new(),
                 release_listeners: SubscriberSet::new(),
-                keystroke_observers: SubscriberSet::new(),
-                keystroke_interceptors: SubscriberSet::new(),
-                keyboard_layout_observers: SubscriberSet::new(),
+                keystroke_observers: SingleSubscriberSet::new(),
+                keystroke_interceptors: SingleSubscriberSet::new(),
+                keyboard_layout_observers: SingleSubscriberSet::new(),
                 missing_glyph_callback: Rc::default(),
-                thermal_state_observers: SubscriberSet::new(),
-                display_observers: SubscriberSet::new(),
+                thermal_state_observers: SingleSubscriberSet::new(),
+                display_observers: SingleSubscriberSet::new(),
                 displays: read_displays(platform.as_ref()),
-                system_sleep_observers: SubscriberSet::new(),
-                system_wake_observers: SubscriberSet::new(),
+                system_sleep_observers: SingleSubscriberSet::new(),
+                system_wake_observers: SingleSubscriberSet::new(),
                 global_observers: SubscriberSet::new(),
-                quit_observers: SubscriberSet::new(),
-                restart_observers: SubscriberSet::new(),
+                quit_observers: SingleSubscriberSet::new(),
+                restart_observers: SingleSubscriberSet::new(),
                 restart_path: None,
                 restart_arguments: Vec::new(),
-                window_closed_observers: SubscriberSet::new(),
+                window_closed_observers: SingleSubscriberSet::new(),
                 layout_id_buffer: Vec::default(),
                 propagate_event: true,
                 ui_snapshots: false,
@@ -673,7 +674,7 @@ impl App {
                     let cx = &mut app.borrow_mut();
                     cx.keyboard_layout = cx.platform.keyboard_layout();
                     cx.keyboard_mapper = cx.platform.keyboard_mapper();
-                    cx.keyboard_layout_observers.clone().retain(&(), move |callback| (callback)(cx));
+                    cx.keyboard_layout_observers.clone().retain(move |callback| (callback)(cx));
                 }
             }
         }));
@@ -683,7 +684,7 @@ impl App {
             move || {
                 if let Some(app) = app.upgrade() {
                     let cx = &mut app.borrow_mut();
-                    cx.thermal_state_observers.clone().retain(&(), move |callback| (callback)(cx));
+                    cx.thermal_state_observers.clone().retain(move |callback| (callback)(cx));
                 }
             }
         }));
@@ -702,7 +703,7 @@ impl App {
             move || {
                 if let Some(app) = app.upgrade() {
                     let cx = &mut app.borrow_mut();
-                    cx.system_sleep_observers.clone().retain(&(), move |callback| (callback)(cx));
+                    cx.system_sleep_observers.clone().retain(move |callback| (callback)(cx));
                 }
             }
         }));
@@ -712,7 +713,7 @@ impl App {
             move || {
                 if let Some(app) = app.upgrade() {
                     let cx = &mut app.borrow_mut();
-                    cx.system_wake_observers.clone().retain(&(), move |callback| (callback)(cx));
+                    cx.system_wake_observers.clone().retain(move |callback| (callback)(cx));
                 }
             }
         }));
@@ -751,7 +752,7 @@ impl App {
         let mut futures: Vec<LocalBoxFuture<'static, ()>> = Vec::new();
         let mut pending = Vec::new();
 
-        for (observer, location) in self.quit_observers.remove(&()) {
+        for (observer, location) in self.quit_observers.remove() {
             let future = observer(self);
             let done = Rc::new(Cell::new(false));
             pending.push((location, done.clone()));
@@ -798,15 +799,10 @@ impl App {
     where
         F: 'static + FnMut(&mut App),
     {
-        let (subscription, activate) = self.keyboard_layout_observers.insert(
-            (),
-            Box::new(move |cx| {
-                callback(cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.keyboard_layout_observers.insert(Box::new(move |cx| {
+            callback(cx);
+            true
+        }))
     }
 
     /// Gracefully quit the application via the platform's standard routine.
@@ -965,7 +961,7 @@ impl App {
     }
 
     pub(crate) fn new_observer(&mut self, key: EntityId, value: Handler) -> Subscription {
-        let (subscription, activate) = self.observers.insert(key, value);
+        let (subscription, activate) = self.observers.insert_pending(key, value);
         self.defer(move |_| activate());
         subscription
     }
@@ -1004,7 +1000,7 @@ impl App {
     }
 
     pub(crate) fn new_subscription(&mut self, key: EntityId, value: (TypeId, Listener)) -> Subscription {
-        let (subscription, activate) = self.event_listeners.insert(key, value);
+        let (subscription, activate) = self.event_listeners.insert_pending(key, value);
         self.defer(move |_| activate());
         subscription
     }
@@ -1140,15 +1136,10 @@ impl App {
     where
         F: 'static + FnMut(&mut App),
     {
-        let (subscription, activate) = self.thermal_state_observers.insert(
-            (),
-            Box::new(move |cx| {
-                callback(cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.thermal_state_observers.insert(Box::new(move |cx| {
+            callback(cx);
+            true
+        }))
     }
 
     /// Invokes a handler when the system is about to sleep.
@@ -1159,15 +1150,10 @@ impl App {
     where
         F: 'static + FnMut(&mut App),
     {
-        let (subscription, activate) = self.system_sleep_observers.insert(
-            (),
-            Box::new(move |cx| {
-                callback(cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.system_sleep_observers.insert(Box::new(move |cx| {
+            callback(cx);
+            true
+        }))
     }
 
     pub(crate) fn displays_changed(&mut self) {
@@ -1188,7 +1174,7 @@ impl App {
             }
         }
         for event in events {
-            self.display_observers.clone().retain(&(), |callback| (callback)(event, self));
+            self.display_observers.clone().retain(|callback| (callback)(event, self));
         }
     }
 
@@ -1208,15 +1194,10 @@ impl App {
     where
         F: 'static + FnMut(DisplayEvent, &mut App),
     {
-        let (subscription, activate) = self.display_observers.insert(
-            (),
-            Box::new(move |event, cx| {
-                callback(event, cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.display_observers.insert(Box::new(move |event, cx| {
+            callback(event, cx);
+            true
+        }))
     }
 
     /// Invokes a handler when the system wakes from sleep.
@@ -1224,15 +1205,10 @@ impl App {
     where
         F: 'static + FnMut(&mut App),
     {
-        let (subscription, activate) = self.system_wake_observers.insert(
-            (),
-            Box::new(move |cx| {
-                callback(cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.system_wake_observers.insert(Box::new(move |cx| {
+            callback(cx);
+            true
+        }))
     }
 
     /// Returns the appearance of the application's windows.
@@ -1392,7 +1368,7 @@ impl App {
 
     /// Restarts the application.
     pub fn restart(&mut self) {
-        self.restart_observers.clone().retain(&(), |observer| observer(self));
+        self.restart_observers.clone().retain(|observer| observer(self));
         self.platform.restart(self.restart_path.take(), std::mem::take(&mut self.restart_arguments))
     }
 
@@ -1784,7 +1760,7 @@ impl App {
 
     /// Register a callback to be invoked when a global of the given type is updated.
     pub fn observe_global<G: Global>(&mut self, mut f: impl FnMut(&mut Self) + 'static) -> Subscription {
-        let (subscription, activate) = self.global_observers.insert(
+        let (subscription, activate) = self.global_observers.insert_pending(
             TypeId::of::<G>(),
             Box::new(move |cx| {
                 f(cx);
@@ -1815,9 +1791,7 @@ impl App {
     }
 
     pub(crate) fn new_entity_observer(&self, key: TypeId, value: NewEntityListener) -> Subscription {
-        let (subscription, activate) = self.new_entity_observers.insert(key, value);
-        activate();
-        subscription
+        self.new_entity_observers.insert(key, value)
     }
 
     /// Arrange for the given function to be invoked whenever a view of the specified type is created.
@@ -1847,15 +1821,13 @@ impl App {
     where
         T: 'static,
     {
-        let (subscription, activate) = self.release_listeners.insert(
+        self.release_listeners.insert(
             handle.entity_id(),
             Box::new(move |entity, cx| {
                 let entity = entity.downcast_mut().expect("invalid entity type");
                 on_release(entity, cx)
             }),
-        );
-        activate();
-        subscription
+        )
     }
 
     /// Observe the release of a entity. The callback is invoked after the entity
@@ -1884,12 +1856,10 @@ impl App {
         mut f: impl FnMut(&KeystrokeEvent, &mut Window, &mut App) + 'static,
     ) -> Subscription {
         fn inner(
-            keystroke_observers: &SubscriberSet<(), KeystrokeObserver>,
+            keystroke_observers: &SingleSubscriberSet<KeystrokeObserver>,
             handler: KeystrokeObserver,
         ) -> Subscription {
-            let (subscription, activate) = keystroke_observers.insert((), handler);
-            activate();
-            subscription
+            keystroke_observers.insert(handler)
         }
 
         inner(
@@ -1910,12 +1880,10 @@ impl App {
         mut f: impl FnMut(&KeystrokeEvent, &mut Window, &mut App) + 'static,
     ) -> Subscription {
         fn inner(
-            keystroke_interceptors: &SubscriberSet<(), KeystrokeObserver>,
+            keystroke_interceptors: &SingleSubscriberSet<KeystrokeObserver>,
             handler: KeystrokeObserver,
         ) -> Subscription {
-            let (subscription, activate) = keystroke_interceptors.insert((), handler);
-            activate();
-            subscription
+            keystroke_interceptors.insert(handler)
         }
 
         inner(
@@ -2007,41 +1975,29 @@ impl App {
     where
         Fut: 'static + Future<Output = ()>,
     {
-        let (subscription, activate) = self.quit_observers.insert(
-            (),
-            (
-                Box::new(move |cx| {
-                    let future = on_quit(cx);
-                    future.boxed_local()
-                }),
-                std::panic::Location::caller(),
-            ),
-        );
-        activate();
-        subscription
+        self.quit_observers.insert((
+            Box::new(move |cx| {
+                let future = on_quit(cx);
+                future.boxed_local()
+            }),
+            std::panic::Location::caller(),
+        ))
     }
 
     /// Register a callback to be invoked when the application is about to restart.
     ///
     /// These callbacks are called before any `on_app_quit` callbacks.
     pub fn on_app_restart(&self, mut on_restart: impl 'static + FnMut(&mut App)) -> Subscription {
-        let (subscription, activate) = self.restart_observers.insert(
-            (),
-            Box::new(move |cx| {
-                on_restart(cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.restart_observers.insert(Box::new(move |cx| {
+            on_restart(cx);
+            true
+        }))
     }
 
     /// Register a callback to be invoked when a window is closed
     /// The window is no longer accessible at the point this callback is invoked.
     pub fn on_window_closed(&self, on_closed: impl FnMut(&mut App, WindowId) + 'static) -> Subscription {
-        let (subscription, activate) = self.window_closed_observers.insert((), Box::new(on_closed));
-        activate();
-        subscription
+        self.window_closed_observers.insert(Box::new(on_closed))
     }
 
     pub(crate) fn clear_pending_keystrokes(&mut self) {
@@ -2380,7 +2336,7 @@ impl App {
                         }
                     }
 
-                    cx.window_closed_observers.clone().retain(&(), |callback| {
+                    cx.window_closed_observers.clone().retain(|callback| {
                         callback(cx, window_id);
                         true
                     });

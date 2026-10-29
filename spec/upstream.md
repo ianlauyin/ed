@@ -51,7 +51,9 @@ from upstream in layout as well as in behaviour.
   #55294, #66157, #66181, #66206, #65728, #66127, #66119, #65972, #66167,
   #66173, #66016, #66132, #47296, #66066.
 - Ported after a second look: #66147 and #66152 (lock-free per-window text
-  layout cache, hash-based layout cache removed; the fork never called it).
+  layout cache, hash-based layout cache removed; the fork never called it),
+  #66156 (`SingleSubscriberSet` and the one-state subscriber lifecycle, the
+  unused `ctor` re-export dropped; its lint fixes were already in the fork).
 
 ### Declined
 
@@ -78,7 +80,7 @@ upstream change depends on them or the need changes.
   helpers / `PathStyle` normalization ahead of upstream's `join_path`),
   #65805 (`ScrollWheelEvent` → `ScrollEvent` rename, for iOS), #65970
   (web-aware `Modifiers::secondary`), #65821 (proptest bump), #65593 and
-  #65929 (version bumps), #66156 (gpui cleanups), #65942
+  #65929 (version bumps), #65942
   (drop `block`), #65994 (require macOS 12 / SDK 26), #66185 (tree-sitter
   bump and extension grammar imports), #66048 (`github_releases` crate),
   #65966 and #66209 (`PathStyle::join` / repository identity path

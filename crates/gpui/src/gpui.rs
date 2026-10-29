@@ -72,7 +72,6 @@ pub(crate) use arena::ArenaBox;
 pub use asset_cache::*;
 pub use assets::*;
 pub use color::*;
-pub use ctor::ctor;
 pub use element::*;
 pub use elements::*;
 pub use executor::*;

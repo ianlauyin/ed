@@ -23,7 +23,6 @@ async-task.workspace = true
 bitflags.workspace = true
 
 collections.workspace = true
-ctor.workspace = true
 derive_more = { workspace = true, features = ["add", "add_assign", "mul", "mul_assign", "not"] }
 etagere.workspace = true
 futures.workspace = true

@@ -129,11 +129,11 @@ use crate::ScaledPixels;
 use crate::Scene;
 use crate::Shadow;
 use crate::SharedString;
+use crate::SingleSubscriberSet;
 use crate::Size;
 use crate::StrikethroughStyle;
 use crate::Style;
 use crate::SubpixelSprite;
-use crate::SubscriberSet;
 use crate::Subscription;
 use crate::TabStopMap;
 use crate::TaffyLayoutEngine;
@@ -1171,7 +1171,7 @@ pub struct Window {
     pub(crate) removed: bool,
     pub(crate) platform_window: Box<dyn PlatformWindow>,
     pub(crate) display_id: Option<DisplayId>,
-    pub(crate) display_observers: SubscriberSet<(), AnyObserver>,
+    pub(crate) display_observers: SingleSubscriberSet<AnyObserver>,
     is_resizable: bool,
     is_minimizable: bool,
     sprite_atlas: Arc<dyn PlatformAtlas>,
@@ -1206,8 +1206,8 @@ pub struct Window {
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
     pub(crate) next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
     pub(crate) dirty_views: FxHashSet<EntityId>,
-    focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
-    pub(crate) focus_lost_listeners: SubscriberSet<(), AnyObserver>,
+    focus_listeners: SingleSubscriberSet<AnyWindowFocusListener>,
+    pub(crate) focus_lost_listeners: SingleSubscriberSet<AnyObserver>,
     focus_lost_path: SmallVec<[FocusId; 8]>,
     default_prevented: bool,
     mouse_position: Point<Pixels>,
@@ -1215,13 +1215,14 @@ pub struct Window {
     modifiers: Modifiers,
     capslock: Capslock,
     scale_factor: f32,
-    pub(crate) bounds_observers: SubscriberSet<(), AnyObserver>,
+    pub(crate) bounds_observers: SingleSubscriberSet<AnyObserver>,
     appearance: WindowAppearance,
-    pub(crate) appearance_observers: SubscriberSet<(), AnyObserver>,
-    pub(crate) button_layout_observers: SubscriberSet<(), AnyObserver>,
+    pub(crate) appearance_observers: SingleSubscriberSet<AnyObserver>,
+    pub(crate) button_layout_observers: SingleSubscriberSet<AnyObserver>,
     active: Rc<Cell<bool>>,
     visibility: WindowVisibility,
-    pub(crate) visibility_observers: SubscriberSet<(), Box<dyn FnMut(WindowVisibility, &mut Window, &mut App) -> bool>>,
+    pub(crate) visibility_observers:
+        SingleSubscriberSet<Box<dyn FnMut(WindowVisibility, &mut Window, &mut App) -> bool>>,
     hovered: Rc<Cell<bool>>,
     pub(crate) needs_present: Rc<Cell<bool>>,
     /// Tracks recent input event timestamps to determine if input is arriving at a high rate.
@@ -1233,7 +1234,7 @@ pub struct Window {
     long_press_timer: Option<Task<()>>,
     long_press_capture: Option<EntityId>,
     pub(crate) refreshing: bool,
-    pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
+    pub(crate) activation_observers: SingleSubscriberSet<AnyObserver>,
     pub(crate) focus: Option<FocusId>,
     focus_enabled: bool,
     /// Incremented every time focus moves. Used to invalidate a
@@ -1241,7 +1242,7 @@ pub struct Window {
     pub(crate) focus_generation: u64,
     pending_input: Option<PendingInput>,
     pending_modifier: ModifierState,
-    pub(crate) pending_input_observers: SubscriberSet<(), AnyObserver>,
+    pub(crate) pending_input_observers: SingleSubscriberSet<AnyObserver>,
     prompt: Option<RenderablePromptHandle>,
     pub(crate) client_inset: Option<Pixels>,
     /// The hitbox that has captured the pointer, if any.
@@ -1758,7 +1759,7 @@ impl Window {
                         window.active.set(active);
                         window.modifiers = window.platform_window.modifiers();
                         window.capslock = window.platform_window.capslock();
-                        window.activation_observers.clone().retain(&(), |callback| callback(window, cx));
+                        window.activation_observers.clone().retain(|callback| callback(window, cx));
 
                         window.bounds_changed(cx);
                         window.refresh();
@@ -1825,7 +1826,7 @@ impl Window {
             removed: false,
             platform_window,
             display_id,
-            display_observers: SubscriberSet::new(),
+            display_observers: SingleSubscriberSet::new(),
             is_resizable,
             is_minimizable,
             sprite_atlas,
@@ -1852,8 +1853,8 @@ impl Window {
             next_tooltip_id: TooltipId::default(),
             tooltip_bounds: None,
             dirty_views: FxHashSet::default(),
-            focus_listeners: SubscriberSet::new(),
-            focus_lost_listeners: SubscriberSet::new(),
+            focus_listeners: SingleSubscriberSet::new(),
+            focus_lost_listeners: SingleSubscriberSet::new(),
             focus_lost_path: SmallVec::new(),
             default_prevented: true,
             mouse_position,
@@ -1861,13 +1862,13 @@ impl Window {
             modifiers,
             capslock,
             scale_factor,
-            bounds_observers: SubscriberSet::new(),
+            bounds_observers: SingleSubscriberSet::new(),
             appearance,
-            appearance_observers: SubscriberSet::new(),
-            button_layout_observers: SubscriberSet::new(),
+            appearance_observers: SingleSubscriberSet::new(),
+            button_layout_observers: SingleSubscriberSet::new(),
             active,
             visibility,
-            visibility_observers: SubscriberSet::new(),
+            visibility_observers: SingleSubscriberSet::new(),
             hovered,
             needs_present,
             input_rate_tracker,
@@ -1879,13 +1880,13 @@ impl Window {
             long_press_timer: None,
             long_press_capture: None,
             refreshing: false,
-            activation_observers: SubscriberSet::new(),
+            activation_observers: SingleSubscriberSet::new(),
             focus: None,
             focus_enabled: true,
             focus_generation: 0,
             pending_input: None,
             pending_modifier: ModifierState::default(),
-            pending_input_observers: SubscriberSet::new(),
+            pending_input_observers: SingleSubscriberSet::new(),
             prompt: None,
             client_inset: None,
             image_cache_stack: Vec::new(),
@@ -1894,7 +1895,7 @@ impl Window {
     }
 
     pub(crate) fn new_focus_listener(&self, value: AnyWindowFocusListener) -> (Subscription, impl FnOnce() + use<>) {
-        self.focus_listeners.insert((), value)
+        self.focus_listeners.insert_pending(value)
     }
 }
 
@@ -1943,7 +1944,7 @@ impl Window {
         let visibility = self.platform_window.visibility();
         if self.visibility != visibility {
             self.visibility = visibility;
-            self.visibility_observers.clone().retain(&(), |callback| callback(visibility, self, cx));
+            self.visibility_observers.clone().retain(|callback| callback(visibility, self, cx));
         }
     }
 
@@ -1967,28 +1968,18 @@ impl Window {
         &self,
         mut callback: impl FnMut(WindowVisibility, &mut Window, &mut App) + 'static,
     ) -> Subscription {
-        let (subscription, activate) = self.visibility_observers.insert(
-            (),
-            Box::new(move |visibility, window, cx| {
-                callback(visibility, window, cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.visibility_observers.insert(Box::new(move |visibility, window, cx| {
+            callback(visibility, window, cx);
+            true
+        }))
     }
 
     /// Registers a callback to be invoked when the window appearance changes.
     pub fn observe_window_appearance(&self, mut callback: impl FnMut(&mut Window, &mut App) + 'static) -> Subscription {
-        let (subscription, activate) = self.appearance_observers.insert(
-            (),
-            Box::new(move |window, cx| {
-                callback(window, cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.appearance_observers.insert(Box::new(move |window, cx| {
+            callback(window, cx);
+            true
+        }))
     }
 
     /// Registers a callback to be invoked when the window button layout changes.
@@ -1996,15 +1987,10 @@ impl Window {
         &self,
         mut callback: impl FnMut(&mut Window, &mut App) + 'static,
     ) -> Subscription {
-        let (subscription, activate) = self.button_layout_observers.insert(
-            (),
-            Box::new(move |window, cx| {
-                callback(window, cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.button_layout_observers.insert(Box::new(move |window, cx| {
+            callback(window, cx);
+            true
+        }))
     }
 
     /// Replaces the root entity of the window with a new one.
@@ -2218,7 +2204,7 @@ impl Window {
         context_stack: Vec<KeyContext>,
         cx: &mut App,
     ) {
-        cx.keystroke_observers.clone().retain(&(), move |callback| {
+        cx.keystroke_observers.clone().retain(move |callback| {
             (callback)(
                 &KeystrokeEvent {
                     keystroke: keystroke.clone(),
@@ -2239,7 +2225,7 @@ impl Window {
         context_stack: Vec<KeyContext>,
         cx: &mut App,
     ) {
-        cx.keystroke_interceptors.clone().retain(&(), move |callback| {
+        cx.keystroke_interceptors.clone().retain(move |callback| {
             (callback)(
                 &KeystrokeEvent {
                     keystroke: keystroke.clone(),
@@ -2340,15 +2326,13 @@ impl Window {
     {
         let entity_id = entity.entity_id();
         let window_handle = self.handle;
-        let (subscription, activate) = cx.release_listeners.insert(
+        cx.release_listeners.insert(
             entity_id,
             Box::new(move |entity, cx| {
                 let entity = entity.downcast_mut().expect("invalid entity type");
                 let _ = window_handle.update(cx, |_, window, cx| on_release(entity, window, cx));
             }),
-        );
-        activate();
-        subscription
+        )
     }
 
     /// Creates an [`AsyncWindowContext`], which has a static lifetime and can be held across
@@ -2427,7 +2411,7 @@ impl Window {
 
         self.refresh();
 
-        self.bounds_observers.clone().retain(&(), |callback| callback(self, cx));
+        self.bounds_observers.clone().retain(|callback| callback(self, cx));
     }
 
     fn display_changed(handle: AnyWindowHandle, cx: &mut App) {
@@ -2455,7 +2439,7 @@ impl Window {
     }
 
     pub(crate) fn notify_display_observers(&mut self, cx: &mut App) {
-        self.display_observers.clone().retain(&(), |callback| callback(self, cx));
+        self.display_observers.clone().retain(|callback| callback(self, cx));
     }
 
     /// The time between refreshes of the display the window is on, as of the
@@ -2471,15 +2455,10 @@ impl Window {
     /// interval. [`Self::refresh_interval`] already returns the new value
     /// when the callback runs.
     pub fn observe_window_display(&self, mut callback: impl FnMut(&mut Window, &mut App) + 'static) -> Subscription {
-        let (subscription, activate) = self.display_observers.insert(
-            (),
-            Box::new(move |window, cx| {
-                callback(window, cx);
-                true
-            }),
-        );
-        activate();
-        subscription
+        self.display_observers.insert(Box::new(move |window, cx| {
+            callback(window, cx);
+            true
+        }))
     }
 
     /// Returns the bounds of the current window in the global coordinate space, which could span across multiple displays.
@@ -2507,11 +2486,11 @@ impl Window {
     pub(crate) fn appearance_changed(&mut self, cx: &mut App) {
         self.appearance = self.platform_window.appearance();
 
-        self.appearance_observers.clone().retain(&(), |callback| callback(self, cx));
+        self.appearance_observers.clone().retain(|callback| callback(self, cx));
     }
 
     pub(crate) fn button_layout_changed(&mut self, cx: &mut App) {
-        self.button_layout_observers.clone().retain(&(), |callback| callback(self, cx));
+        self.button_layout_observers.clone().retain(|callback| callback(self, cx));
     }
 
     /// Returns the appearance of the current window.
@@ -3035,7 +3014,7 @@ impl Window {
         if previous_focus_path != current_focus_path || previous_window_active != current_window_active {
             if !previous_focus_path.is_empty() && current_focus_path.is_empty() {
                 self.focus_lost_path.clone_from(&previous_focus_path);
-                self.focus_lost_listeners.clone().retain(&(), |listener| listener(self, cx));
+                self.focus_lost_listeners.clone().retain(|listener| listener(self, cx));
                 self.focus_lost_path = SmallVec::new();
                 // The focus-lost fallback (e.g. a workspace refocusing itself) may target
                 // an element that isn't part of the element tree, in which case scheduling
@@ -3048,7 +3027,7 @@ impl Window {
                 previous_focus_path: if previous_window_active { previous_focus_path } else { SmallVec::default() },
                 current_focus_path: if current_window_active { current_focus_path } else { SmallVec::default() },
             };
-            self.focus_listeners.clone().retain(&(), |listener| listener(&event, self, cx));
+            self.focus_listeners.clone().retain(|listener| listener(&event, self, cx));
         }
 
         debug_assert!(self.rendered_entity_stack.is_empty());
@@ -5303,7 +5282,7 @@ impl Window {
     }
 
     pub(crate) fn pending_input_changed(&mut self, cx: &mut App) {
-        self.pending_input_observers.clone().retain(&(), |callback| callback(self, cx));
+        self.pending_input_observers.clone().retain(|callback| callback(self, cx));
     }
 
     fn defer_pending_input_changed(&self, cx: &mut App) {
@@ -5598,7 +5577,7 @@ impl Window {
         f: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Subscription {
         let window_handle = self.handle;
-        let (subscription, activate) = cx.global_observers.insert(
+        let (subscription, activate) = cx.global_observers.insert_pending(
             TypeId::of::<G>(),
             Box::new(move |cx| window_handle.update(cx, |_, window, cx| f(window, cx)).is_ok()),
         );

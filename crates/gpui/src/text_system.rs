@@ -6,7 +6,7 @@ mod line_wrapper;
 
 use core::fmt;
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::cmp;
 use std::collections::VecDeque;
 use std::fmt::Debug;
@@ -14,7 +14,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
@@ -545,7 +544,7 @@ impl TextSystem {
 #[derive(Deref)]
 pub struct WindowTextSystem {
     line_layout_cache: LineLayoutCache,
-    font_runs_buffer: RefCell<Vec<FontRun>>,
+    font_runs_buffer: Cell<Vec<FontRun>>,
     #[deref]
     text_system: Arc<TextSystem>,
 }
@@ -558,7 +557,7 @@ impl WindowTextSystem {
                 text_system.platform_text_system.clone(),
                 text_system.font_generation.clone(),
             ),
-            font_runs_buffer: RefCell::default(),
+            font_runs_buffer: Cell::default(),
             text_system,
         }
     }
@@ -627,7 +626,7 @@ impl WindowTextSystem {
         line_clamp: Option<usize>,
     ) -> Result<SmallVec<[WrappedLine; 1]>> {
         let mut runs = runs.iter().filter(|run| run.len > 0).cloned().peekable();
-        let mut font_runs = mem::take(&mut *self.font_runs_buffer.borrow_mut());
+        let mut font_runs = self.font_runs_buffer.take();
 
         let mut lines = SmallVec::new();
         let max_wrap_lines = line_clamp;
@@ -722,7 +721,7 @@ impl WindowTextSystem {
             process_line(text, 0, end);
         }
 
-        *self.font_runs_buffer.borrow_mut() = font_runs;
+        self.font_runs_buffer.set(font_runs);
 
         Ok(lines)
     }
@@ -743,7 +742,7 @@ impl WindowTextSystem {
         force_width: Option<Pixels>,
     ) -> Arc<LineLayout> {
         let mut last_run = None::<&TextRun>;
-        let mut font_runs = mem::take(&mut *self.font_runs_buffer.borrow_mut());
+        let mut font_runs = self.font_runs_buffer.take();
         font_runs.clear();
 
         for run in runs {
@@ -773,7 +772,7 @@ impl WindowTextSystem {
 
         let layout = self.line_layout_cache.layout_line(SharedString::new(text), font_size, &font_runs, force_width);
 
-        *self.font_runs_buffer.borrow_mut() = font_runs;
+        self.font_runs_buffer.set(font_runs);
 
         layout
     }
