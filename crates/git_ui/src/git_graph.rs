@@ -2540,7 +2540,7 @@ impl GitGraph {
         let ref_names = commit_entry.data.ref_names.clone();
 
         let head_branch_name: Option<SharedString> =
-            repository.read(cx).snapshot().branch.as_ref().map(|branch| SharedString::from(branch.name().to_string()));
+            repository.read(cx).branch.as_ref().map(|branch| SharedString::from(branch.name().to_string()));
 
         let accent_colors = cx.theme().accents();
         let accent_color = accent_colors
@@ -3170,7 +3170,7 @@ impl GitGraph {
             first_visible_row.min(loaded_commit_count.saturating_sub(1))..last_visible_row.min(loaded_commit_count);
 
         let head_branch_name: Option<SharedString> = self.get_repository(cx).and_then(|repo| {
-            repo.read(cx).snapshot().branch.as_ref().map(|branch| SharedString::from(branch.name().to_string()))
+            repo.read(cx).branch.as_ref().map(|branch| SharedString::from(branch.name().to_string()))
         });
 
         let theme = cx.theme();
