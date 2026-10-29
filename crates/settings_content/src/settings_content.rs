@@ -71,22 +71,6 @@ pub enum HideMouseMode {
     OnTypingAndAction,
 }
 
-/// Determines whether to reduce non-essential motion in the UI, such as
-/// loading spinners and pulsating labels, by rendering them in a static state.
-///
-/// Default: off
-#[derive(
-    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, strum::VariantArray, strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ReduceMotionMode {
-    /// Always reduce motion
-    On,
-    /// Never reduce motion
-    #[default]
-    Off,
-}
-
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct SettingsContent {
     #[serde(flatten)]
@@ -148,12 +132,6 @@ pub struct SettingsContent {
     pub outline_panel: Option<OutlinePanelSettingsContent>,
 
     pub project_panel: Option<ProjectPanelSettingsContent>,
-
-    /// Whether to reduce non-essential motion in the UI, such as loading
-    /// spinners and pulsating labels, by rendering them in a static state.
-    ///
-    /// Default: off
-    pub reduce_motion: Option<ReduceMotionMode>,
 
     /// Configuration for session-related features
     pub session: Option<SessionSettingsContent>,

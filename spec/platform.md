@@ -78,6 +78,9 @@ remote detection, command execution, and proxy startup are removed.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.
 - No bundled fonts: the UI defaults to the macOS system font (`.SystemUIFont`),
   the minimap inherits the buffer font, and SVG/Mermaid text uses system fonts.
+- No reduce-motion mode: GPUI has no `reduce_motion` flag and there is no
+  `reduce_motion` setting; animations (spinners, GIFs, scrollbar fades,
+  notification fades, cursor animation, smooth scrolling) always run.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.
 - GPUI core has no direct `libc` dependency; native OS integration belongs in

@@ -54,6 +54,17 @@
 - No sticky scroll: enclosing outline items are never pinned to the top of
   the editor (removed with its `sticky_scroll` setting). Multibuffer sticky
   buffer headers are a separate feature and remain.
+- Smooth scrolling is always on, with no setting. Jumps (page/half-page
+  scrolls and autoscroll to the cursor: search, go-to-definition, `G`) move
+  the scroll anchor at once; only drawing trails it, easing out over 120ms.
+  Everything except painting (selections, events, saved position, LSP
+  ranges) sees the destination immediately. Jumps of one row snap, so typing
+  or stepping past the viewport edge never lags; jumps longer than a screen
+  skip ahead and animate only the last screen. A new jump mid-animation starts
+  from the drawn position. Both sides of a split diff animate together. Mouse
+  and trackpad scrolling are not animated.
+- Cursor animation (neovide-style trail) runs 1.5× faster than the
+  vscode-neovide-cursor timings it is adapted from (~83ms for a long move).
 - No mouse-wheel zoom: Cmd/Ctrl+scroll scrolls like a plain scroll and never
   changes the buffer font size (removed with its `mouse_wheel_zoom` setting).
 - The gutter has no settings: line numbers (with space reserved for 4

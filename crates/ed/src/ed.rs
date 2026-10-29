@@ -202,7 +202,6 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
 pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     init_cursor_hide_mode(cx);
     init_app_appearance(cx);
-    init_reduce_motion(cx);
 
     cx.observe_new(|_: &mut MultiWorkspace, window, cx| {
         let Some(window) = window else {
@@ -933,26 +932,6 @@ fn init_app_appearance(cx: &mut App) {
             }),
         };
         cx.set_window_appearance(appearance);
-    };
-    apply(cx);
-    cx.observe_global::<SettingsStore>(apply).detach();
-}
-
-#[derive(Copy, Clone, Debug)]
-struct ReduceMotionSetting(settings::ReduceMotionMode);
-
-settings::register_setting!(ReduceMotionSetting);
-
-impl Settings for ReduceMotionSetting {
-    fn from_settings(content: &settings::SettingsContent) -> Self {
-        Self(content.reduce_motion.unwrap_or_default())
-    }
-}
-
-fn init_reduce_motion(cx: &mut App) {
-    let apply = |cx: &mut App| {
-        let reduce_motion = ReduceMotionSetting::get_global(cx).0 == settings::ReduceMotionMode::On;
-        cx.set_reduce_motion(reduce_motion);
     };
     apply(cx);
     cx.observe_global::<SettingsStore>(apply).detach();

@@ -1028,7 +1028,7 @@ impl EditorElement {
 
             let show_local_cursors = editor.show_local_cursors(window, cx);
             let animation_settings = EditorSettings::get_global(cx).cursor_animation;
-            let animation_enabled = animation_settings.enabled && !cx.reduce_motion();
+            let animation_enabled = animation_settings.enabled;
             let animation_context = animation_enabled.then(|| {
                 (
                     CursorViewport::new(
@@ -6082,6 +6082,11 @@ impl Element for EditorElement {
                         });
 
                     let mut scroll_position = snapshot.scroll_position();
+                    let smooth_scroll_offset = self.editor.read(cx).scroll_manager.smooth_scroll_offset(cx);
+                    if smooth_scroll_offset != 0. {
+                        scroll_position.y = (scroll_position.y - smooth_scroll_offset).clamp(0., max_scroll_top);
+                        window.request_animation_frame();
+                    }
                     if !line_height.is_zero() {
                         scroll_position.y =
                             window.pixel_snap_f64(scroll_position.y * f64::from(line_height)) / f64::from(line_height);

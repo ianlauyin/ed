@@ -5,6 +5,7 @@ pub(crate) mod scroll_amount;
 use core::fmt::Debug;
 use std::cmp::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 pub use autoscroll::Autoscroll;
 pub use autoscroll::AutoscrollStrategy;
@@ -51,6 +52,58 @@ use crate::hover_popover::hide_hover;
 use crate::persistence::EditorDb;
 
 const SCROLLBAR_SHOW_INTERVAL: Duration = Duration::from_secs(1);
+const SMOOTH_SCROLL_DURATION: Duration = Duration::from_millis(120);
+/// Jumps of at most this many rows (e.g. the cursor stepping past the viewport edge) snap.
+const SMOOTH_SCROLL_MIN_JUMP_ROWS: ScrollOffset = 1.;
+/// Longer jumps skip ahead and only animate the last this-many screens.
+const SMOOTH_SCROLL_MAX_SCREENS: ScrollOffset = 1.;
+const SMOOTH_SCROLL_EPSILON: ScrollOffset = 0.01;
+
+/// A jump that is drawn as an animation. The scroll anchor moves to the target at once;
+/// only drawing trails it by `delta` display rows, decaying to zero.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SmoothScroll {
+    delta: ScrollOffset,
+    started_at: Instant,
+}
+
+impl SmoothScroll {
+    /// Rows the viewport is still drawn above its logical position, or `None` once settled.
+    fn remaining(&self, now: Instant) -> Option<ScrollOffset> {
+        let t = now.saturating_duration_since(self.started_at).as_secs_f64() / SMOOTH_SCROLL_DURATION.as_secs_f64();
+        if t >= 1. {
+            return None;
+        }
+        // Ease out cubic.
+        let remaining = self.delta * (1. - t).powi(3);
+        (remaining.abs() > SMOOTH_SCROLL_EPSILON).then_some(remaining)
+    }
+
+    fn offset(smooth_scroll: Option<SmoothScroll>, now: Instant) -> ScrollOffset {
+        smooth_scroll.and_then(|smooth_scroll| smooth_scroll.remaining(now)).unwrap_or(0.)
+    }
+
+    /// The animation after the logical scroll top jumped from `from_top` to `to_top`. It starts
+    /// where the viewport is currently drawn, so retargeting mid-flight doesn't snap.
+    fn for_jump(
+        in_flight: Option<SmoothScroll>,
+        from_top: ScrollOffset,
+        to_top: ScrollOffset,
+        visible_line_count: Option<ScrollOffset>,
+        now: Instant,
+    ) -> Option<SmoothScroll> {
+        if (to_top - from_top).abs() <= SMOOTH_SCROLL_MIN_JUMP_ROWS {
+            return in_flight;
+        }
+        let drawn_top = from_top - SmoothScroll::offset(in_flight, now);
+        let mut delta = to_top - drawn_top;
+        if let Some(visible_line_count) = visible_line_count {
+            let max_distance = SMOOTH_SCROLL_MAX_SCREENS * visible_line_count;
+            delta = delta.clamp(-max_distance, max_distance);
+        }
+        (delta.abs() > SMOOTH_SCROLL_EPSILON).then_some(SmoothScroll { delta, started_at: now })
+    }
+}
 
 pub struct WasScrolled(pub(crate) bool);
 
@@ -92,6 +145,8 @@ impl ScrollAnchor {
 pub struct SharedScrollAnchor {
     pub scroll_anchor: ScrollAnchor,
     pub display_map_id: Option<EntityId>,
+    /// Shared so both sides of a split diff animate together.
+    pub(crate) smooth_scroll: Option<SmoothScroll>,
 }
 
 impl SharedScrollAnchor {
@@ -185,7 +240,11 @@ pub struct ScrollManager {
 
 impl ScrollManager {
     pub fn new(cx: &mut Context<Editor>) -> Self {
-        let anchor = cx.new(|_| SharedScrollAnchor { scroll_anchor: ScrollAnchor::new(), display_map_id: None });
+        let anchor = cx.new(|_| SharedScrollAnchor {
+            scroll_anchor: ScrollAnchor::new(),
+            display_map_id: None,
+            smooth_scroll: None,
+        });
         ScrollManager {
             vertical_scroll_margin: EditorSettings::get_global(cx).vertical_scroll_margin,
             anchor,
@@ -292,7 +351,11 @@ impl ScrollManager {
 
     pub fn unshare_scroll_anchor(&mut self, snapshot: &DisplaySnapshot, cx: &mut Context<Editor>) {
         let scroll_anchor = self.native_anchor(snapshot, cx);
-        self.anchor = cx.new(|_| SharedScrollAnchor { scroll_anchor, display_map_id: Some(snapshot.display_map_id) });
+        self.anchor = cx.new(|_| SharedScrollAnchor {
+            scroll_anchor,
+            display_map_id: Some(snapshot.display_map_id),
+            smooth_scroll: None,
+        });
     }
 
     pub fn filter_scroll_delta(&mut self, delta: &mut gpui::Point<Pixels>, touch_phase: TouchPhase) {
@@ -409,6 +472,22 @@ impl ScrollManager {
         cx.notify();
 
         WasScrolled(true)
+    }
+
+    /// Draws the jump of the logical scroll top from `from_top` to where it is now as an animation.
+    pub(crate) fn animate_jump(&self, from_top: ScrollOffset, display_map: &DisplaySnapshot, cx: &mut Context<Editor>) {
+        let to_top = self.anchor.read(cx).scroll_position(display_map).y;
+        let now = cx.background_executor().now();
+        let visible_line_count = self.visible_line_count;
+        self.anchor.update(cx, |shared, _| {
+            shared.smooth_scroll =
+                SmoothScroll::for_jump(shared.smooth_scroll, from_top, to_top, visible_line_count, now);
+        });
+    }
+
+    /// Rows the viewport should be drawn above its logical scroll position while a jump animates.
+    pub(crate) fn smooth_scroll_offset(&self, cx: &App) -> ScrollOffset {
+        SmoothScroll::offset(self.anchor.read(cx).smooth_scroll, cx.background_executor().now())
     }
 
     pub fn show_scrollbars(&mut self, window: &mut Window, cx: &mut Context<Editor>) {
@@ -716,7 +795,10 @@ impl Editor {
         }
         let new_position =
             current_position + point(amount.columns(visible_column_count), amount.lines(visible_line_count));
-        self.set_scroll_position(new_position, window, cx);
+        if self.set_scroll_position(new_position, window, cx).0 {
+            let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
+            self.scroll_manager.animate_jump(current_position.y, &display_map, cx);
+        }
     }
 
     pub fn scroll_screen_with_cursor_margin(
@@ -808,5 +890,74 @@ impl Editor {
             let scroll_anchor = ScrollAnchor { offset: gpui::Point::new(x, y), anchor: top_anchor };
             self.set_scroll_anchor(scroll_anchor, window, cx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smooth_scroll_eases_out_from_the_full_distance_to_nothing() {
+        let started_at = Instant::now();
+        let smooth_scroll = SmoothScroll { delta: 20., started_at };
+
+        assert_eq!(smooth_scroll.remaining(started_at), Some(20.));
+        let quarter = smooth_scroll.remaining(started_at + SMOOTH_SCROLL_DURATION / 4).unwrap();
+        let half = smooth_scroll.remaining(started_at + SMOOTH_SCROLL_DURATION / 2).unwrap();
+        assert!(20. > quarter && quarter > half && half > 0.);
+        assert!(half < 10., "expected an ease out, got {half} left halfway");
+        assert_eq!(smooth_scroll.remaining(started_at + SMOOTH_SCROLL_DURATION), None);
+    }
+
+    #[test]
+    fn smooth_scroll_settles_once_the_remaining_distance_is_imperceptible() {
+        let started_at = Instant::now();
+        let smooth_scroll = SmoothScroll { delta: SMOOTH_SCROLL_EPSILON / 2., started_at };
+        assert_eq!(smooth_scroll.remaining(started_at), None);
+    }
+
+    #[test]
+    fn smooth_scroll_offset_is_zero_without_an_animation() {
+        let now = Instant::now();
+        assert_eq!(SmoothScroll::offset(None, now), 0.);
+        let settled = SmoothScroll { delta: 20., started_at: now };
+        assert_eq!(SmoothScroll::offset(Some(settled), now + SMOOTH_SCROLL_DURATION), 0.);
+        assert_eq!(SmoothScroll::offset(Some(settled), now), 20.);
+    }
+
+    #[test]
+    fn smooth_scroll_animates_a_jump_from_where_it_started() {
+        let now = Instant::now();
+        let smooth_scroll = SmoothScroll::for_jump(None, 10., 15., Some(10.), now);
+        assert_eq!(smooth_scroll, Some(SmoothScroll { delta: 5., started_at: now }));
+        let smooth_scroll = SmoothScroll::for_jump(None, 15., 10., Some(10.), now);
+        assert_eq!(smooth_scroll, Some(SmoothScroll { delta: -5., started_at: now }));
+    }
+
+    #[test]
+    fn smooth_scroll_snaps_single_row_jumps() {
+        let now = Instant::now();
+        assert_eq!(SmoothScroll::for_jump(None, 10., 11., Some(10.), now), None);
+        let in_flight = Some(SmoothScroll { delta: 8., started_at: now });
+        assert_eq!(SmoothScroll::for_jump(in_flight, 10., 9., Some(10.), now), in_flight);
+    }
+
+    #[test]
+    fn smooth_scroll_only_animates_the_last_screen_of_a_long_jump() {
+        let now = Instant::now();
+        assert_eq!(SmoothScroll::for_jump(None, 0., 150., Some(10.), now).unwrap().delta, 10.);
+        assert_eq!(SmoothScroll::for_jump(None, 150., 0., Some(10.), now).unwrap().delta, -10.);
+        assert_eq!(SmoothScroll::for_jump(None, 0., 150., None, now).unwrap().delta, 150.);
+    }
+
+    #[test]
+    fn smooth_scroll_retargets_from_where_the_viewport_is_drawn() {
+        let started_at = Instant::now();
+        let in_flight = Some(SmoothScroll { delta: 20., started_at });
+        let now = started_at + SMOOTH_SCROLL_DURATION / 2;
+        // Halfway through, 20 * 0.5^3 = 2.5 rows remain, so the viewport is drawn at 97.5.
+        let smooth_scroll = SmoothScroll::for_jump(in_flight, 100., 105., Some(10.), now).unwrap();
+        assert_eq!(smooth_scroll, SmoothScroll { delta: 7.5, started_at: now });
     }
 }

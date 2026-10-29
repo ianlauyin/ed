@@ -223,6 +223,7 @@ impl Editor {
             target_bottom = target_top + 1.;
         }
 
+        let jump_from_top = scroll_position.y;
         let was_autoscrolled = match strategy {
             AutoscrollStrategy::Fit | AutoscrollStrategy::Newest => {
                 let (margin_top, margin_bottom) =
@@ -275,6 +276,9 @@ impl Editor {
             }
         };
 
+        if was_autoscrolled.0 {
+            self.scroll_manager.animate_jump(jump_from_top, &display_map, cx);
+        }
         self.scroll_manager.last_autoscroll =
             Some((self.scroll_manager.offset(cx), target_top, target_bottom, strategy));
 

@@ -2356,12 +2356,6 @@ impl Window {
     /// It will cause the window to redraw on the next frame, even if no other changes have occurred.
     ///
     /// If called from within a view, it will notify that view on the next frame. Otherwise, it will refresh the entire window.
-    ///
-    /// Callers driving purely decorative animations (spinners, pulses, and the
-    /// like) should prefer [`AnimationExt::with_animation`](crate::AnimationExt::with_animation),
-    /// which automatically respects [`App::reduce_motion`]. When using this
-    /// method directly for decorative motion, check [`App::reduce_motion`]
-    /// and skip the frame request when it is set.
     pub fn request_animation_frame(&self) {
         let entity = self.current_view();
         self.on_next_frame(move |_, cx| cx.notify(entity));

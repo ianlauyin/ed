@@ -112,7 +112,6 @@ use settings_content::ProjectPanelSortOrder;
 use settings_content::ProjectPanelTitleTooltipDelay;
 use settings_content::ProjectSettingsContent;
 use settings_content::ProjectTerminalSettingsContent;
-use settings_content::ReduceMotionMode;
 use settings_content::RemoteSettingsContent;
 use settings_content::RestoreOnStartupBehavior;
 use settings_content::RewrapBehavior;
@@ -326,7 +325,6 @@ pub fn settings() -> SettingsContent {
             diagnostic_badges: Some(true),
             git_status_indicator: Some(false),
         }),
-        reduce_motion: Some(ReduceMotionMode::Off),
         session: Some(SessionSettingsContent { restore_unsaved_buffers: Some(true), trust_all_worktrees: Some(false) }),
         terminal: terminal_settings(),
         title_bar: Some(TitleBarSettingsContent {
