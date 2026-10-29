@@ -953,7 +953,12 @@ impl CompletionsMenu {
                                 // in case label changes during completion/resolve
                                 label_match.string == completion.label.filter_text()
                             })
-                            .or_else(|| (completion.filter_text() == completion.label.filter_text()).then_some(mat))
+                            .or_else(|| {
+                                // Some servers change labels during resolve despite our advertised capabilities.
+                                // `mat` offsets index the candidate text, so reuse them only if it equals the
+                                // displayed label's filter slice.
+                                (mat.string == completion.label.filter_text()).then_some(mat)
+                            })
                             .into_iter()
                             .flat_map(|string_match| {
                                 string_match.ranges().map(|range| {
