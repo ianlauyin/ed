@@ -63,6 +63,7 @@ use gpui::deferred;
 use gpui::point;
 use gpui::prelude::*;
 use gpui::px;
+use gpui::relative;
 use gpui::uniform_list;
 use language::line_diff;
 use markdown::Markdown;
@@ -1338,9 +1339,7 @@ impl GitGraph {
             )
             .width;
 
-        label_width
-            .clamp(REF_LABEL_GUTTER_MIN_WIDTH, REF_LABEL_GUTTER_MAX_WIDTH)
-            .min(self.graph_viewport_width(window, cx) / 2.)
+        label_width.clamp(REF_LABEL_GUTTER_MIN_WIDTH, REF_LABEL_GUTTER_MAX_WIDTH)
     }
 
     /// Returns the column fractions in display order:
@@ -1379,16 +1378,6 @@ impl GitGraph {
         };
 
         ColumnWidthConfig::explicit(widths)
-    }
-
-    fn graph_viewport_width(&self, window: &Window, cx: &App) -> Pixels {
-        let container = self.column_widths.read(cx).cached_container_width();
-        let graph_fraction = self.preview_column_fractions(window, cx)[0];
-        if container > px(0.) && graph_fraction > 0.0 {
-            container * graph_fraction
-        } else {
-            self.graph_canvas_content_width()
-        }
     }
 
     pub fn new(
@@ -2908,11 +2897,7 @@ impl GitGraph {
         let first_visible_row = (scroll_offset_y / row_height).floor() as usize;
         let vertical_scroll_offset = scroll_offset_y - (first_visible_row as f32 * row_height);
 
-        // The graph column is split into a fixed-width ref-label gutter and the
-        // canvas; the canvas only occupies the space to the right of the gutter.
-        let canvas_viewport_width =
-            (self.graph_viewport_width(window, cx) - self.ref_label_gutter_width(window, cx)).max(px(0.));
-        let graph_width = self.graph_canvas_content_width().max(canvas_viewport_width);
+        let graph_content_width = self.graph_canvas_content_width();
         let last_visible_row = first_visible_row + visible_row_count + 1;
 
         let viewport_range =
@@ -3145,7 +3130,8 @@ impl GitGraph {
                 })
             },
         )
-        .w(graph_width)
+        .w_full()
+        .min_w(graph_content_width)
         .h_full()
     }
 
@@ -3155,7 +3141,6 @@ impl GitGraph {
     /// by `render_graph_canvas` so the labels stay in sync as the graph scrolls.
     fn render_graph_ref_labels(&self, window: &Window, cx: &Context<GitGraph>) -> impl IntoElement {
         let row_height = Self::row_height(window, cx);
-        let gutter_width = self.ref_label_gutter_width(window, cx);
         let visible_row_count = self.visible_row_count(window, cx);
         let table_state = self.table_interaction_state.read(cx);
         let viewport_height = table_state
@@ -3209,8 +3194,7 @@ impl GitGraph {
             let top = visible_row_idx as f32 * row_height - vertical_scroll_offset;
             let bg_color = if is_selected { selected_bg } else { hover_bg };
 
-            elements
-                .push(div().absolute().top(top).left_0().w(gutter_width).h(row_height).bg(bg_color).into_any_element());
+            elements.push(div().absolute().top(top).left_0().w_full().h(row_height).bg(bg_color).into_any_element());
         }
 
         for absolute_idx in viewport_range {
@@ -3251,7 +3235,7 @@ impl GitGraph {
                     .absolute()
                     .top(top)
                     .left_0()
-                    .w(gutter_width)
+                    .w_full()
                     .h(row_height)
                     .child(
                         h_flex()
@@ -3747,6 +3731,7 @@ impl Render for GitGraph {
                                                                     .relative()
                                                                     .h_full()
                                                                     .w(gutter_width)
+                                                                    .max_w(relative(0.5))
                                                                     .flex_shrink_0()
                                                                     .overflow_hidden()
                                                                     .child(self.render_graph_ref_labels(window, cx)),
