@@ -2345,6 +2345,21 @@ impl Pane {
         &self.toolbar
     }
 
+    pub fn remove_navigation_history_paths(&mut self, project_paths: &HashSet<ProjectPath>, cx: &mut Context<Self>) {
+        let open_item_ids = self.items.iter().map(|item| item.item_id()).collect::<HashSet<_>>();
+        let mut item_ids = HashSet::default();
+        self.nav_history.for_each_entry(cx, &mut |entry, (path, _)| {
+            if project_paths.contains(&path) && !open_item_ids.contains(&entry.item.id()) {
+                item_ids.insert(entry.item.id());
+            }
+        });
+        if item_ids.is_empty() {
+            return;
+        }
+        self.nav_history.remove_items(&item_ids);
+        self.history_updated(cx);
+    }
+
     pub fn handle_deleted_project_item(
         &mut self,
         entry_id: ProjectEntryId,
@@ -4295,10 +4310,15 @@ impl NavHistory {
     pub fn remove_item(&mut self, item_id: EntityId) {
         let mut state = self.0.lock();
         state.paths_by_item.remove(&item_id);
-        state.backward_stack.retain(|entry| entry.item.id() != item_id);
-        state.forward_stack.retain(|entry| entry.item.id() != item_id);
-        state.closed_stack.retain(|entry| entry.item.id() != item_id);
-        state.tag_stack.retain(|entry| entry.origin.item.id() != item_id && entry.target.item.id() != item_id);
+        state.retain_entries(|id| id != item_id);
+    }
+
+    pub fn remove_items(&mut self, item_ids: &HashSet<EntityId>) {
+        let mut state = self.0.lock();
+        for item_id in item_ids {
+            state.paths_by_item.remove(item_id);
+        }
+        state.retain_entries(|id| !item_ids.contains(&id));
     }
 
     pub fn rename_item(&mut self, item_id: EntityId, project_path: ProjectPath, abs_path: Option<PathBuf>) {
@@ -4351,6 +4371,23 @@ impl NavHistoryState {
                 pane.update(cx, |pane, cx| pane.history_updated(cx));
             });
         }
+    }
+
+    fn retain_entries(&mut self, retain: impl Fn(EntityId) -> bool) {
+        self.backward_stack.retain(|entry| retain(entry.item.id()));
+        self.forward_stack.retain(|entry| retain(entry.item.id()));
+        self.closed_stack.retain(|entry| retain(entry.item.id()));
+        // Keep the tag stack position pointing at the same entry.
+        let old_position = self.tag_stack_pos;
+        let mut index = 0;
+        self.tag_stack.retain(|entry| {
+            let keep = retain(entry.origin.item.id()) && retain(entry.target.item.id());
+            if index < old_position && !keep {
+                self.tag_stack_pos -= 1;
+            }
+            index += 1;
+            keep
+        });
     }
 }
 

@@ -181,10 +181,12 @@ pub use persistence::model::SerializedWorkspaceLocation;
 pub use persistence::model::SessionWorkspace;
 pub use persistence::read_serialized_multi_workspaces;
 use project::DirectoryLister;
+use project::PathChange;
 use project::Project;
 use project::ProjectEntryId;
 use project::ProjectPath;
 use project::ResolvedPath;
+use project::UpdatedEntriesSet;
 use project::Worktree;
 use project::WorktreeId;
 use project::WorktreeSettings;
@@ -1412,7 +1414,8 @@ impl Workspace {
                         this.update_history(cx);
                     }
                 }
-                project::Event::WorktreeUpdatedEntries(..) => {
+                project::Event::WorktreeUpdatedEntries(worktree_id, changes) => {
+                    this.remove_deleted_navigation_history(*worktree_id, changes, cx);
                     this.update_window_title(window, cx);
                     this.serialize_workspace(window, cx);
                 }
@@ -2273,6 +2276,7 @@ impl Workspace {
             }
         }
 
+        recent_history.retain(|(path, _)| !self.is_deleted_history_path(path, cx));
         recent_history.into_iter()
     }
 
@@ -2287,6 +2291,83 @@ impl Workspace {
         self.persisted_recent_navigation_history.clear();
         self.last_active_project_path = None;
         self.serialize_workspace(window, cx);
+    }
+
+    fn is_deleted_history_path(&self, path: &ProjectPath, cx: &App) -> bool {
+        let project = self.project.read(cx);
+        project
+            .get_open_buffer(path, cx)
+            .is_some_and(|buffer| buffer.read(cx).file().is_some_and(|file| file.disk_state().is_deleted()))
+            && project
+                .worktree_for_id(path.worktree_id, cx)
+                .is_some_and(|worktree| Workspace::history_path_is_removed(worktree.read(cx), &path.path, cx))
+    }
+
+    /// Whether `path` is gone from the worktree, as opposed to excluded or inside a directory that isn't loaded.
+    fn history_path_is_removed(worktree: &Worktree, path: &RelPath, cx: &App) -> bool {
+        let settings =
+            WorktreeSettings::get(Some(SettingsLocation { worktree_id: worktree.id(), path: RelPath::empty() }), cx);
+        worktree.entry_for_path(path).is_none()
+            && !settings.is_path_excluded(path)
+            && !path
+                .ancestors()
+                .skip(1)
+                .find_map(|ancestor| worktree.entry_for_path(ancestor))
+                .is_some_and(|entry| entry.kind.is_unloaded())
+    }
+
+    fn remove_deleted_navigation_history(
+        &mut self,
+        worktree_id: WorktreeId,
+        changes: &UpdatedEntriesSet,
+        cx: &mut Context<Self>,
+    ) {
+        let project = self.project.read(cx);
+        let Some(worktree) = project.worktree_for_id(worktree_id, cx) else {
+            return;
+        };
+        let worktree = worktree.read(cx);
+        let removed_paths = changes
+            .iter()
+            .filter(|(path, entry_id, change)| {
+                *change == PathChange::Removed
+                    && worktree.entry_for_id(*entry_id).is_none()
+                    && Workspace::history_path_is_removed(worktree, path, cx)
+            })
+            .map(|(path, _, _)| path.clone())
+            .collect::<HashSet<_>>();
+        if removed_paths.is_empty() {
+            return;
+        }
+
+        let (paths, absolute_paths): (HashSet<_>, HashSet<_>) = self
+            .recent_navigation_history_iter(cx)
+            .chain(self.persisted_recent_navigation_history.iter().filter_map(|absolute_path| {
+                let path = project.project_path_for_absolute_path(absolute_path, cx)?;
+                Some((path, Some(absolute_path.clone())))
+            }))
+            .filter(|(path, _)| {
+                path.worktree_id == worktree_id
+                    && path.path.ancestors().any(|ancestor| removed_paths.contains(ancestor))
+                    && worktree.entry_for_path(&path.path).is_none()
+            })
+            .filter_map(|(path, _)| {
+                let absolute_path = project.absolute_path(&path, cx)?;
+                Some((path, absolute_path))
+            })
+            .unzip();
+
+        if paths.is_empty() {
+            return;
+        }
+        self.persisted_recent_navigation_history.retain(|path| !absolute_paths.contains(path));
+        for pane in &self.panes {
+            pane.update(cx, |pane, cx| pane.remove_navigation_history_paths(&paths, cx));
+        }
+        if self.last_active_project_path.as_ref().is_some_and(|path| paths.contains(path)) {
+            self.last_active_project_path = None;
+        }
+        cx.notify();
     }
 
     fn rename_persisted_navigation_history_paths(&mut self, old_path: &Path, new_path: &Path) -> bool {
@@ -4649,6 +4730,9 @@ impl Workspace {
                 serialize_workspace = false;
             }
             pane::Event::RemovedItem { item } => {
+                if item.project_path(cx).is_some_and(|path| self.is_deleted_history_path(&path, cx)) {
+                    pane.update(cx, |pane, _| pane.nav_history_mut().remove_item(item.item_id()));
+                }
                 cx.emit(Event::ActiveItemChanged);
                 self.update_window_edited(window, cx);
                 if let hash_map::Entry::Occupied(entry) = self.panes_by_item.entry(item.item_id())
@@ -4881,7 +4965,9 @@ impl Workspace {
         if active_project_path_changed {
             match active_entry.as_ref() {
                 None => self.last_active_project_path = None,
-                Some(path) if self.remember_navigation_history_path(path, cx) => {
+                Some(path)
+                    if !self.is_deleted_history_path(path, cx) && self.remember_navigation_history_path(path, cx) =>
+                {
                     self.serialize_workspace(window, cx);
                 }
                 Some(_) => {}
