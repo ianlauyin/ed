@@ -4992,7 +4992,6 @@ impl<'a> BufferChunks<'a> {
                     "Attempted to seek on a language-aware buffer iterator without associated buffer snapshot"
                 );
             }
-            self.initialize_diagnostic_endpoints();
         } else if let Some(highlights) = self.highlights.as_mut() {
             if old_range.start <= self.range.start && old_range.end >= self.range.end {
                 // Reuse existing highlights stack, as the new range is a subrange of the old one.
@@ -5022,8 +5021,8 @@ impl<'a> BufferChunks<'a> {
             }
 
             highlights.captures.set_byte_range(self.range.clone());
-            self.initialize_diagnostic_endpoints();
         }
+        self.initialize_diagnostic_endpoints();
     }
 
     fn initialize_diagnostic_endpoints(&mut self) {
