@@ -812,6 +812,18 @@ impl MultiWorkspace {
         }
 
         let workspaces = self.workspaces_for_project_group(group_key, cx);
+        // A group restored from history may have no loaded workspace behind it; drop its row directly.
+        if workspaces.is_empty() {
+            let previous_group_count = self.project_groups.len();
+            self.project_groups.retain(|group| group.key != *group_key);
+            if self.project_groups.len() == previous_group_count {
+                return Task::ready(Ok(false));
+            }
+            cx.emit(MultiWorkspaceEvent::ProjectGroupsChanged);
+            self.serialize(cx);
+            cx.notify();
+            return Task::ready(Ok(true));
+        }
 
         self.remove(workspaces, RemovalIntent::CloseProject, window, cx)
     }
