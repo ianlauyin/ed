@@ -31,7 +31,6 @@ use theme::ThemeFamily;
 use theme::ThemeRegistry;
 use theme::ThemeSettingsProvider;
 use theme::ThemeStyles;
-pub use theme::UiDensity;
 use theme::default_color_scales;
 use theme::try_parse_color;
 
@@ -90,10 +89,6 @@ impl ThemeSettingsProvider for ThemeSettingsProviderImpl {
 
     fn buffer_font_size(&self, cx: &App) -> Pixels {
         ThemeSettings::get_global(cx).buffer_font_size(cx)
-    }
-
-    fn ui_density(&self, cx: &App) -> UiDensity {
-        ThemeSettings::get_global(cx).ui_density
     }
 }
 

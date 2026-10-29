@@ -5292,7 +5292,6 @@ dependencies = [
  "smallvec",
  "strum",
  "theme",
- "ui_macros",
 ]
 
 [[package]]
@@ -5301,14 +5300,6 @@ version = "0.1.0"
 dependencies = [
  "gpui",
  "ui",
-]
-
-[[package]]
-name = "ui_macros"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]

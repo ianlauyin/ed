@@ -681,10 +681,10 @@ impl RenderOnce for ButtonLike {
                     .when(rounding.bottom_right, |this| this.rounded_br_sm())
                     .when(rounding.bottom_left, |this| this.rounded_bl_sm())
             })
-            .gap(DynamicSpacing::Base04.rems(cx))
+            .gap(DynamicSpacing::Base04.rems())
             .map(|this| match self.size {
-                ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),
-                ButtonSize::Default | ButtonSize::Compact => this.px(DynamicSpacing::Base04.rems(cx)),
+                ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems()),
+                ButtonSize::Default | ButtonSize::Compact => this.px(DynamicSpacing::Base04.rems()),
                 ButtonSize::None => this.px_px(),
             })
             .border_color(style.enabled(self.layer, cx).border_color)

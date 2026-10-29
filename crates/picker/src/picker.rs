@@ -1282,7 +1282,7 @@ impl<D: PickerDelegate> Picker<D> {
             )
             .with_sizing_behavior(sizing_behavior)
             .flex_grow_1()
-            .py(DynamicSpacing::Base04.rems(cx))
+            .py(DynamicSpacing::Base04.rems())
             .into_any_element(),
         }
     }

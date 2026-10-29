@@ -108,16 +108,16 @@ impl Render for Toolbar {
         v_flex()
             .group("toolbar")
             .relative()
-            .py(DynamicSpacing::Base06.rems(cx))
-            .px(DynamicSpacing::Base08.rems(cx))
-            .when(has_left_items || has_right_items, |this| this.gap(DynamicSpacing::Base06.rems(cx)))
+            .py(DynamicSpacing::Base06.rems())
+            .px(DynamicSpacing::Base08.rems())
+            .when(has_left_items || has_right_items, |this| this.gap(DynamicSpacing::Base06.rems()))
             .bg(cx.theme().colors().toolbar_background)
             .when(has_left_items || has_right_items, |this| {
                 this.child(
                     h_flex()
                         .items_start()
                         .justify_between()
-                        .gap(DynamicSpacing::Base08.rems(cx))
+                        .gap(DynamicSpacing::Base08.rems())
                         .when(has_left_items, |this| {
                             this.child(
                                 h_flex()

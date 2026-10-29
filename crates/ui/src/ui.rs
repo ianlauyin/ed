@@ -4,7 +4,6 @@
 //!
 //! ## Related Crates:
 //!
-//! - [`ui_macros`] - proc_macros support for this crate
 //! - `ui_input` - the single line input component
 
 mod components;

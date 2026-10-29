@@ -249,7 +249,7 @@ impl RenderOnce for Checkbox {
                     this.cursor_pointer()
                 }
             })
-            .gap(DynamicSpacing::Base06.rems(cx))
+            .gap(DynamicSpacing::Base06.rems())
             .child(checkbox)
             .when_some(self.label, |this, label| {
                 this.child(Label::new(label).color(self.label_color).size(self.label_size))
@@ -439,8 +439,8 @@ impl RenderOnce for Switch {
             })
             .child(
                 h_flex()
-                    .w(DynamicSpacing::Base32.rems(cx))
-                    .h(DynamicSpacing::Base20.rems(cx))
+                    .w(DynamicSpacing::Base32.rems())
+                    .h(DynamicSpacing::Base20.rems())
                     .group(group_id.clone())
                     .child(
                         h_flex()
@@ -455,7 +455,7 @@ impl RenderOnce for Switch {
                             .border_color(border_color)
                             .child(
                                 div()
-                                    .size(DynamicSpacing::Base12.rems(cx))
+                                    .size(DynamicSpacing::Base12.rems())
                                     .rounded_full()
                                     .bg(thumb_color)
                                     .opacity(thumb_opacity),
@@ -466,7 +466,7 @@ impl RenderOnce for Switch {
         h_flex()
             .id(self.id)
             .cursor_pointer()
-            .gap(DynamicSpacing::Base06.rems(cx))
+            .gap(DynamicSpacing::Base06.rems())
             .when(self.full_width, |this| this.w_full().justify_between())
             .when(self.label_position == Some(SwitchLabelPosition::Start), |this| {
                 this.when_some(label.clone(), |this, label| {

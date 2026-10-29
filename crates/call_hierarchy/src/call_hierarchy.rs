@@ -846,8 +846,8 @@ async fn load_and_apply_calls(
     let mut calls = fetch_calls(&root_item, &project, mode, cx).await;
     picker
         .update_in(cx, |picker, window, cx| {
-            let row_insets = (DynamicSpacing::Base04.rems(cx).to_pixels(window.rem_size())
-                + DynamicSpacing::Base06.rems(cx).to_pixels(window.rem_size()))
+            let row_insets = (DynamicSpacing::Base04.rems().to_pixels(window.rem_size())
+                + DynamicSpacing::Base06.rems().to_pixels(window.rem_size()))
                 * 2.;
             let available_width = picker.delegate.modal_width - row_insets;
             let settings = ThemeSettings::get_global(cx);

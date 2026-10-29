@@ -25,7 +25,6 @@ pub use settings::ThemeName;
 use theme::Appearance;
 use theme::SyntaxTheme;
 use theme::Theme;
-use theme::UiDensity;
 
 use crate::merge_accent_colors;
 use crate::merge_player_color;
@@ -36,14 +35,6 @@ use crate::schema::theme_colors_refinement;
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
 const MIN_LINE_HEIGHT: f32 = 1.0;
-
-pub(crate) const fn ui_density_from_settings(val: settings::UiDensity) -> UiDensity {
-    match val {
-        settings::UiDensity::Compact => UiDensity::Compact,
-        settings::UiDensity::Default => UiDensity::Default,
-        settings::UiDensity::Comfortable => UiDensity::Comfortable,
-    }
-}
 
 pub const fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
     match appearance {
@@ -102,9 +93,6 @@ pub struct ThemeSettings {
     pub experimental_theme_overrides: Option<settings::ThemeStyleContent>,
     /// Manual overrides per theme
     pub theme_overrides: HashMap<String, settings::ThemeStyleContent>,
-    /// The density of the UI.
-    /// Note: This setting is still experimental. See [this tracking issue](
-    pub ui_density: UiDensity,
     /// The amount of fading applied to unnecessary code.
     pub unnecessary_code_fade: f32,
 }
@@ -595,7 +583,6 @@ impl settings::Settings for ThemeSettings {
             theme: theme_selection,
             experimental_theme_overrides: content.experimental_theme_overrides.clone(),
             theme_overrides: content.theme_overrides.clone(),
-            ui_density: ui_density_from_settings(content.ui_density.unwrap_or_default()),
             unnecessary_code_fade: content.unnecessary_code_fade.unwrap().0.clamp(0.0, 0.9),
         }
     }

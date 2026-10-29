@@ -3,9 +3,7 @@ use gpui::Font;
 use gpui::Global;
 use gpui::Pixels;
 
-use crate::UiDensity;
-
-/// Trait for providing theme-related settings (fonts, font sizes, UI density)
+/// Trait for providing theme-related settings (fonts, font sizes)
 /// without coupling to the concrete settings infrastructure.
 ///
 /// A concrete implementation is registered as a global by the `theme_settings` crate.
@@ -21,9 +19,6 @@ pub trait ThemeSettingsProvider: Send + Sync + 'static {
 
     /// Returns the buffer font size in pixels.
     fn buffer_font_size(&self, cx: &App) -> Pixels;
-
-    /// Returns the current UI density setting.
-    fn ui_density(&self, cx: &App) -> UiDensity;
 }
 
 struct GlobalThemeSettingsProvider(Box<dyn ThemeSettingsProvider>);

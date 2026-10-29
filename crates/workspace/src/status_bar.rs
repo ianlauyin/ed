@@ -116,7 +116,7 @@ impl Render for StatusBar {
             }))
             .w_full()
             .justify_between()
-            .gap(DynamicSpacing::Base08.rems(cx))
+            .gap(DynamicSpacing::Base08.rems())
             // Even gap above and below, matching the floating card gap.
             .px(crate::CARD_GAP)
             .py(crate::CARD_GAP - px(2.))

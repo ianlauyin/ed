@@ -102,7 +102,6 @@ title_bar = { path = "crates/title_bar" }
 trash = { path = "crates/trash" }
 ui = { path = "crates/ui" }
 ui_input = { path = "crates/ui_input" }
-ui_macros = { path = "crates/ui_macros" }
 util = { path = "crates/util" }
 watch = { path = "crates/watch" }
 workspace = { path = "crates/workspace" }
@@ -360,7 +359,6 @@ proc-macro2 = { opt-level = 3 }
 quote = { opt-level = 3 }
 sqlez_macros = { opt-level = 3, codegen-units = 1 }
 syn = { opt-level = 3 }
-ui_macros = { opt-level = 3 }
 # proc-macros end
 
 # Build single-source-file crates with cg=1 as it helps make `cargo build` of a whole workspace a bit faster

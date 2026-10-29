@@ -351,7 +351,7 @@ impl Render for QuickActionBar {
 
         h_flex()
             .id("quick action bar")
-            .gap(DynamicSpacing::Base01.rems(cx))
+            .gap(DynamicSpacing::Base01.rems())
             .children(self.render_preview_button(cx))
             .children(search_button)
             .children(code_actions_dropdown)

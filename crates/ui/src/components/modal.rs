@@ -77,7 +77,7 @@ impl ParentElement for Modal {
 }
 
 impl RenderOnce for Modal {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         v_flex()
             .id(self.id.clone())
             .size_full()
@@ -89,7 +89,7 @@ impl RenderOnce for Modal {
                     .id(self.container_id.clone())
                     .w_full()
                     .flex_1()
-                    .gap(DynamicSpacing::Base08.rems(cx))
+                    .gap(DynamicSpacing::Base08.rems())
                     .when_some(self.container_scroll_handler, |this, container_scroll_handle| {
                         this.overflow_y_scroll().track_scroll(&container_scroll_handle)
                     })
@@ -164,7 +164,7 @@ impl ParentElement for ModalHeader {
 }
 
 impl RenderOnce for ModalHeader {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let mut children = self.children;
 
         if let Some(headline) = self.headline {
@@ -177,10 +177,10 @@ impl RenderOnce for ModalHeader {
             .flex_none()
             .justify_between()
             .w_full()
-            .px(DynamicSpacing::Base12.rems(cx))
-            .pt(DynamicSpacing::Base08.rems(cx))
-            .pb(DynamicSpacing::Base04.rems(cx))
-            .gap(DynamicSpacing::Base08.rems(cx))
+            .px(DynamicSpacing::Base12.rems())
+            .pt(DynamicSpacing::Base08.rems())
+            .pb(DynamicSpacing::Base04.rems())
+            .gap(DynamicSpacing::Base08.rems())
             .when(self.show_back_button, |this| {
                 this.child(IconButton::new("back", IconName::ArrowLeft).shape(IconButtonShape::Square).on_click(
                     |_, window, cx| {
@@ -278,7 +278,7 @@ impl RenderOnce for ModalFooter {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         h_flex()
             .w_full()
-            .p(DynamicSpacing::Base08.rems(cx))
+            .p(DynamicSpacing::Base08.rems())
             .flex_none()
             .justify_between()
             .gap_1()
@@ -345,7 +345,7 @@ impl RenderOnce for Section {
         section_bg.fade_out(0.96);
 
         let children = if self.contained {
-            v_flex().flex_1().when(self.padded, |this| this.px(DynamicSpacing::Base12.rems(cx))).child(
+            v_flex().flex_1().when(self.padded, |this| this.px(DynamicSpacing::Base12.rems())).child(
                 v_flex()
                     .w_full()
                     .rounded_sm()
@@ -358,9 +358,9 @@ impl RenderOnce for Section {
             v_flex()
                 .w_full()
                 .flex_1()
-                .gap_y(DynamicSpacing::Base04.rems(cx))
+                .gap_y(DynamicSpacing::Base04.rems())
                 .pb_2()
-                .when(self.padded, |this| this.px(DynamicSpacing::Base06.rems(cx) + DynamicSpacing::Base06.rems(cx)))
+                .when(self.padded, |this| this.px(DynamicSpacing::Base06.rems() + DynamicSpacing::Base06.rems()))
                 .children(self.children)
         };
 
@@ -370,7 +370,7 @@ impl RenderOnce for Section {
             .child(
                 v_flex()
                     .flex_none()
-                    .px(DynamicSpacing::Base12.rems(cx))
+                    .px(DynamicSpacing::Base12.rems())
                     .children(self.header)
                     .when_some(self.meta, |this, meta| {
                         this.child(Label::new(meta).size(LabelSize::Small).color(Color::Muted))
@@ -403,15 +403,15 @@ impl SectionHeader {
 }
 
 impl RenderOnce for SectionHeader {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        h_flex().id(self.label.clone()).w_full().px(DynamicSpacing::Base08.rems(cx)).child(
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        h_flex().id(self.label.clone()).w_full().px(DynamicSpacing::Base08.rems()).child(
             div()
                 .h_7()
                 .flex()
                 .items_center()
                 .justify_between()
                 .w_full()
-                .gap(DynamicSpacing::Base04.rems(cx))
+                .gap(DynamicSpacing::Base04.rems())
                 .child(div().flex_1().child(Label::new(self.label.clone()).size(LabelSize::Small).into_element()))
                 .child(h_flex().children(self.end_slot)),
         )

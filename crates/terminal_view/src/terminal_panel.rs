@@ -157,7 +157,7 @@ impl TerminalPanel {
                 }
                 let focus_handle = pane.focus_handle(cx);
                 let right_children = h_flex()
-                    .gap(DynamicSpacing::Base02.rems(cx))
+                    .gap(DynamicSpacing::Base02.rems())
                     .child(
                         PopoverMenu::new("terminal-tab-bar-popover-menu")
                             .trigger_with_tooltip(

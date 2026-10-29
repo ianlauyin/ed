@@ -105,8 +105,8 @@ impl RenderOnce for TabBar {
                 this.child(
                     h_flex()
                         .flex_none()
-                        .gap(DynamicSpacing::Base04.rems(cx))
-                        .px(DynamicSpacing::Base06.rems(cx))
+                        .gap(DynamicSpacing::Base04.rems())
+                        .px(DynamicSpacing::Base06.rems())
                         .children(self.start_children),
                 )
             })
@@ -124,8 +124,8 @@ impl RenderOnce for TabBar {
                 this.child(
                     h_flex()
                         .flex_none()
-                        .gap(DynamicSpacing::Base04.rems(cx))
-                        .px(DynamicSpacing::Base06.rems(cx))
+                        .gap(DynamicSpacing::Base04.rems())
+                        .px(DynamicSpacing::Base06.rems())
                         .children(self.end_children),
                 )
             })

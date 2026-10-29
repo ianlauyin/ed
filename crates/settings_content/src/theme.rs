@@ -168,12 +168,6 @@ pub struct ThemeSettingsContent {
     /// The name of the ed theme to use.
     pub theme: Option<ThemeSelection>,
 
-    /// UNSTABLE: Expect many elements to be broken.
-    ///
-    // Controls the density of the UI.
-    #[serde(rename = "unstable.ui_density")]
-    pub ui_density: Option<UiDensity>,
-
     /// How much to fade out unused code.
     pub unnecessary_code_fade: Option<CodeFade>,
 
@@ -274,35 +268,6 @@ pub enum ThemeAppearanceMode {
     /// Use the theme based on the system's appearance.
     #[default]
     System,
-}
-
-/// Specifies the density of the UI.
-/// Note: This setting is still experimental. See [this tracking issue](https://github.com/zed-industries/zed/issues/18078)
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum UiDensity {
-    /// A denser UI with tighter spacing and smaller elements.
-    #[serde(alias = "compact")]
-    Compact,
-    #[default]
-    #[serde(alias = "default")]
-    /// The default UI density.
-    Default,
-    #[serde(alias = "comfortable")]
-    /// A looser UI with more spacing and larger elements.
-    Comfortable,
-}
-
-impl UiDensity {
-    /// The spacing ratio of a given density.
-    /// TODO: Standardize usage throughout the app or remove
-    pub const fn spacing_ratio(self) -> f32 {
-        match self {
-            UiDensity::Compact => 0.75,
-            UiDensity::Default => 1.0,
-            UiDensity::Comfortable => 1.25,
-        }
-    }
 }
 
 /// Font family name.

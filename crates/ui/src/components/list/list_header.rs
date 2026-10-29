@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use gpui::AnyElement;
 use gpui::ClickEvent;
-use theme::UiDensity;
 
 use crate::Disclosure;
 use crate::DockSide;
@@ -111,16 +110,11 @@ impl Toggleable for ListHeader {
 
 impl RenderOnce for ListHeader {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let ui_density = theme::theme_settings(cx).ui_density(cx);
-
         h_flex().id(self.label.clone()).w_full().relative().group("list_header").child(
             div()
                 .map(|this| match self.height {
                     Some(height) => this.h(height),
-                    None => match ui_density {
-                        UiDensity::Comfortable => this.h_5(),
-                        _ => this.h_7(),
-                    },
+                    None => this.h_7(),
                 })
                 .when(self.inset, |this| this.px_2())
                 .when(self.selected, |this| this.bg(cx.theme().colors().ghost_element_selected))
@@ -137,10 +131,10 @@ impl RenderOnce for ListHeader {
                 .items_center()
                 .justify_between()
                 .w_full()
-                .gap(DynamicSpacing::Base04.rems(cx))
+                .gap(DynamicSpacing::Base04.rems())
                 .child(
                     h_flex()
-                        .gap(DynamicSpacing::Base04.rems(cx))
+                        .gap(DynamicSpacing::Base04.rems())
                         .children(self.toggle.map(|is_open| {
                             Disclosure::new("toggle", is_open)
                                 .when_some(self.disclosure_shape, |this, shape| this.shape(shape))
@@ -150,7 +144,7 @@ impl RenderOnce for ListHeader {
                             div()
                                 .id("label_container")
                                 .flex()
-                                .gap(DynamicSpacing::Base04.rems(cx))
+                                .gap(DynamicSpacing::Base04.rems())
                                 .items_center()
                                 .children(self.start_slot)
                                 .child(Label::new(self.label.clone()).color(Color::Muted))

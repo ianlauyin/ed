@@ -3,56 +3,77 @@ use gpui::Pixels;
 use gpui::Rems;
 use gpui::px;
 use gpui::rems;
-use theme::UiDensity;
-use ui_macros::derive_dynamic_spacing;
 
-// Derives [DynamicSpacing]. See [ui_macros::derive_dynamic_spacing].
-//
-// There are 3 UI density settings: Compact, Default, and Comfortable.
-//
-// When a tuple of three values is provided, the values are used directly.
-//
-// Example: (1, 2, 4) => Compact: 1px, Default: 2px, Comfortable: 4px
-//
-// When a single value is provided, the standard spacing formula is
-// used to derive the of spacing values. This formula can be found in
-// the macro.
-//
-// Example:
-//
-// Assuming the standard formula is (n-4, n, n+4)
-//
-// 24 => Compact: 20px, Default: 24px, Comfortable: 28px
-//
-// The [DynamicSpacing] enum variants use a BaseXX format,
-// where XX = the pixel value @ default rem size and the default UI density.
-//
-// Example:
-//
-// DynamicSpacing::Base16 would return 16px at the default UI scale & density.
-derive_dynamic_spacing![
-    (0, 0, 0),
-    (1, 1, 2),
-    (1, 2, 4),
-    (2, 3, 4),
-    (2, 4, 6),
-    (3, 6, 8),
-    (4, 8, 10),
-    (10, 12, 14),
-    (14, 16, 18),
-    (18, 20, 22),
-    24,
-    32,
-    40,
-    48
-];
+const BASE_REM_SIZE_IN_PX: f32 = 16.0;
 
-/// Returns the current [`UiDensity`] setting. Use this to
-/// modify or show something in the UI other than spacing.
-///
-/// Do not use this to calculate spacing values.
-///
-/// Always use [DynamicSpacing] for spacing values.
-pub fn ui_density(cx: &mut App) -> UiDensity {
-    theme::theme_settings(cx).ui_density(cx)
+/// UI spacing scale. The number following "Base" is the pixel size at the
+/// default rem size (16px); values scale with the user's UI font size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DynamicSpacing {
+    Base00,
+    Base01,
+    Base02,
+    Base03,
+    Base04,
+    Base06,
+    Base08,
+    Base12,
+    Base16,
+    Base20,
+    Base24,
+    Base32,
+    Base40,
+    Base48,
+}
+
+impl DynamicSpacing {
+    /// Returns the spacing value in pixels at the default rem size.
+    pub const fn base_px(self) -> f32 {
+        match self {
+            DynamicSpacing::Base00 => 0.0,
+            DynamicSpacing::Base01 => 1.0,
+            DynamicSpacing::Base02 => 2.0,
+            DynamicSpacing::Base03 => 3.0,
+            DynamicSpacing::Base04 => 4.0,
+            DynamicSpacing::Base06 => 6.0,
+            DynamicSpacing::Base08 => 8.0,
+            DynamicSpacing::Base12 => 12.0,
+            DynamicSpacing::Base16 => 16.0,
+            DynamicSpacing::Base20 => 20.0,
+            DynamicSpacing::Base24 => 24.0,
+            DynamicSpacing::Base32 => 32.0,
+            DynamicSpacing::Base40 => 40.0,
+            DynamicSpacing::Base48 => 48.0,
+        }
+    }
+
+    /// Returns the spacing value in rems.
+    pub fn rems(self) -> Rems {
+        rems(self.base_px() / BASE_REM_SIZE_IN_PX)
+    }
+
+    /// Returns the spacing value in pixels, scaled by the UI font size.
+    pub fn px(self, cx: &App) -> Pixels {
+        let ui_font_size: f32 = theme::theme_settings(cx).ui_font_size(cx).into();
+        px(ui_font_size * self.base_px() / BASE_REM_SIZE_IN_PX)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_base_px_matches_variant_name() {
+        assert_eq!(DynamicSpacing::Base00.base_px(), 0.0);
+        assert_eq!(DynamicSpacing::Base06.base_px(), 6.0);
+        assert_eq!(DynamicSpacing::Base48.base_px(), 48.0);
+    }
+
+    #[test]
+    fn test_rems() {
+        assert_eq!(DynamicSpacing::Base16.rems(), rems(1.0));
+        assert_eq!(DynamicSpacing::Base08.rems(), rems(0.5));
+        assert_eq!(DynamicSpacing::Base00.rems(), rems(0.0));
+    }
 }

@@ -375,7 +375,7 @@ impl ButtonCommon for Button {
 
 impl RenderOnce for Button {
     #[allow(refining_impl_trait)]
-    fn render(self, _window: &mut Window, cx: &mut App) -> ButtonLike {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> ButtonLike {
         let is_disabled = self.base.disabled;
         let is_selected = self.base.selected;
 
@@ -393,7 +393,7 @@ impl RenderOnce for Button {
         self.base.child(
             h_flex()
                 .when(self.truncate, |this| this.min_w_0().overflow_hidden())
-                .gap(DynamicSpacing::Base04.rems(cx))
+                .gap(DynamicSpacing::Base04.rems())
                 .when_else(
                     self.loading,
                     |this| {
@@ -414,7 +414,7 @@ impl RenderOnce for Button {
                     h_flex()
                         .when(self.truncate, |this| this.min_w_0().overflow_hidden())
                         .when(self.key_binding_position == KeybindingPosition::Start, |this| this.flex_row_reverse())
-                        .gap(DynamicSpacing::Base06.rems(cx))
+                        .gap(DynamicSpacing::Base06.rems())
                         .justify_between()
                         .child(
                             Label::new(label)

@@ -234,7 +234,7 @@ impl RenderOnce for KeyBinding {
             };
 
             h_flex()
-                .gap(DynamicSpacing::Base04.rems(cx))
+                .gap(DynamicSpacing::Base04.rems())
                 .flex_none()
                 .children(keystrokes.iter().map(|keystroke| {
                     h_flex()

@@ -930,7 +930,7 @@ impl PickerDelegate for WorktreePickerDelegate {
 
         match entry {
             WorktreeEntry::Separator => {
-                Some(div().py(DynamicSpacing::Base04.rems(cx)).child(Divider::horizontal()).into_any_element())
+                Some(div().py(DynamicSpacing::Base04.rems()).child(Divider::horizontal()).into_any_element())
             }
             WorktreeEntry::SectionHeader(label) => {
                 Some(ListSubHeader::new(label.clone()).inset(true).into_any_element())

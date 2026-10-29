@@ -937,7 +937,7 @@ impl Delegate {
     ) -> Option<AnyElement> {
         match self.entries.get(ix)? {
             Entry::Separator => {
-                Some(div().py(DynamicSpacing::Base04.rems(cx)).child(Divider::horizontal()).into_any_element())
+                Some(div().py(DynamicSpacing::Base04.rems()).child(Divider::horizontal()).into_any_element())
             }
             Entry::Header(path) => {
                 let path_style = self.project(cx).read(cx).path_style(cx);

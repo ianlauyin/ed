@@ -77,8 +77,8 @@ impl From<AnyElement> for EmptyMessage {
 }
 
 impl RenderOnce for List {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        v_flex().w_full().py(DynamicSpacing::Base04.rems(cx)).children(self.header).map(|this| {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        v_flex().w_full().py(DynamicSpacing::Base04.rems()).children(self.header).map(|this| {
             match (self.children.is_empty(), self.toggle) {
                 (false, _) => this.children(self.children),
                 (true, Some(false)) => this,

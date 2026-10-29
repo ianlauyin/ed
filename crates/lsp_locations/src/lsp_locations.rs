@@ -689,7 +689,7 @@ impl PickerDelegate for LspLocationsDelegate {
     ) -> Option<Self::ListItem> {
         match self.entries.get(ix)? {
             Entry::Separator => {
-                Some(div().py(DynamicSpacing::Base04.rems(cx)).child(Divider::horizontal()).into_any_element())
+                Some(div().py(DynamicSpacing::Base04.rems()).child(Divider::horizontal()).into_any_element())
             }
             Entry::Header(path) => {
                 let path_style = self.project.read(cx).path_style(cx);
@@ -709,7 +709,7 @@ impl PickerDelegate for LspLocationsDelegate {
                     h_flex()
                         .w_full()
                         .min_w_0()
-                        .px(DynamicSpacing::Base06.rems(cx))
+                        .px(DynamicSpacing::Base06.rems())
                         .py_1()
                         .gap_1p5()
                         .children(file_icon)
