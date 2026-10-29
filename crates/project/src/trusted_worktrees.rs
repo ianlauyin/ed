@@ -381,7 +381,8 @@ impl TrustedWorktreesStore {
         worktree_id: WorktreeId,
         cx: &mut Context<Self>,
     ) -> bool {
-        if ProjectSettings::get_global(cx).session.trust_all_worktrees {
+        // Debug builds trust everything so dev and automation launches never stop at the trust prompt.
+        if cfg!(debug_assertions) || ProjectSettings::get_global(cx).session.trust_all_worktrees {
             return true;
         }
 

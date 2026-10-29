@@ -82,6 +82,11 @@
   always sees the document version from the `didChange` sent before it.
 - `editor::RestartLanguageServer` restarts the servers relevant to the current
   buffer, including servers previously stopped with `editor::StopLanguageServer`.
+- The status-bar LSP menu keeps a stopped server listed as "Stopped" under the
+  worktree it last ran in, so "Restart Server" and "Restart All Servers" stay
+  reachable after stopping one or all servers.
+- Debug builds trust every worktree (as with `session.trust_all_worktrees`), so
+  dev and `edctl` launches never stop at the worktree trust prompt.
 - JSON language-server schema-content requests resolve the last supplied URI;
   an empty URI list returns an error.
 - There is no managed Node.js runtime and no `node` settings (`node.path`,

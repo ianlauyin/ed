@@ -174,6 +174,8 @@ struct LanguageServers {
     health_statuses: HashMap<LanguageServerId, LanguageServerHealthStatus>,
     binary_statuses: HashMap<LanguageServerName, LanguageServerBinaryStatus>,
     servers_per_buffer_abs_path: HashMap<PathBuf, ServersForPath>,
+    /// Where removed servers last ran, so stopped servers stay listed and can be restarted.
+    removed_server_worktrees: HashMap<LanguageServerName, (WeakEntity<Worktree>, LanguageServerId)>,
 }
 
 #[derive(Debug, Clone)]
@@ -496,19 +498,9 @@ impl LanguageServerState {
                                     .collect::<Vec<_>>();
 
                                 if server_buffers.is_empty() {
-                                    state
-                                        .language_servers
-                                        .servers_per_buffer_abs_path
-                                        .iter()
-                                        .filter_map(|(abs_path, servers)| {
-                                            let worktree = servers.worktree.as_ref()?.upgrade()?.read(cx);
-                                            let relative_path = abs_path.strip_prefix(worktree.abs_path()).ok()?;
-                                            let relative_path = RelPath::new(relative_path, path_style).log_err()?;
-                                            let entry = worktree.entry_for_path(&relative_path)?;
-                                            let project_path = project.read(cx).path_for_entry(entry.id, cx)?;
-                                            buffer_store.read(cx).get_by_path(&project_path)
-                                        })
-                                        .collect()
+                                    // A stopped server has no tracked buffers; the name selector limits the
+                                    // restart to it.
+                                    buffer_store.read(cx).buffers().collect()
                                 } else {
                                     server_buffers
                                 }
@@ -671,6 +663,13 @@ impl LanguageServers {
     /// drive the "Downloading… → Starting…" status UX.
     fn remove_server(&mut self, server_id: LanguageServerId) {
         self.health_statuses.remove(&server_id);
+        for servers_for_path in self.servers_per_buffer_abs_path.values() {
+            if let Some(Some(name)) = servers_for_path.servers.get(&server_id)
+                && let Some(worktree) = &servers_for_path.worktree
+            {
+                self.removed_server_worktrees.insert(name.clone(), (worktree.clone(), server_id));
+            }
+        }
         self.servers_per_buffer_abs_path.retain(|_, servers_for_path| {
             servers_for_path.servers.remove(&server_id);
             !servers_for_path.servers.is_empty()
@@ -1022,6 +1021,16 @@ impl LspButton {
                         binary_status,
                         server_id: *server_id,
                     });
+                } else if let Some((worktree, server_id)) =
+                    state.language_servers.removed_server_worktrees.get(server_name)
+                    && let Some(worktree) = worktree.upgrade()
+                {
+                    let worktree_name = SharedString::new(worktree.read(cx).root_name_str());
+                    servers_per_worktree.entry(worktree_name).or_default().push(ServerData::WithBinaryStatus {
+                        server_name,
+                        binary_status,
+                        server_id: *server_id,
+                    });
                 }
             }
 
@@ -1221,5 +1230,49 @@ impl Render for LspButton {
                     move |_window, cx| Tooltip::with_meta("Language Servers", Some(&ToggleMenu), description, cx),
                 ),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removed_server_keeps_its_worktree() {
+        let name = LanguageServerName::new_static("rust-analyzer");
+        let mut language_servers = LanguageServers::default();
+        language_servers.servers_per_buffer_abs_path.insert(
+            PathBuf::from("/proj/src/main.rs"),
+            ServersForPath {
+                servers: HashMap::from_iter([(LanguageServerId(1), Some(name.clone()))]),
+                worktree: Some(WeakEntity::new_invalid()),
+            },
+        );
+
+        language_servers.remove_server(LanguageServerId(1));
+
+        assert!(language_servers.servers_per_buffer_abs_path.is_empty());
+        let (_, server_id) =
+            language_servers.removed_server_worktrees.get(&name).expect("removed server should keep its worktree");
+        assert_eq!(*server_id, LanguageServerId(1));
+    }
+
+    #[test]
+    fn removed_server_without_worktree_is_not_recorded() {
+        let mut language_servers = LanguageServers::default();
+        language_servers.servers_per_buffer_abs_path.insert(
+            PathBuf::from("/scratch.rs"),
+            ServersForPath {
+                servers: HashMap::from_iter([(
+                    LanguageServerId(1),
+                    Some(LanguageServerName::new_static("rust-analyzer")),
+                )]),
+                worktree: None,
+            },
+        );
+
+        language_servers.remove_server(LanguageServerId(1));
+
+        assert!(language_servers.removed_server_worktrees.is_empty());
     }
 }
