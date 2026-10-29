@@ -1557,9 +1557,19 @@ impl Window {
         }
 
         platform_window.on_close(Box::new({
-            let mut cx = cx.to_async();
+            let window_id = handle.window_id();
+            let cx = cx.to_async();
             move || {
-                let _ = handle.update(&mut cx, |_, window, _| window.remove_window());
+                // Native destruction can re-enter while the app is borrowed, so don't borrow it here.
+                cx.spawn(async move |cx| {
+                    cx.update(|cx| {
+                        // App-driven closure may already have removed the window.
+                        if cx.windows.contains_key(window_id) {
+                            handle.update(cx, |_, window, _| window.remove_window()).log_err();
+                        }
+                    });
+                })
+                .detach();
             }
         }));
         platform_window.on_request_frame(Box::new({
