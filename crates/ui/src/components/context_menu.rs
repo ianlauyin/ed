@@ -48,6 +48,7 @@ use crate::ListSeparator;
 use crate::ListSubHeader;
 use crate::Tooltip;
 use crate::prelude::*;
+use crate::utils::RetainedFocusExt as _;
 use crate::utils::WithRemSize;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -334,7 +335,7 @@ impl ContextMenu {
         cx.new(|cx| {
             let builder = Rc::new(builder);
 
-            let focus_handle = cx.focus_handle();
+            let focus_handle = cx.retained_focus_handle();
             let _on_blur_subscription = cx.on_blur(&focus_handle, window, |this: &mut ContextMenu, window, cx| {
                 if let Some(ignore_until) = this.ignore_blur_until {
                     if Instant::now() < ignore_until {
@@ -402,7 +403,7 @@ impl ContextMenu {
         };
 
         // The way we rebuild the menu is a bit of a hack.
-        let focus_handle = cx.focus_handle();
+        let focus_handle = cx.retained_focus_handle();
         let new_menu = (builder.clone())(
             Self {
                 builder: Some(builder),
@@ -1175,7 +1176,7 @@ impl ContextMenu {
         cx: &mut App,
     ) -> Entity<ContextMenu> {
         cx.new(|cx| {
-            let focus_handle = cx.focus_handle();
+            let focus_handle = cx.retained_focus_handle();
 
             let _on_blur_subscription = cx.on_blur(&focus_handle, window, |_this: &mut ContextMenu, _window, _cx| {});
 
@@ -1864,7 +1865,7 @@ impl ContextMenu {
 
     #[inline(never)]
     fn new_inner(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let focus_handle = cx.focus_handle();
+        let focus_handle = cx.retained_focus_handle();
         let _on_blur_subscription = cx.on_blur(&focus_handle, window, |context_menu: &mut ContextMenu, window, cx| {
             if let Some(ignore_until) = context_menu.ignore_blur_until {
                 if Instant::now() < ignore_until {

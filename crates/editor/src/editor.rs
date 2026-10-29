@@ -623,6 +623,7 @@ use ui::IconButtonShape;
 use ui::Tooltip;
 use ui::prelude::*;
 use ui::scrollbars::ScrollbarAutoHide;
+use ui::utils::RetainedFocusExt as _;
 use ui_input::ErasedEditor;
 use util::RangeExt;
 use util::ResultExt;
@@ -2137,7 +2138,7 @@ impl Editor {
         let buffer_snapshot = multi_buffer.read(cx).snapshot(cx);
 
         let inlay_hint_settings = inlay_hint_settings(selections.newest_anchor().head(), &buffer_snapshot, cx);
-        let focus_handle = cx.focus_handle();
+        let focus_handle = if mode.is_single_line() { cx.retained_focus_handle() } else { cx.focus_handle() };
         if !is_minimap {
             cx.on_focus(&focus_handle, window, Self::handle_focus).detach();
             cx.on_focus_in(&focus_handle, window, Self::handle_focus_in).detach();
