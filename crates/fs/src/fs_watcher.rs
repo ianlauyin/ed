@@ -388,15 +388,7 @@ async fn poll_path_until_created(
             let tx = tx.clone();
             let pending_path_events = pending_path_events.clone();
             let native_watcher = native_watcher.clone();
-            move || {
-                register_existing_path(
-                    &native_watcher,
-                    path,
-                    case_insensitive,
-                    tx,
-                    pending_path_events,
-                )
-            }
+            move || register_existing_path(&native_watcher, path, case_insensitive, tx, pending_path_events)
         };
         let registration = if fs.is_fake() { register() } else { smol::unblock(register).await };
 
@@ -664,10 +656,7 @@ impl OsWatcher {
 
     /// Watches with the given backend in place of notify's; `event_sink` is how
     /// that backend reports events, standing in for notify's `EventHandler`.
-    pub(crate) fn with_backend(
-        executor: BackgroundExecutor,
-        backend: Option<Box<dyn WatchBackend>>,
-    ) -> Arc<Self> {
+    pub(crate) fn with_backend(executor: BackgroundExecutor, backend: Option<Box<dyn WatchBackend>>) -> Arc<Self> {
         let (event_tx, event_rx) = async_channel::unbounded();
         let state = Arc::new(Mutex::new(WatcherState {
             watchers: HashMap::default(),
@@ -1081,5 +1070,3 @@ static NATIVE_WATCH_LIMIT_COOLDOWN: LazyLock<Duration> = LazyLock::new(|| {
 pub(crate) const fn case_insensitive_path(_path: &Path) -> bool {
     false
 }
-
-

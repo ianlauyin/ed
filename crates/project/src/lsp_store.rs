@@ -695,8 +695,7 @@ impl LocalLspStore {
                     }
 
                     let initialization_params = cx.update(|cx| {
-                        let mut params =
-                            language_server.default_initialize_params(pull_diagnostics);
+                        let mut params = language_server.default_initialize_params(pull_diagnostics);
                         params.initialization_options = initialization_options;
                         adapter.adapter.prepare_initialize_params(params, cx)
                     })?;

@@ -269,20 +269,22 @@ impl Render for QuickActionBar {
                             menu = menu.context(focus_handle);
 
                             if supports_minimap {
-                                menu = menu.toggleable_entry("Minimap", minimap_enabled, IconPosition::Start, Some(editor::actions::ToggleMinimap.boxed_clone()), {
-                                    let editor = editor.clone();
-                                    move |window, cx| {
-                                        editor
-                                            .update(cx, |editor, cx| {
-                                                editor.toggle_minimap(
-                                                    &editor::actions::ToggleMinimap,
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                            .ok();
-                                    }
-                                },)
+                                menu = menu.toggleable_entry(
+                                    "Minimap",
+                                    minimap_enabled,
+                                    IconPosition::Start,
+                                    Some(editor::actions::ToggleMinimap.boxed_clone()),
+                                    {
+                                        let editor = editor.clone();
+                                        move |window, cx| {
+                                            editor
+                                                .update(cx, |editor, cx| {
+                                                    editor.toggle_minimap(&editor::actions::ToggleMinimap, window, cx);
+                                                })
+                                                .ok();
+                                        }
+                                    },
+                                )
                             }
 
                             if is_full {
@@ -296,11 +298,7 @@ impl Render for QuickActionBar {
                                         move |window, cx| {
                                             editor
                                                 .update(cx, |editor, cx| {
-                                                    editor.toggle_diagnostics(
-                                                        &ToggleDiagnostics,
-                                                        window,
-                                                        cx,
-                                                    );
+                                                    editor.toggle_diagnostics(&ToggleDiagnostics, window, cx);
                                                 })
                                                 .ok();
                                         }
@@ -338,13 +336,7 @@ impl Render for QuickActionBar {
                                     let editor = editor.clone();
                                     move |window, cx| {
                                         editor
-                                            .update(cx, |editor, cx| {
-                                                editor.toggle_git_blame(
-                                                    &git::Blame,
-                                                    window,
-                                                    cx,
-                                                )
-                                            })
+                                            .update(cx, |editor, cx| editor.toggle_git_blame(&git::Blame, window, cx))
                                             .ok();
                                     }
                                 },
