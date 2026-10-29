@@ -31,7 +31,6 @@ use ui::ListItemSpacing;
 use ui::Window;
 use ui::prelude::*;
 use util::ResultExt;
-use util::maybe;
 use util::paths::PathStyle;
 use util::paths::compare_paths;
 use workspace::Workspace;
@@ -513,26 +512,15 @@ impl PickerDelegate for OpenPathDelegate {
         }
 
         let path_style = self.path_style;
-        Some(
-            maybe!({
-                match &self.directory_state {
-                    DirectoryState::Create { parent_path, .. } => Some(format!(
-                        "{}{}{}",
-                        parent_path,
-                        candidate.path.string,
-                        if candidate.is_dir { path_style.primary_separator() } else { "" }
-                    )),
-                    DirectoryState::List { parent_path, .. } => Some(format!(
-                        "{}{}{}",
-                        parent_path,
-                        candidate.path.string,
-                        if candidate.is_dir { path_style.primary_separator() } else { "" }
-                    )),
-                    DirectoryState::None { .. } => return None,
-                }
-            })
-            .unwrap_or(query),
-        )
+        Some(match &self.directory_state {
+            DirectoryState::Create { parent_path, .. } | DirectoryState::List { parent_path, .. } => format!(
+                "{}{}{}",
+                parent_path,
+                candidate.path.string,
+                if candidate.is_dir { path_style.primary_separator() } else { "" }
+            ),
+            DirectoryState::None { .. } => query,
+        })
     }
 
     fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -668,7 +656,7 @@ impl PickerDelegate for OpenPathDelegate {
 
         let is_current_dir_candidate = candidate.path.string == self.current_dir();
 
-        let file_icon = maybe!({
+        let file_icon = (|| {
             if !settings.file_icons {
                 return None;
             }
@@ -684,7 +672,7 @@ impl PickerDelegate for OpenPathDelegate {
                 FileIcons::get_icon(path, cx)?
             };
             Some(Icon::from_path(icon).color(Color::Muted))
-        });
+        })();
 
         match &self.directory_state {
             DirectoryState::List { parent_path, .. } => {

@@ -48,7 +48,6 @@ use text::BufferId;
 use text::ReplicaId;
 use util::ResultExt as _;
 use util::debug_panic;
-use util::maybe;
 use util::rel_path::RelPath;
 use worktree::File;
 use worktree::PathChange;
@@ -189,7 +188,7 @@ impl RemoteBufferStore {
                 let buffer_id = BufferId::new(state.id)?;
 
                 let mut capability = capability;
-                let buffer_file_result = maybe!({
+                let buffer_file_result = (|| {
                     let mut buffer_file = None;
                     if let Some(file) = state.file.take() {
                         let worktree_id = worktree::WorktreeId::from_proto(file.worktree_id);
@@ -206,7 +205,7 @@ impl RemoteBufferStore {
                         buffer_file = Some(Arc::new(File::from_proto(file, worktree, cx)?) as Arc<dyn language::File>);
                     }
                     anyhow::Ok(buffer_file)
-                });
+                })();
 
                 match buffer_file_result {
                     Ok(buffer_file) => {
@@ -232,7 +231,7 @@ impl RemoteBufferStore {
                         format!("received chunk for buffer {} without initial state", chunk.buffer_id)
                     })?;
 
-                let result = maybe!({
+                let result = (|| {
                     let operations = chunk
                         .operations
                         .into_iter()
@@ -240,7 +239,7 @@ impl RemoteBufferStore {
                         .collect::<Result<Vec<_>>>()?;
                     buffer.update(cx, |buffer, cx| buffer.apply_ops(operations, cx));
                     anyhow::Ok(())
-                });
+                })();
 
                 if let Err(error) = result {
                     self.loading_remote_buffers_by_id.remove(&buffer_id);

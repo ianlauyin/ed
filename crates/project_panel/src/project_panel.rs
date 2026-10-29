@@ -149,7 +149,6 @@ use ui::prelude::*;
 use util::ResultExt;
 use util::TryFutureExt;
 use util::markdown::MarkdownInlineCode;
-use util::maybe;
 use util::paths::PathExt;
 use util::paths::PathStyle;
 use util::paths::compare_paths;
@@ -2406,7 +2405,7 @@ impl ProjectPanel {
     }
 
     fn restore_file(&mut self, action: &git::RestoreFile, window: &mut Window, cx: &mut Context<Self>) {
-        maybe!({
+        (|| {
             let selection = self.selection?;
             let project = self.project.read(cx);
 
@@ -2484,11 +2483,11 @@ impl ProjectPanel {
             .detach_and_log_err(cx);
 
             Some(())
-        });
+        })();
     }
 
     fn add_to_gitignore(&mut self, _: &git::AddToGitignore, _window: &mut Window, cx: &mut Context<Self>) {
-        maybe!({
+        (|| {
             let selection = self.selection?;
             let (_, entry) = self.selected_sub_entry(cx)?;
             let is_dir = entry.is_dir();
@@ -2521,11 +2520,11 @@ impl ProjectPanel {
             .detach_and_log_err(cx);
 
             Some(())
-        });
+        })();
     }
 
     fn add_to_git_info_exclude(&mut self, _: &git::AddToGitInfoExclude, _window: &mut Window, cx: &mut Context<Self>) {
-        maybe!({
+        (|| {
             let selection = self.selection?;
             let (_, entry) = self.selected_sub_entry(cx)?;
             let is_dir = entry.is_dir();
@@ -2558,7 +2557,7 @@ impl ProjectPanel {
             .detach_and_log_err(cx);
 
             Some(())
-        });
+        })();
     }
 
     /// Builds the confirmation prompt shared by direct removal and undo/redo.
@@ -2610,7 +2609,7 @@ impl ProjectPanel {
 
     /// Moves the selection to the system trash and records it for undo.
     fn delete(&mut self, action: &Delete, window: &mut Window, cx: &mut Context<ProjectPanel>) {
-        maybe!({
+        (|| {
             let items_to_delete = self.disjoint_effective_entries_excluding_roots(cx);
             let project = self.project.read(cx);
             if items_to_delete.is_empty()
@@ -2698,7 +2697,7 @@ impl ProjectPanel {
             })
             .detach_and_log_err(cx);
             Some(())
-        });
+        })();
     }
 
     /// Displays a toast notification, informing that some of the selected
@@ -3205,107 +3204,105 @@ impl ProjectPanel {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<()> {
-        maybe!({
-            let (worktree, entry) = self.selected_entry_handle(cx)?;
-            let entry = entry.clone();
-            let worktree_id = worktree.read(cx).id();
+        let (worktree, entry) = self.selected_entry_handle(cx)?;
+        let entry = entry.clone();
+        let worktree_id = worktree.read(cx).id();
 
-            enum EntryTransferTask {
-                Rename { task: Task<Result<CreatedEntry>>, from: ProjectPath, to: ProjectPath },
-                Copy { task: Task<Result<Option<Entry>>>, destination: ProjectPath },
-            }
+        enum EntryTransferTask {
+            Rename { task: Task<Result<CreatedEntry>>, from: ProjectPath, to: ProjectPath },
+            Copy { task: Task<Result<Option<Entry>>>, destination: ProjectPath },
+        }
 
-            let mut transfer_tasks = Vec::new();
-            let mut disambiguation_range = None;
-            for source_entry in &entries {
-                let (new_path, new_disambiguation_range) =
-                    self.create_paste_path(source_entry, self.selected_sub_entry(cx)?, cx)?;
-                let source_entry_id = source_entry.entry_id;
-                let destination: ProjectPath = (worktree_id, new_path).into();
-                let task = match operation {
-                    EntryTransferOperation::Copy => {
-                        let task = self
-                            .project
-                            .update(cx, |project, cx| project.copy_entry(source_entry_id, destination.clone(), cx));
-                        EntryTransferTask::Copy { task, destination }
-                    }
-                    EntryTransferOperation::Move => {
-                        let original_path = self.project.read(cx).path_for_entry(source_entry_id, cx)?;
-                        let task = self
-                            .project
-                            .update(cx, |project, cx| project.rename_entry(source_entry_id, destination.clone(), cx));
-                        EntryTransferTask::Rename { task, from: original_path, to: destination }
-                    }
-                };
-                transfer_tasks.push(task);
-                disambiguation_range = new_disambiguation_range.or(disambiguation_range);
-            }
+        let mut transfer_tasks = Vec::new();
+        let mut disambiguation_range = None;
+        for source_entry in &entries {
+            let (new_path, new_disambiguation_range) =
+                self.create_paste_path(source_entry, self.selected_sub_entry(cx)?, cx)?;
+            let source_entry_id = source_entry.entry_id;
+            let destination: ProjectPath = (worktree_id, new_path).into();
+            let task = match operation {
+                EntryTransferOperation::Copy => {
+                    let task = self
+                        .project
+                        .update(cx, |project, cx| project.copy_entry(source_entry_id, destination.clone(), cx));
+                    EntryTransferTask::Copy { task, destination }
+                }
+                EntryTransferOperation::Move => {
+                    let original_path = self.project.read(cx).path_for_entry(source_entry_id, cx)?;
+                    let task = self
+                        .project
+                        .update(cx, |project, cx| project.rename_entry(source_entry_id, destination.clone(), cx));
+                    EntryTransferTask::Rename { task, from: original_path, to: destination }
+                }
+            };
+            transfer_tasks.push(task);
+            disambiguation_range = new_disambiguation_range.or(disambiguation_range);
+        }
 
-            let item_count = transfer_tasks.len();
-            let workspace = self.workspace.clone();
+        let item_count = transfer_tasks.len();
+        let workspace = self.workspace.clone();
 
-            cx.spawn_in(window, async move |project_panel, cx| {
-                let mut last_succeed = None;
-                let mut changes = Vec::new();
+        cx.spawn_in(window, async move |project_panel, cx| {
+            let mut last_succeed = None;
+            let mut changes = Vec::new();
 
-                for task in transfer_tasks {
-                    match task {
-                        EntryTransferTask::Rename { task, from, to } => {
-                            if let Some(CreatedEntry::Included(entry)) =
-                                task.await.notify_workspace_async_err(workspace.clone(), cx)
-                            {
-                                changes.push(Change::Renamed(from, to));
-                                last_succeed = Some(entry);
-                            }
+            for task in transfer_tasks {
+                match task {
+                    EntryTransferTask::Rename { task, from, to } => {
+                        if let Some(CreatedEntry::Included(entry)) =
+                            task.await.notify_workspace_async_err(workspace.clone(), cx)
+                        {
+                            changes.push(Change::Renamed(from, to));
+                            last_succeed = Some(entry);
                         }
-                        EntryTransferTask::Copy { task, destination } => {
-                            if let Some(Some(entry)) = task.await.notify_workspace_async_err(workspace.clone(), cx) {
-                                changes.push(Change::Created(destination));
-                                last_succeed = Some(entry);
-                            }
+                    }
+                    EntryTransferTask::Copy { task, destination } => {
+                        if let Some(Some(entry)) = task.await.notify_workspace_async_err(workspace.clone(), cx) {
+                            changes.push(Change::Created(destination));
+                            last_succeed = Some(entry);
                         }
                     }
                 }
+            }
 
+            project_panel
+                .update(cx, |this, _| {
+                    this.undo_manager.record(changes).log_err();
+                })
+                .ok();
+
+            // update selection
+            if let Some(entry) = last_succeed {
                 project_panel
-                    .update(cx, |this, _| {
-                        this.undo_manager.record(changes).log_err();
+                    .update_in(cx, |project_panel, window, cx| {
+                        project_panel.selection = Some(SelectedEntry { worktree_id, entry_id: entry.id });
+
+                        if item_count == 1 {
+                            // open entry if not dir, setting is enabled, and only focus if rename is not pending
+                            if !entry.is_dir() {
+                                let settings = ProjectPanelSettings::get_global(cx);
+                                if settings.auto_open.should_open_on_paste() {
+                                    project_panel.open_entry(entry.id, disambiguation_range.is_none(), false, cx);
+                                }
+                            }
+
+                            // if only one entry was pasted and it was disambiguated, open the rename editor
+                            if disambiguation_range.is_some() {
+                                cx.defer_in(window, |this, window, cx| {
+                                    this.rename_impl(disambiguation_range, window, cx);
+                                });
+                            }
+                        }
                     })
                     .ok();
+            }
 
-                // update selection
-                if let Some(entry) = last_succeed {
-                    project_panel
-                        .update_in(cx, |project_panel, window, cx| {
-                            project_panel.selection = Some(SelectedEntry { worktree_id, entry_id: entry.id });
-
-                            if item_count == 1 {
-                                // open entry if not dir, setting is enabled, and only focus if rename is not pending
-                                if !entry.is_dir() {
-                                    let settings = ProjectPanelSettings::get_global(cx);
-                                    if settings.auto_open.should_open_on_paste() {
-                                        project_panel.open_entry(entry.id, disambiguation_range.is_none(), false, cx);
-                                    }
-                                }
-
-                                // if only one entry was pasted and it was disambiguated, open the rename editor
-                                if disambiguation_range.is_some() {
-                                    cx.defer_in(window, |this, window, cx| {
-                                        this.rename_impl(disambiguation_range, window, cx);
-                                    });
-                                }
-                            }
-                        })
-                        .ok();
-                }
-
-                anyhow::Ok(())
-            })
-            .detach_and_log_err(cx);
-
-            self.expand_entry(worktree_id, entry.id, cx);
-            Some(())
+            anyhow::Ok(())
         })
+        .detach_and_log_err(cx);
+
+        self.expand_entry(worktree_id, entry.id, cx);
+        Some(())
     }
 
     fn download_from_remote(&mut self, _: &DownloadFromRemote, window: &mut Window, cx: &mut Context<Self>) {
@@ -4290,7 +4287,7 @@ impl ProjectPanel {
 
         let open_file_after_drop = paths.len() == 1 && paths[0].is_file();
 
-        let Some((target_directory, worktree, fs)) = maybe!({
+        let Some((target_directory, worktree, fs)) = (|| {
             let project = self.project.read(cx);
             let fs = project.fs().clone();
             let worktree = project.worktree_for_entry(entry_id, cx)?;
@@ -4298,7 +4295,7 @@ impl ProjectPanel {
             let path = entry.path.clone();
             let target_directory = if entry.is_dir() { path } else { path.parent()?.into() };
             Some((target_directory, worktree, fs))
-        }) else {
+        })() else {
             return;
         };
 
@@ -4481,7 +4478,7 @@ impl ProjectPanel {
         }
 
         if Self::is_copy_modifier_set(&window.modifiers()) {
-            let _ = maybe!({
+            let _ = (|| {
                 let project = self.project.read(cx);
                 let target_worktree = project.worktree_for_entry(target_entry_id, cx)?;
                 let worktree_id = target_worktree.read(cx).id();
@@ -4530,7 +4527,7 @@ impl ProjectPanel {
                 })
                 .detach();
                 Some(())
-            });
+            })();
         } else {
             let update_marks = !self.marked_entries.is_empty();
             let active_selection = selections.active_selection;
@@ -5269,11 +5266,11 @@ impl ProjectPanel {
                 if entry_id == highlight_entry_id {
                     true
                 } else {
-                    maybe!({
+                    (|| {
                         let worktree = self.project.read(cx).worktree_for_id(worktree_id, cx)?;
                         let highlight_entry = worktree.read(cx).entry_for_id(highlight_entry_id)?;
                         Some(path.starts_with(&highlight_entry.path))
-                    })
+                    })()
                     .unwrap_or(false)
                 }
             } else {
@@ -5353,14 +5350,14 @@ impl ProjectPanel {
 
                             this.marked_entries.clear();
 
-                            let Some((entry_id, highlight_entry_id)) = maybe!({
+                            let Some((entry_id, highlight_entry_id)) = (|| {
                                 let target_worktree =
                                     this.project.read(cx).worktree_for_id(selection.worktree_id, cx)?.read(cx);
                                 let target_entry = target_worktree.entry_for_path(&path_for_external_paths)?;
                                 let highlight_entry_id =
                                     this.highlight_entry_for_external_drag(target_entry, target_worktree)?;
                                 Some((target_entry.id, highlight_entry_id))
-                            }) else {
+                            })() else {
                                 return;
                             };
 
@@ -5399,7 +5396,7 @@ impl ProjectPanel {
                                 this.marked_entries.push(drag_state.active_selection);
                             }
 
-                            let Some((entry_id, highlight_entry_id)) = maybe!({
+                            let Some((entry_id, highlight_entry_id)) = (|| {
                                 let target_worktree =
                                     this.project.read(cx).worktree_for_id(selection.worktree_id, cx)?.read(cx);
                                 let target_entry = target_worktree.entry_for_path(&path_for_dragged_selection)?;
@@ -5410,7 +5407,7 @@ impl ProjectPanel {
                                     cx,
                                 )?;
                                 Some((target_entry.id, highlight_entry_id))
-                            }) else {
+                            })() else {
                                 return;
                             };
 
@@ -6519,14 +6516,15 @@ impl Render for ProjectPanel {
                                             |this, active_indent_guide: &IndentGuideLayout, window, cx| {
                                                 if window.modifiers().secondary() {
                                                     let ix = active_indent_guide.offset.y;
-                                                    let Some((target_entry, worktree)) = maybe!({
+                                                    let Some((target_entry, worktree)) = (|| {
                                                         let (worktree_id, entry) = this.entry_at_index(ix)?;
                                                         let worktree =
                                                             this.project.read(cx).worktree_for_id(worktree_id, cx)?;
                                                         let target_entry =
                                                             worktree.read(cx).entry_for_path(entry.path.parent()?)?;
                                                         Some((target_entry, worktree))
-                                                    }) else {
+                                                    })(
+                                                    ) else {
                                                         return;
                                                     };
 

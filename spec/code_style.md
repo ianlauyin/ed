@@ -12,3 +12,6 @@
   `Self::Target` and `Self::Output`. Use explicit names inside concrete trait
   implementations wherever these exceptions do not apply. Generated code follows
   the same convention.
+- Prefer explicit code over convenience macros: write an immediately-invoked
+  closure (`(|| { ... })()`) or an `async` block directly to scope `?`, rather
+  than a `maybe!`-style macro.

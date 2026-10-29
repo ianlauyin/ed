@@ -118,7 +118,6 @@ use sum_tree::TreeSet;
 use text::LineEnding;
 use text::Rope;
 use util::ResultExt;
-use util::maybe;
 use util::paths::PathMatcher;
 use util::paths::PathStyle;
 use util::paths::SanitizedPath;
@@ -3715,7 +3714,7 @@ impl BackgroundScanner {
             && scanning_enabled
             && self.track_git_repositories
         {
-            maybe!(async {
+            async {
                 self.state
                     .lock()
                     .await
@@ -3728,7 +3727,7 @@ impl BackgroundScanner {
                     .await
                     .log_err()?;
                 Some(ancestor_dot_git)
-            })
+            }
             .await
         } else {
             None

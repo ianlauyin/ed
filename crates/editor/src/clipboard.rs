@@ -27,12 +27,12 @@ impl ClipboardSelection {
     ) -> Self {
         let first_line_indent = buffer.indent_size_for_line(MultiBufferRow(range.start.row)).len;
 
-        let file_path = util::maybe!({
+        let file_path = (|| {
             let project = project?.read(cx);
             let file = buffer.file_at(range.start)?;
             let project_path = ProjectPath { worktree_id: file.worktree_id(cx), path: file.path().clone() };
             project.absolute_path(&project_path, cx)
-        });
+        })();
 
         let line_range = if file_path.is_some() {
             buffer.range_to_buffer_range(range).map(|(_, buffer_range)| buffer_range.start.row..=buffer_range.end.row)
@@ -226,7 +226,7 @@ impl Editor {
             };
 
             if is_markdown {
-                let handled = maybe!({
+                let handled = (|| {
                     let buffer = self.buffer().read(cx).as_singleton()?;
                     let file = buffer.read(cx).file()?;
                     let worktree_id = file.worktree_id(cx);
@@ -249,7 +249,7 @@ impl Editor {
                     .detach_and_log_err(cx);
 
                     Some(())
-                });
+                })();
                 if handled.is_some() {
                     // stop clipboard handling when the snippet is inserted
                     return;

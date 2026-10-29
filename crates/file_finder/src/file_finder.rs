@@ -62,7 +62,6 @@ use ui::ListItemSpacing;
 use ui::Tooltip;
 use ui::prelude::*;
 use util::ResultExt;
-use util::maybe;
 use util::paths::PathStyle;
 use util::paths::PathWithPosition;
 use util::post_inc;
@@ -1680,7 +1679,7 @@ impl PickerDelegate for FileFinderDelegate {
                 } else if was_in_flight {
                     cx.background_executor().timer(SEARCH_DEBOUNCE).await;
                 }
-                let _ = maybe!(async move {
+                let _ = async move {
                     let is_absolute_path = path.is_absolute();
                     let did_resolve_abs_path = is_absolute_path
                         && this
@@ -1695,7 +1694,7 @@ impl PickerDelegate for FileFinderDelegate {
                         this.update_in(cx, |this, window, cx| this.delegate.spawn_search(query, window, cx))?.await;
                     }
                     anyhow::Ok(())
-                })
+                }
                 .await;
                 search_in_flight.store(false, atomic::Ordering::Relaxed);
             })
@@ -1824,7 +1823,7 @@ impl FileFinderDelegate {
 
         let start_icon = match path_match {
             Match::CreateNew(_) => Some(Icon::new(IconName::Plus).size(IconSize::Small)),
-            _ => maybe!({
+            _ => (|| {
                 if !settings.file_icons {
                     return None;
                 }
@@ -1832,7 +1831,7 @@ impl FileFinderDelegate {
                 let file_name = abs_path.file_name()?;
                 let icon = FileIcons::get_icon(file_name.as_ref(), cx)?;
                 Some(Icon::from_path(icon).color(Color::Muted))
-            }),
+            })(),
         };
 
         let checkbox = checkbox.map(|checkbox| {

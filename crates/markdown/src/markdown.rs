@@ -123,7 +123,6 @@ use ui::prelude::*;
 use ui::utils::ensure_highlight_contrast;
 use ui::utils::merge_highlight_backgrounds;
 use util::ResultExt;
-use util::maybe;
 
 use crate::parser::CodeBlockKind;
 use crate::parser::CodeBlockMetadata;

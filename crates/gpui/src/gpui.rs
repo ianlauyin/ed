@@ -84,7 +84,6 @@ pub use gpui_macros::Render;
 pub use gpui_macros::VisualContext;
 pub use gpui_macros::register_action;
 pub use gpui_shared_string::*;
-pub use gpui_util::arc_cow::ArcCow;
 pub use input::*;
 pub use interactive::*;
 use key_dispatch::DispatchActionListener;

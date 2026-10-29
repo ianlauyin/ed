@@ -304,7 +304,7 @@ impl RenderedLine {
     }
 
     pub(crate) fn source_index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize> {
-        let adjusted_position = maybe!({
+        let adjusted_position = (|| {
             if self.text_align == TextAlign::Left {
                 return None;
             }
@@ -332,7 +332,7 @@ impl RenderedLine {
 
             let alignment_offset = self.alignment_offset_for_segment(bounds.size.width, segment_start_x, segment_end_x);
             Some(point(position.x - alignment_offset, position.y))
-        })
+        })()
         .unwrap_or(position);
 
         let (line_rendered_index, out_of_bounds) = match self.layout.index_for_position(adjusted_position) {

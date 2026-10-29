@@ -49,7 +49,6 @@ use tempfile::TempDir;
 use text::LineEnding;
 use util::command::Stdio;
 use util::command::new_command;
-use util::maybe;
 
 pub trait Watcher: Send + Sync {
     fn add(&self, path: &Path) -> Result<()>;
@@ -888,7 +887,7 @@ impl Fs for RealFs {
             return load == CASE_SENSITIVE;
         }
         let temp_dir = self.executor.spawn(async { TempDir::new() });
-        let res = maybe!(async {
+        let res = async {
             let temp_dir = temp_dir.await?;
             let test_file_1 = temp_dir.path().join("case_sensitivity_test.tmp");
             let test_file_2 = temp_dir.path().join("CASE_SENSITIVITY_TEST.TMP");
@@ -912,7 +911,7 @@ impl Fs for RealFs {
 
             temp_dir.close()?;
             case_sensitive
-        })
+        }
         .await
         .unwrap_or_else(|e| {
             log::error!(

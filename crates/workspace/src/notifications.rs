@@ -266,7 +266,7 @@ impl LanguageServerPrompt {
     }
 
     async fn select_option(this: Entity<Self>, ix: usize, cx: &mut AsyncWindowContext) {
-        util::maybe!(async move {
+        async move {
             let potential_future = this.update(cx, |this, _| this.request.take().map(|request| request.respond(ix)));
 
             potential_future.context("Response already sent")?.await.context("Stream already closed")?;
@@ -276,7 +276,7 @@ impl LanguageServerPrompt {
             });
 
             anyhow::Ok(())
-        })
+        }
         .await
         .log_err();
     }

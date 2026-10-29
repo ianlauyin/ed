@@ -50,7 +50,6 @@ use ui::App;
 use ui::SharedString;
 use ui::px;
 use util::ResultExt;
-use util::maybe;
 use uuid::Uuid;
 
 use self::model::DockStructure;
@@ -1223,7 +1222,7 @@ impl WorkspaceDb {
         ))?((group_id, workspace_id))?
         .into_iter()
         .map(|(group_id, axis, pane_id, active, pinned_count, flexes)| {
-            let maybe_pane = maybe!({ Some((pane_id?, active?, pinned_count?)) });
+            let maybe_pane = (|| Some((pane_id?, active?, pinned_count?)))();
             if let Some((group_id, axis)) = group_id.zip(axis) {
                 let flexes = flexes.map(|flexes: String| serde_json::from_str::<Vec<f32>>(&flexes)).transpose()?;
 

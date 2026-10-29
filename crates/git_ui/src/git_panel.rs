@@ -152,7 +152,6 @@ use ui::prelude::*;
 use util::ResultExt;
 use util::TryFutureExt;
 use util::markdown::MarkdownInlineCode;
-use util::maybe;
 use util::paths::PathStyle;
 use workspace::Item;
 use workspace::ModalView;
@@ -2123,7 +2122,7 @@ impl GitPanel {
 
     /// Show diff view at selected entry, only if the diff view is open
     fn move_diff_to_entry(&self, window: &mut Window, cx: &mut Context<Self>) {
-        maybe!({
+        (|| {
             let workspace = self.workspace.upgrade()?;
             let selected_index = self.selected_entry?;
             let entry = self.entries.get(selected_index)?.status_entry()?.clone();
@@ -2154,7 +2153,7 @@ impl GitPanel {
             }
 
             Some(())
-        });
+        })();
     }
 
     fn first_entry(&mut self, _: &FirstEntry, window: &mut Window, cx: &mut Context<Self>) {
@@ -2251,7 +2250,7 @@ impl GitPanel {
             self.toggle_directory(&dir_entry.key, window, cx);
             return;
         }
-        maybe!({
+        (|| {
             let selected_index = self.selected_entry?;
             let entry = self.entries.get(selected_index)?.status_entry()?;
             let workspace = self.workspace.upgrade()?;
@@ -2284,7 +2283,7 @@ impl GitPanel {
             self.focus_handle.focus(window, cx);
 
             Some(())
-        });
+        })();
     }
 
     fn open_solo_diff(&mut self, _: &menu::SecondaryConfirm, window: &mut Window, cx: &mut Context<Self>) {
@@ -2513,7 +2512,7 @@ impl GitPanel {
             return;
         }
 
-        maybe!({
+        (|| {
             let active_repo = self.active_repository.clone()?;
             let workspace = self.workspace.clone();
             let path_style = self.project.read(cx).path_style(cx);
@@ -2596,7 +2595,7 @@ impl GitPanel {
             .detach_and_prompt_err("Failed to revert changes", window, cx, |e| Some(format!("{e}")));
 
             Some(())
-        });
+        })();
     }
 
     fn perform_checkout(&self, entries: Vec<GitStatusEntry>, window: &Window, cx: &Context<Self>) {
@@ -3373,7 +3372,7 @@ impl GitPanel {
         let prior_head = self.load_commit_details("HEAD".to_string(), cx);
 
         let task = cx.spawn_in(window, async move |this, cx| {
-            let result = maybe!(async {
+            let result = async {
                 if let Ok(true) = confirmation.await {
                     let prior_head = prior_head.await?;
 
@@ -3383,7 +3382,7 @@ impl GitPanel {
                 } else {
                     Ok(None)
                 }
-            })
+            }
             .await;
 
             this.update_in(cx, |this, window, cx| {

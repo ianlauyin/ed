@@ -23,7 +23,6 @@ use text::BufferId;
 use theme::ActiveTheme as _;
 use theme::SyntaxTheme;
 use unicode_segmentation::UnicodeSegmentation as _;
-use util::maybe;
 
 use crate::Editor;
 use crate::LSP_REQUEST_DEBOUNCE_TIMEOUT;
@@ -258,7 +257,7 @@ fn highlights_from_buffer(
     let multi_buffer_source_range_anchors = multi_buffer_snapshot
         .text_anchors_to_visible_anchors([item.source_range_for_text.start, item.source_range_for_text.end]);
     let anchor_range =
-        maybe!({ Some((*multi_buffer_source_range_anchors.first()?)?..(*multi_buffer_source_range_anchors.get(1)?)?) });
+        (|| Some((*multi_buffer_source_range_anchors.first()?)?..(*multi_buffer_source_range_anchors.get(1)?)?))();
     let buffer_snapshot = multi_buffer_snapshot.buffer_for_id(item.source_range_for_text.start.buffer_id)?;
     let can_reuse_buffer_highlight_offsets = buffer_snapshot
         .text_for_range(item.source_range_for_text.clone())

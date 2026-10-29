@@ -24,7 +24,6 @@ use sqlez::thread_safe_connection::ThreadSafeConnection;
 pub use sqlez_macros;
 use sqlez_macros::sql;
 use util::ResultExt;
-use util::maybe;
 pub use uuid;
 
 /// A domain schema registered via `static_connection!` and collected at link time.
@@ -153,12 +152,12 @@ pub fn db_path(db_dir: &Path, scope: impl DbScope) -> PathBuf {
 pub async fn open_db<S: Schema>(db_dir: &Path, scope: impl DbScope) -> ThreadSafeConnection {
     let db_path = db_path(db_dir, scope);
 
-    let connection = maybe!(async {
+    let connection = async {
         if let Some(parent) = db_path.parent() {
             create_dir_all(parent).context("Could not create db directory").log_err()?;
         }
         open_main_db::<S>(&db_path).await
-    })
+    }
     .await;
 
     if let Some(connection) = connection {

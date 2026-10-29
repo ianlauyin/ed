@@ -44,7 +44,6 @@ use rpc::AnyProtoClient;
 use rpc::proto;
 use text::Rope;
 use util::ResultExt;
-use util::maybe;
 use util::rel_path::RelPath;
 use worktree::Entry;
 use worktree::ProjectEntryId;
@@ -293,7 +292,7 @@ impl Search {
 
                         let issue_remote_buffers_request = cx
                             .spawn(async move |cx| {
-                                let _ = maybe!(async move {
+                                let _ = async move {
                                     request.await?;
 
                                     let (buffer_tx, buffer_rx) = bounded(24);
@@ -324,7 +323,7 @@ impl Search {
                                     drop(guard);
                                     cancel_ongoing_search.abort();
                                     anyhow::Ok(())
-                                })
+                                }
                                 .await
                                 .log_err();
                             })
@@ -410,7 +409,7 @@ impl Search {
         results_tx: Sender<SearchResult>,
     ) -> impl AsyncFnOnce(&mut AsyncApp) {
         async move |cx| {
-            _ = maybe!(async move {
+            _ = async move {
                 let gitignored_tracker = PathInclusionMatcher::new(query.clone());
                 let include_ignored = query.include_ignored();
                 for worktree in worktrees {
@@ -477,7 +476,7 @@ impl Search {
                         .await;
                 }
                 anyhow::Ok(())
-            })
+            }
             .await;
         }
     }
@@ -515,7 +514,7 @@ impl Search {
     ) {
         let mut entryless_file_buffers = sorted_entryless_file_buffers.into_iter().peekable();
         let mut rx = pin!(rx.ready_chunks(64));
-        _ = maybe!(async move {
+        _ = async move {
             while let Some(requested_paths) = rx.next().await {
                 let line_hints: Vec<MatchPositionHint> = requested_paths.iter().map(|(_, line)| *line).collect();
                 let sort_keys: Vec<(u64, Arc<RelPath>)> =
@@ -546,7 +545,7 @@ impl Search {
                 find_all_matches_tx.send((entryless_buffer, MatchPositionHint::default())).await?;
             }
             Result::<_, anyhow::Error>::Ok(())
-        })
+        }
         .await;
     }
 
@@ -557,7 +556,7 @@ impl Search {
         results: Sender<oneshot::Receiver<(Entity<Buffer>, Vec<Range<language::Anchor>>)>>,
         cx: AsyncApp,
     ) {
-        _ = maybe!(async move {
+        _ = async move {
             while let Ok((buffer, line_hint)) = rx.recv().await {
                 let snapshot = buffer.read_with(&cx, |buffer, _| buffer.snapshot());
                 let (tx, rx) = oneshot::channel();
@@ -568,7 +567,7 @@ impl Search {
             }
             debug_assert!(rx.is_empty());
             Result::<_, anyhow::Error>::Ok(())
-        })
+        }
         .await;
     }
 
@@ -577,7 +576,7 @@ impl Search {
         rx: Receiver<oneshot::Receiver<(Entity<Buffer>, Vec<Range<language::Anchor>>)>>,
         tx: Sender<SearchResult>,
     ) {
-        _ = maybe!(async move {
+        _ = async move {
             let mut matched_buffers = 0;
             let mut matches = 0;
             while let Ok(next_buffer_matches) = rx.recv().await {
@@ -595,7 +594,7 @@ impl Search {
                 tx.send(SearchResult::Buffer { buffer, ranges }).await?;
             }
             anyhow::Ok(())
-        })
+        }
         .await;
     }
 
@@ -808,7 +807,7 @@ impl RequestHandler<'_> {
     }
 
     async fn handle_scan_path(&self, req: InputPath) {
-        _ = maybe!(async move {
+        _ = async move {
             let InputPath { entry, snapshot, should_scan_tx } = req;
 
             if entry.is_fifo || !entry.is_file() {
@@ -847,7 +846,7 @@ impl RequestHandler<'_> {
             }
 
             anyhow::Ok(())
-        })
+        }
         .await;
     }
 }

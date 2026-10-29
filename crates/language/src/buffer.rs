@@ -89,7 +89,6 @@ use theme::ActiveTheme as _;
 use theme::SyntaxTheme;
 use util::RangeExt;
 use util::debug_panic;
-use util::maybe;
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
 
@@ -4224,7 +4223,7 @@ impl BufferSnapshot {
         std::iter::from_fn(move || {
             while let Some(mat) = matches.peek() {
                 let config = &configs[mat.grammar_index];
-                let containing_item_node = maybe!({
+                let containing_item_node = (|| {
                     let item_node = mat
                         .captures
                         .iter()
@@ -4236,7 +4235,7 @@ impl BufferSnapshot {
                     } else {
                         Some(item_node)
                     }
-                });
+                })();
 
                 let range = containing_item_node.as_ref().map(|item_node| {
                     Point::from_ts_point(item_node.start_position())..Point::from_ts_point(item_node.end_position())

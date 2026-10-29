@@ -628,7 +628,6 @@ use ui_input::ErasedEditor;
 use util::RangeExt;
 use util::ResultExt;
 use util::TryFutureExt;
-use util::maybe;
 use util::post_inc;
 use workspace::Item as WorkspaceItem;
 use workspace::ItemId;

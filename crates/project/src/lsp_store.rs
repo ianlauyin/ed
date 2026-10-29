@@ -209,7 +209,6 @@ use util::ConnectionResult;
 use util::ResultExt as _;
 use util::debug_panic;
 use util::defer;
-use util::maybe;
 use util::merge_json_value_into;
 use util::paths::PathStyle;
 use util::paths::SanitizedPath;
@@ -5848,10 +5847,10 @@ impl LspStore {
             })
             .or_else(|| self.upstream_client().is_some().then_some(LanguageServerToQuery::FirstCapable))
             .filter(|_| {
-                maybe!({
+                (|| {
                     buffer.read(cx).language_at(position)?;
                     Some(LanguageSettings::for_buffer_at(buffer.read(cx), position, cx).linked_edits)
-                }) == Some(true)
+                })() == Some(true)
             })
         else {
             return Task::ready(Ok(Vec::new()));
@@ -7103,7 +7102,7 @@ impl LspStore {
             let pull_diagnostics = servers
                 .into_iter()
                 .flat_map(|(adapter, server)| {
-                    let result = maybe!({
+                    let result = (|| {
                         let local = self.as_local()?;
                         let server_id = server.server_id();
                         let mut providers_with_identifiers = Vec::new();
@@ -7155,7 +7154,7 @@ impl LspStore {
                                 })
                                 .collect::<Vec<_>>(),
                         )
-                    });
+                    })();
 
                     result.unwrap_or_default()
                 })
@@ -7961,7 +7960,7 @@ impl LspStore {
     }
 
     async fn refresh_workspace_configurations(lsp_store: &WeakEntity<Self>, cx: &mut AsyncApp) {
-        maybe!(async move {
+        async move {
             let mut refreshed_servers = HashSet::default();
             let servers = lsp_store
                 .update(cx, |lsp_store, cx| {
@@ -8023,7 +8022,7 @@ impl LspStore {
             let _: Vec<Option<()>> = join_all(servers).await;
 
             Some(())
-        })
+        }
         .await;
     }
 
@@ -9498,7 +9497,7 @@ impl LspStore {
     }
 
     pub(super) fn did_rename_entry(&self, worktree_id: WorktreeId, old_path: &Path, new_path: &Path, is_dir: bool) {
-        maybe!({
+        (|| {
             let local_store = self.as_local()?;
 
             let old_uri = lsp::Uri::from_file_path(old_path).ok().map(|uri| uri.to_string())?;
@@ -9520,7 +9519,7 @@ impl LspStore {
                 }
             }
             Some(())
-        });
+        })();
     }
 
     pub(super) fn will_rename_entry(
@@ -9599,7 +9598,7 @@ impl LspStore {
     }
 
     fn lsp_notify_abs_paths_changed(&self, server_id: LanguageServerId, changes: Vec<PathEvent>) {
-        maybe!({
+        (|| {
             let server = self.language_server_for_id(server_id)?;
             let changes = changes
                 .into_iter()
@@ -9618,7 +9617,7 @@ impl LspStore {
                     .ok();
             }
             Some(())
-        });
+        })();
     }
 
     pub fn language_server_for_id(&self, id: LanguageServerId) -> Option<Arc<LanguageServer>> {
@@ -12876,7 +12875,7 @@ impl LanguageServerWatchedPaths {
 
         cx.spawn({
             async move |_, cx| {
-                maybe!(async move {
+                async move {
                     let mut push_updates = cx
                         .background_spawn({
                             let abs_path = abs_path.clone();
@@ -12908,7 +12907,7 @@ impl LanguageServerWatchedPaths {
                         }
                     }
                     Some(())
-                })
+                }
                 .await;
             }
         })

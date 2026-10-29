@@ -26,7 +26,6 @@ use text::Point;
 use theme_settings::ThemeSettings;
 use ui::CopyButton;
 use ui::prelude::*;
-use util::maybe;
 
 use crate::toolbar_controls::DiagnosticsToolbarEditor;
 
@@ -247,13 +246,13 @@ impl DiagnosticBlock {
             editor::hover_popover::open_markdown_url(workspace, link, window, cx);
             return;
         };
-        let Some((buffer_id, group_id, ix)) = maybe!({
+        let Some((buffer_id, group_id, ix)) = (|| {
             let mut parts = diagnostic_link.split('-');
             let buffer_id: u64 = parts.next()?.parse().ok()?;
             let group_id: usize = parts.next()?.parse().ok()?;
             let ix: usize = parts.next()?.parse().ok()?;
             Some((BufferId::new(buffer_id).ok()?, group_id, ix))
-        }) else {
+        })() else {
             return;
         };
 

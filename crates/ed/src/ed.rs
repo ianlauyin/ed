@@ -80,7 +80,6 @@ use theme_settings::ThemeSettings;
 use ui::PopoverMenuHandle;
 use ui::prelude::*;
 use util::ResultExt;
-use util::maybe;
 use uuid::Uuid;
 use workspace::AppState;
 use workspace::CloseProject;
@@ -862,7 +861,7 @@ fn open_log_file(workspace: &Workspace, window: &Window, cx: &Context<Workspace>
                 return;
             }
         };
-        maybe!(async move {
+        async move {
             let project = workspace.read_with(cx, |workspace, _| workspace.project().clone()).ok()?;
             let buffer = project.update(cx, |project, cx| project.create_buffer(log_language, false, cx)).await.ok()?;
             buffer.update(cx, |buffer, cx| {
@@ -894,7 +893,7 @@ fn open_log_file(workspace: &Workspace, window: &Window, cx: &Context<Workspace>
                     workspace.add_item_to_active_pane(Box::new(editor), None, true, window, cx);
                 })
                 .ok()
-        })
+        }
         .await;
     })
     .detach();

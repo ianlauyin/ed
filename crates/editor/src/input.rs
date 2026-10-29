@@ -483,55 +483,31 @@ impl Editor {
                             };
                             let mut delimiter = None;
 
-                            if let Some(comment_delimiter) = maybe!({
-                                if !selection_is_empty {
-                                    return None;
-                                }
-
-                                if !multi_buffer.language_settings(cx).extend_comment_on_newline {
-                                    return None;
-                                }
-
-                                return comment_delimiter_for_newline(&start_point, &buffer, language);
-                            }) {
+                            if selection_is_empty
+                                && multi_buffer.language_settings(cx).extend_comment_on_newline
+                                && let Some(comment_delimiter) =
+                                    comment_delimiter_for_newline(&start_point, &buffer, language)
+                            {
                                 delimiter = Some(comment_delimiter);
                                 if let NewlineConfig::Newline { extra_line_additional_indent, .. } = &mut newline_config
                                 {
                                     *extra_line_additional_indent = None;
                                 }
-                            } else if let Some(doc_delimiter) = maybe!({
-                                if !selection_is_empty {
-                                    return None;
-                                }
-
-                                if !multi_buffer.language_settings(cx).extend_comment_on_newline {
-                                    return None;
-                                }
-
-                                return documentation_delimiter_for_newline(
+                            } else if selection_is_empty
+                                && multi_buffer.language_settings(cx).extend_comment_on_newline
+                                && let Some(doc_delimiter) = documentation_delimiter_for_newline(
                                     &start_point,
                                     &buffer,
                                     language,
                                     &mut newline_config,
-                                );
-                            }) {
+                                )
+                            {
                                 delimiter = Some(doc_delimiter);
-                            } else if let Some(list_delimiter) = maybe!({
-                                if !selection_is_empty {
-                                    return None;
-                                }
-
-                                if !multi_buffer.language_settings(cx).extend_list_on_newline {
-                                    return None;
-                                }
-
-                                return list_delimiter_for_newline(
-                                    &start_point,
-                                    &buffer,
-                                    language,
-                                    &mut newline_config,
-                                );
-                            }) {
+                            } else if selection_is_empty
+                                && multi_buffer.language_settings(cx).extend_list_on_newline
+                                && let Some(list_delimiter) =
+                                    list_delimiter_for_newline(&start_point, &buffer, language, &mut newline_config)
+                            {
                                 delimiter = Some(list_delimiter);
                             }
 

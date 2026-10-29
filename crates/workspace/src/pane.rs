@@ -86,7 +86,6 @@ use ui::right_click_menu;
 use util::ResultExt;
 use util::debug_panic;
 use util::markdown::MarkdownInlineCode;
-use util::maybe;
 use util::paths::PathStyle;
 use util::truncate_and_remove_front;
 
@@ -2451,7 +2450,7 @@ impl Pane {
     }
 
     fn change_tab_pin_state(&mut self, ix: usize, operation: PinOperation, window: &Window, cx: &mut Context<Self>) {
-        maybe!({
+        (|| {
             let pane = cx.entity();
 
             let destination_index = match operation {
@@ -2491,7 +2490,7 @@ impl Pane {
             cx.emit(event);
 
             Some(())
-        });
+        })();
     }
 
     const fn is_tab_pinned(&self, ix: usize) -> bool {
@@ -4410,15 +4409,13 @@ pub fn tab_details(items: &[Box<dyn ItemHandle>], _window: &Window, cx: &App) ->
 }
 
 pub fn render_item_indicator(item: Box<dyn ItemHandle>, cx: &App) -> Option<Indicator> {
-    maybe!({
-        let indicator_color = match (item.has_conflict(cx), item.is_dirty(cx)) {
-            (true, _) => Color::Warning,
-            (_, true) => Color::Accent,
-            (false, false) => return None,
-        };
+    let indicator_color = match (item.has_conflict(cx), item.is_dirty(cx)) {
+        (true, _) => Color::Warning,
+        (_, true) => Color::Accent,
+        (false, false) => return None,
+    };
 
-        Some(Indicator::dot().color(indicator_color))
-    })
+    Some(Indicator::dot().color(indicator_color))
 }
 
 impl Render for DraggedTab {
