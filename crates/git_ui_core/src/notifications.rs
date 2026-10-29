@@ -36,13 +36,29 @@ pub fn open_output(
     workspace.add_item_to_center(Box::new(editor), window, cx);
 }
 
+fn is_non_fast_forward_error(error_message: &str) -> bool {
+    (error_message.contains("[rejected]")
+        && (error_message.contains("(non-fast-forward)") || error_message.contains("(fetch first)")))
+        || (error_message.contains("Updates were rejected")
+            && (error_message.contains("behind") || error_message.contains("remote")))
+}
+
+fn git_error_toast_title(action: &str, message: &str) -> String {
+    if action == "push" && is_non_fast_forward_error(message) {
+        "Push rejected: fetch and integrate remote changes before pushing again".to_string()
+    } else {
+        format!("git {action} failed")
+    }
+}
+
 pub fn show_error_toast(workspace: Entity<Workspace>, action: impl Into<SharedString>, e: anyhow::Error, cx: &mut App) {
     let action = action.into();
     let message = format_git_error_toast_message(&e);
     cx.defer(move |cx| {
         workspace.update(cx, |workspace, cx| {
             let workspace_weak = cx.weak_entity();
-            let toast = StatusToast::new(format!("git {} failed", action), cx, |this, _cx| {
+            let title = git_error_toast_title(&action, &message);
+            let toast = StatusToast::new(title, cx, |this, _cx| {
                 this.icon(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error)).action(
                     "View Log",
                     move |window, cx| {
