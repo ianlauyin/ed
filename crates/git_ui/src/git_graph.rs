@@ -21,6 +21,7 @@ use git::repository::LogOrder;
 use git::repository::LogSource;
 use git::repository::RepoPath;
 use git::repository::SearchCommitArgs;
+use git::repository::commit_hash_search_query;
 use git::status::FileStatus;
 use git::status::StatusCode;
 use git::status::TrackedStatus;
@@ -525,6 +526,57 @@ struct SearchState {
     state: QueryState,
     matches: IndexSet<Oid>,
     selected_index: Option<usize>,
+}
+
+impl SearchState {
+    fn confirmed_query(&self) -> Option<&str> {
+        match &self.state {
+            QueryState::Confirmed((query, _)) => Some(query.as_str()),
+            _ => None,
+        }
+    }
+}
+
+/// Byte ranges of non-overlapping `query` occurrences in `text`, matching what
+/// `git log --grep --fixed-strings` searched for.
+fn search_match_ranges(text: &str, query: &str, case_sensitive: bool) -> Vec<Range<usize>> {
+    if query.is_empty() {
+        return Vec::new();
+    }
+    if case_sensitive {
+        return text.match_indices(query).map(|(start, matched)| start..start + matched.len()).collect();
+    }
+
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    while let Some(rest) = text.get(start..).filter(|rest| !rest.is_empty()) {
+        if let Some(len) = case_insensitive_prefix_len(rest, query) {
+            ranges.push(start..start + len);
+            start += len;
+        } else {
+            start += rest.chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    ranges
+}
+
+/// Byte length of the prefix of `haystack` that equals `needle` ignoring case.
+fn case_insensitive_prefix_len(haystack: &str, needle: &str) -> Option<usize> {
+    let mut haystack_chars = haystack.char_indices();
+    for needle_char in needle.chars() {
+        let (_, haystack_char) = haystack_chars.next()?;
+        if !haystack_char.to_lowercase().eq(needle_char.to_lowercase()) {
+            return None;
+        }
+    }
+    Some(haystack_chars.next().map_or(haystack.len(), |(index, _)| index))
+}
+
+/// Highlighted prefix of a displayed `sha` when `query` was a commit hash search.
+fn commit_hash_match_range(sha: &str, query: &str) -> Option<Range<usize>> {
+    let hash_query = commit_hash_search_query(query)?;
+    let len = hash_query.len().min(sha.len());
+    sha.get(..len)?.eq_ignore_ascii_case(&hash_query[..len]).then_some(0..len)
 }
 
 struct SplitState {
@@ -1766,43 +1818,24 @@ impl GitGraph {
                     Label::new(label).when(!is_selected, |c| c.color(Color::Muted)).truncate().into_any_element()
                 };
 
-                let subject_label = if is_matched {
-                    let query = match &self.search_state.state {
-                        QueryState::Confirmed((query, _)) => Some(query.clone()),
-                        _ => None,
-                    };
-                    let highlight_ranges = query
-                        .and_then(|q| {
-                            let ranges = if self.search_state.case_sensitive {
-                                subject
-                                    .match_indices(q.as_str())
-                                    .map(|(start, matched)| start..start + matched.len())
-                                    .collect::<Vec<_>>()
-                            } else {
-                                let q = q.to_lowercase();
-                                let subject_lower = subject.to_lowercase();
-
-                                subject_lower
-                                    .match_indices(&q)
-                                    .filter_map(|(start, matched)| {
-                                        let end = start + matched.len();
-                                        subject
-                                            .is_char_boundary(start)
-                                            .then_some(())
-                                            .and_then(|_| subject.is_char_boundary(end).then_some(start..end))
-                                    })
-                                    .collect::<Vec<_>>()
-                            };
-
-                            (!ranges.is_empty()).then_some(ranges)
-                        })
-                        .unwrap_or_default();
+                let query = is_matched.then(|| self.search_state.confirmed_query()).flatten();
+                let subject_label = if let Some(query) = query {
+                    let highlight_ranges = search_match_ranges(&subject, query, self.search_state.case_sensitive);
                     HighlightedLabel::from_ranges(subject, highlight_ranges)
                         .when(!is_selected, |c| c.color(Color::Muted))
                         .truncate()
                         .into_any_element()
                 } else {
                     column_label(subject)
+                };
+                let sha_label = if let Some(query) = query {
+                    let highlight_ranges = commit_hash_match_range(&short_sha, query).into_iter().collect();
+                    HighlightedLabel::from_ranges(short_sha, highlight_ranges)
+                        .when(!is_selected, |c| c.color(Color::Muted))
+                        .truncate()
+                        .into_any_element()
+                } else {
+                    column_label(short_sha.into())
                 };
 
                 vec![
@@ -1819,7 +1852,7 @@ impl GitGraph {
                         .overflow_hidden()
                         .when_some(author_name, |this, author_name| this.child(column_label(author_name)))
                         .into_any_element(),
-                    column_label(short_sha.into()),
+                    sha_label,
                 ]
             })
             .collect()
@@ -1903,6 +1936,7 @@ impl GitGraph {
 
         if query.as_str().is_empty() {
             self.search_state.state = QueryState::Empty;
+            self.update_commit_message_search_highlights(cx);
             cx.notify();
             return;
         }
@@ -1951,6 +1985,7 @@ impl GitGraph {
         });
 
         self.search_state.state = QueryState::Confirmed((query, search_task));
+        self.update_commit_message_search_highlights(cx);
         cx.emit(ItemEvent::Edit);
     }
 
@@ -2068,7 +2103,25 @@ impl GitGraph {
             scroll_handle: ScrollHandle::new(),
         });
         self._selected_commit_message_task = None;
+        self.update_commit_message_search_highlights(cx);
         cx.notify();
+    }
+
+    fn update_commit_message_search_highlights(&self, cx: &mut Context<'_, GitGraph>) {
+        let Some(DetailPanelCommitMessage { message, .. }) = self.selected_commit_message.as_ref() else {
+            return;
+        };
+        let query = self.search_state.confirmed_query();
+        let case_sensitive = self.search_state.case_sensitive;
+        message.update(cx, |message, cx| {
+            let ranges =
+                query.map(|query| search_match_ranges(message.source(), query, case_sensitive)).unwrap_or_default();
+            if ranges.is_empty() {
+                message.clear_search_highlights(cx);
+            } else {
+                message.set_search_highlights(ranges, None, cx);
+            }
+        });
     }
 
     fn select_previous_match(&mut self, cx: &mut Context<Self>) {
@@ -4263,5 +4316,40 @@ mod persistence {
                 WHERE item_id = ? AND workspace_id = ?
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_search_match_ranges() {
+        assert_eq!(search_match_ranges("Fix fix FIX", "fix", true), vec![4..7]);
+        assert_eq!(search_match_ranges("Fix fix FIX", "fix", false), vec![0..3, 4..7, 8..11]);
+        assert_eq!(search_match_ranges("aaaa", "aa", false), vec![0..2, 2..4]);
+        assert_eq!(search_match_ranges("anything", "", false), Vec::<Range<usize>>::new());
+        assert_eq!(search_match_ranges("no match", "xyz", false), Vec::<Range<usize>>::new());
+        // Lowercasing `İ` changes its byte length; ranges must stay in original offsets.
+        assert_eq!(search_match_ranges("İx fix", "fix", false), vec![4..7]);
+        assert_eq!(search_match_ranges("Ünïcode ÜNÏ", "ünï", false), vec![0..5, 10..15]);
+    }
+
+    #[test]
+    fn test_case_insensitive_prefix_len() {
+        assert_eq!(case_insensitive_prefix_len("FooBar", "foo"), Some(3));
+        assert_eq!(case_insensitive_prefix_len("Foo", "foo"), Some(3));
+        assert_eq!(case_insensitive_prefix_len("Fo", "foo"), None);
+        assert_eq!(case_insensitive_prefix_len("Bar", "foo"), None);
+        assert_eq!(case_insensitive_prefix_len("ÄBC", "äb"), Some(3));
+    }
+
+    #[test]
+    fn test_commit_hash_match_range() {
+        assert_eq!(commit_hash_match_range("abc1234", "ABC1234"), Some(0..7));
+        assert_eq!(commit_hash_match_range("abc1234", "abc1234def"), Some(0..7));
+        assert_eq!(commit_hash_match_range("abc1234", "abc1235"), None);
+        assert_eq!(commit_hash_match_range("abc1234", "abc"), None);
+        assert_eq!(commit_hash_match_range("abc1234", "fix bug"), None);
     }
 }

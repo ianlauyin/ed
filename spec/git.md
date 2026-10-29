@@ -60,3 +60,11 @@ repository's `$PATH`; if none is found, the repository is not opened.
 - The header is a single compact row: author, date and email (separated by
   `•`) aligned with the editor text, with the "Commit SHA" copy button on the
   same row at the right. The commit message sits directly below.
+
+## Git graph
+
+- Search matches the whole commit message (`git log --grep --fixed-strings`)
+  or, for a 7+ character hex query, a commit hash prefix. Every place that
+  shows the matched text highlights it: the subject column, the detail panel's
+  commit message (all occurrences) and, for hash queries, the SHA column.
+  Highlight ranges follow the case-sensitivity toggle.
