@@ -26,6 +26,7 @@ use crate::MultiWorkspace;
 use crate::Pane;
 use crate::SidebarSide;
 use crate::ToggleWorkspaceSidebar;
+use crate::dock::PanelButtons;
 use crate::sidebar_side_context_menu;
 
 pub trait StatusItemView: Render {
@@ -76,6 +77,7 @@ pub struct StatusBar {
     right_items: Vec<Box<dyn StatusItemViewHandle>>,
     active_pane: Entity<Pane>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
+    dock_buttons_hidden: bool,
     focus_handle: FocusHandle,
     _observe_active_pane: Subscription,
 }
@@ -155,7 +157,7 @@ impl StatusBar {
             .when(sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Left, |this| {
                 this.child(self.render_sidebar_toggle(sidebar, cx))
             })
-            .children(self.left_items.iter().map(|item| item.to_any()))
+            .children(self.visible_items(&self.left_items).map(|item| item.to_any()))
     }
 
     fn render_right_tools(&self, sidebar: &SidebarStatus, cx: &Context<Self>) -> impl IntoElement {
@@ -163,7 +165,7 @@ impl StatusBar {
             .flex_shrink_0()
             .gap_1()
             .overflow_x_hidden()
-            .children(self.right_items.iter().rev().map(|item| item.to_any()))
+            .children(self.visible_items(&self.right_items).rev().map(|item| item.to_any()))
             .when(sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Right, |this| {
                 this.child(self.render_sidebar_toggle(sidebar, cx))
             })
@@ -217,6 +219,7 @@ impl StatusBar {
             right_items: Vec::default(),
             active_pane: active_pane.clone(),
             multi_workspace,
+            dock_buttons_hidden: false,
             focus_handle: cx.focus_handle(),
             _observe_active_pane: cx
                 .observe_in(active_pane, window, |this, _, window, cx| this.update_active_pane_item(window, cx)),
@@ -228,6 +231,19 @@ impl StatusBar {
     pub fn set_multi_workspace(&mut self, multi_workspace: WeakEntity<MultiWorkspace>, cx: &mut Context<Self>) {
         self.multi_workspace = Some(multi_workspace);
         cx.notify();
+    }
+
+    pub fn set_dock_buttons_hidden(&mut self, hidden: bool, cx: &mut Context<Self>) {
+        self.dock_buttons_hidden = hidden;
+        cx.notify();
+    }
+
+    fn visible_items<'a>(
+        &self,
+        items: &'a [Box<dyn StatusItemViewHandle>],
+    ) -> impl DoubleEndedIterator<Item = &'a Box<dyn StatusItemViewHandle>> {
+        let dock_buttons_hidden = self.dock_buttons_hidden;
+        items.iter().filter(move |item| is_item_visible(item.item_type(), dock_buttons_hidden))
     }
 
     pub fn add_left_item<T>(&mut self, item: Entity<T>, window: &mut Window, cx: &mut Context<Self>)
@@ -335,6 +351,10 @@ impl StatusBar {
     }
 }
 
+fn is_item_visible(item_type: TypeId, dock_buttons_hidden: bool) -> bool {
+    !(dock_buttons_hidden && item_type == TypeId::of::<PanelButtons>())
+}
+
 impl<T: StatusItemView> StatusItemViewHandle for Entity<T> {
     fn to_any(&self) -> AnyView {
         self.clone().into()
@@ -352,5 +372,21 @@ impl<T: StatusItemView> StatusItemViewHandle for Entity<T> {
 impl From<&dyn StatusItemViewHandle> for AnyView {
     fn from(val: &dyn StatusItemViewHandle) -> Self {
         val.to_any()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::any::TypeId;
+
+    use super::is_item_visible;
+    use crate::dock::PanelButtons;
+
+    #[test]
+    fn test_is_item_visible() {
+        assert!(is_item_visible(TypeId::of::<PanelButtons>(), false));
+        assert!(!is_item_visible(TypeId::of::<PanelButtons>(), true));
+        assert!(is_item_visible(TypeId::of::<u8>(), true));
+        assert!(is_item_visible(TypeId::of::<u8>(), false));
     }
 }

@@ -1203,7 +1203,7 @@ impl DelayedDebouncedEditAction {
 /// What fills the window below the title bar.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WorkspaceMode {
-    /// Docks, center panes and the status bar.
+    /// Docks and center panes.
     #[default]
     Editor,
     /// Only the git history pane (git graph and commit tabs).
@@ -1225,6 +1225,11 @@ impl WorkspaceMode {
     /// Buffers outside the project (commit revisions) stay in the history pane.
     pub fn opens_in_history_pane(self, is_project_file: bool) -> bool {
         self == WorkspaceMode::GitHistory && !is_project_file
+    }
+
+    /// Dock buttons are hidden while the docks are.
+    pub fn shows_dock_buttons(self) -> bool {
+        self == WorkspaceMode::Editor
     }
 }
 
@@ -2182,7 +2187,7 @@ impl Workspace {
     /// The status bar is hidden while something is zoomed, so the zoomed view
     /// extends down to the window edge.
     pub fn status_bar_visible(&self, cx: &App) -> bool {
-        StatusBarSettings::get_global(cx).show && self.zoomed.is_none() && self.mode == WorkspaceMode::Editor
+        StatusBarSettings::get_global(cx).show && self.zoomed.is_none()
     }
 
     fn render_git_history(&self, cx: &Context<Self>) -> Div {
@@ -2247,7 +2252,7 @@ impl Workspace {
 
     /// Switches what fills the window and moves focus into it.
     pub fn set_mode(&mut self, mode: WorkspaceMode, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.switch_mode(mode, cx) {
+        if !self.switch_mode(mode, window, cx) {
             return;
         }
         match mode {
@@ -2258,11 +2263,19 @@ impl Workspace {
 
     /// Switches the mode without touching focus, for when focus already moved
     /// into the newly shown area. Returns whether the mode changed.
-    fn switch_mode(&mut self, mode: WorkspaceMode, cx: &mut Context<Self>) -> bool {
+    fn switch_mode(&mut self, mode: WorkspaceMode, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.mode == mode {
             return false;
         }
         self.mode = mode;
+        let pane = match mode {
+            WorkspaceMode::Editor => self.active_pane.clone(),
+            WorkspaceMode::GitHistory => self.git_history_pane.clone(),
+        };
+        self.status_bar.update(cx, |status_bar, cx| {
+            status_bar.set_active_pane(&pane, window, cx);
+            status_bar.set_dock_buttons_hidden(!mode.shows_dock_buttons(), cx);
+        });
         cx.notify();
         true
     }
@@ -2280,7 +2293,7 @@ impl Workspace {
                 self.set_mode(WorkspaceMode::Editor, window, cx)
             }
             pane::Event::Focus => {
-                self.switch_mode(WorkspaceMode::GitHistory, cx);
+                self.switch_mode(WorkspaceMode::GitHistory, window, cx);
             }
             pane::Event::ChangeItemTitle | pane::Event::ActivateItem { .. } | pane::Event::RemovedItem { .. } => {
                 cx.notify()
@@ -4747,7 +4760,7 @@ impl Workspace {
     }
 
     fn handle_pane_focused(&mut self, pane: Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
-        self.switch_mode(WorkspaceMode::Editor, cx);
+        self.switch_mode(WorkspaceMode::Editor, window, cx);
         self.flush_deferred_saves(window, cx);
 
         // This is explicitly hoisted out of the following check for pane identity as
@@ -4808,7 +4821,7 @@ impl Workspace {
     }
 
     fn handle_panel_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.switch_mode(WorkspaceMode::Editor, cx);
+        self.switch_mode(WorkspaceMode::Editor, window, cx);
         self.flush_deferred_saves(window, cx);
     }
 
@@ -4867,7 +4880,7 @@ impl Workspace {
                 // Center panes aren't rendered in Git History mode, so focusing one never
                 // reaches `handle_pane_focused`; show them when an item asks for focus.
                 if *focus_changed {
-                    self.switch_mode(WorkspaceMode::Editor, cx);
+                    self.switch_mode(WorkspaceMode::Editor, window, cx);
                 }
 
                 pane.update(cx, |pane, _| {
@@ -8618,5 +8631,11 @@ mod tests {
         assert!(!WorkspaceMode::GitHistory.opens_in_history_pane(true));
         assert!(!WorkspaceMode::Editor.opens_in_history_pane(false));
         assert!(!WorkspaceMode::Editor.opens_in_history_pane(true));
+    }
+
+    #[test]
+    fn test_shows_dock_buttons() {
+        assert!(WorkspaceMode::Editor.shows_dock_buttons());
+        assert!(!WorkspaceMode::GitHistory.shows_dock_buttons());
     }
 }

@@ -55,7 +55,7 @@ repository's `$PATH`; if none is found, the repository is not opened.
 ## Git History mode
 
 Commit history is kept apart from editing: the window is either in Workspace
-mode (docks, editor panes, status bar) or in Git History mode, which shows only
+mode (docks, editor panes) or in Git History mode, which shows only
 one pane holding the git graph and commit tabs. Commit buffers are read-only
 blobs with no language server, so they are not mixed into editor panes.
 
@@ -66,7 +66,9 @@ blobs with no language server, so they are not mixed into editor panes.
   keyboard. The active tab has no fill: it shows full-contrast text and an
   accent-coloured icon, while inactive tabs are muted. Both show the ghost
   hover background, so the filled pill no longer pulls focus from the content.
-- Git History mode hides the docks, editor panes and status bar. The history
+- Git History mode hides the docks and editor panes. The status bar stays and
+  follows the active history tab (cursor position, language on revisions), but
+  hides the dock buttons since the docks are hidden. The history
   pane is a normal pane (folder tabs, card, toolbar with buffer search) that
   never splits or zooms. Its tabs are not restored after a restart.
 - The graph and every commit view open only in the history pane: the graph
