@@ -37,7 +37,7 @@ pub enum TabStyle {
     /// Fills the tab bar height with rounded tops; the active tab joins the card below.
     #[default]
     Folder,
-    /// A rounded button inside the card; the active one is highlighted.
+    /// A rounded button inside the card; the active one has full-contrast text and no fill.
     Pill,
 }
 
@@ -156,11 +156,9 @@ impl RenderOnce for Tab {
         };
 
         if self.style == TabStyle::Pill {
-            let (text_color, bg) = if self.selected {
-                (cx.theme().colors().text, Some(cx.theme().colors().ghost_element_selected))
-            } else {
-                (cx.theme().colors().text_muted, None)
-            };
+            // Selection is shown by text contrast (and the item's own icon colour), not a fill,
+            // matching the title bar's mode switch.
+            let text_color = if self.selected { cx.theme().colors().text } else { cx.theme().colors().text_muted };
             let hover_bg = cx.theme().colors().ghost_element_hover;
             return self
                 .div
@@ -175,8 +173,7 @@ impl RenderOnce for Tab {
                         .relative()
                         .h(Tab::pill_height(cx))
                         .rounded_full()
-                        .when_some(bg, |this, bg| this.bg(bg))
-                        .when(!self.selected, |this| this.hover(|s| s.bg(hover_bg)))
+                        .hover(|s| s.bg(hover_bg))
                         .px(DynamicSpacing::Base08.px(cx))
                         .gap(DynamicSpacing::Base04.rems())
                         .text_color(text_color)

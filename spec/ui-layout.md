@@ -61,9 +61,16 @@ because it hurt readability; an opaque window is also cheaper to composite.
   straight top edge rather than its rounded corner.
 - The terminal panel's panes use pill tabs instead: the whole pane, tab bar
   included, is one card, and tabs are rounded buttons inside its top edge.
-  Only the active pill has a background (`ghost_element_selected`); inactive
-  ones show `ghost_element_hover` on hover. Split drop zones cover only the
-  content below the pills, and inactive-pane dimming covers the whole card.
+  Pills have no fill, the same as the title bar's Workspace / Git History
+  switch: the active pill gets full-contrast text, inactive ones are muted, and
+  any pill shows `ghost_element_hover` on hover. A plain terminal icon is
+  accented only on the active pill of the focused pane, and the active label
+  goes muted when the pane loses focus, so the terminal draws attention only
+  while you are typing in it. Task status icons keep their own colours. A
+  filled active pill drew too much attention, especially with a single
+  terminal, where there is nothing to tell it apart from. Split drop zones
+  cover only the content below the pills, and inactive-pane dimming covers the
+  whole card.
 - Pane toolbars (search bars, breadcrumbs) have no bottom line either; they sit
   flat inside the card.
 - Breadcrumbs have no hover tooltip and no right-click action (no copy path);

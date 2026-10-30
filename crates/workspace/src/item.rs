@@ -160,6 +160,12 @@ impl TabContentParams {
             Color::Muted
         }
     }
+
+    /// Returns the color for a plain (status-free) tab icon: accented only on the selected tab of
+    /// the focused pane.
+    pub const fn icon_color(&self) -> Color {
+        if self.selected && !self.deemphasized { Color::Accent } else { Color::Muted }
+    }
 }
 
 pub enum TabTooltipContent {
@@ -1021,5 +1027,25 @@ pub trait ProjectItem: Item {
         Self: Sized,
     {
         None
+    }
+}
+
+#[cfg(test)]
+mod tab_content_params_tests {
+    use ui::Color;
+
+    use super::TabContentParams;
+
+    #[test]
+    fn test_icon_color() {
+        let params = |selected: bool, deemphasized: bool| TabContentParams {
+            selected,
+            deemphasized,
+            ..TabContentParams::default()
+        };
+        assert_eq!(params(true, false).icon_color(), Color::Accent);
+        assert_eq!(params(true, true).icon_color(), Color::Muted);
+        assert_eq!(params(false, false).icon_color(), Color::Muted);
+        assert_eq!(params(false, true).icon_color(), Color::Muted);
     }
 }
