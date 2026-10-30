@@ -175,7 +175,7 @@ pub struct GitPanelSettingsContent {
     pub button: Option<bool>,
     /// Where to dock the panel.
     ///
-    /// Default: left
+    /// Default: right
     pub dock: Option<DockPosition>,
     /// Default width of the panel in pixels.
     ///

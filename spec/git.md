@@ -39,6 +39,8 @@ repository's `$PATH`; if none is found, the repository is not opened.
 
 ## Git panel
 
+- The panel docks on the right by default, so its status bar button (and the
+  git graph button beside it) sit in the right-hand button group.
 - The panel shows only changes: no tab bar, no "Changes" title and no History
   tab. Commit history lives in the git graph only.
 - The git graph opens from a status bar button placed right after the git panel

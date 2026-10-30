@@ -78,6 +78,8 @@ remote detection, command execution, and proxy startup are removed.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.
 - No bundled fonts: the UI defaults to the macOS system font (`.SystemUIFont`),
   the minimap inherits the buffer font, and SVG/Mermaid text uses system fonts.
+  The buffer and terminal font defaults to Menlo, which ships with macOS; a
+  missing font family resolves to the proportional Helvetica stack.
 - No reduce-motion mode: GPUI has no `reduce_motion` flag and there is no
   `reduce_motion` setting; animations (spinners, GIFs, scrollbar fades,
   notification fades, cursor animation, smooth scrolling) always run.

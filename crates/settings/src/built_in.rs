@@ -175,7 +175,7 @@ pub fn settings() -> SettingsContent {
         call_hierarchy: Some(CallHierarchySettingsContent { modal_max_width: Some(ModalWidthContent::Medium) }),
         git_panel: Some(GitPanelSettingsContent {
             button: Some(true),
-            dock: Some(DockPosition::Left),
+            dock: Some(DockPosition::Right),
             default_width: Some(PixelSetting(360.0)),
             status_style: Some(StatusStyle::Icon),
             folder_indicator: Some(FolderIndicator::Icon),
@@ -495,7 +495,7 @@ fn theme_settings() -> Box<ThemeSettingsContent> {
         ui_font_fallbacks: None,
         ui_font_features: Some(FontFeaturesContent([("calt".into(), 0)].into_iter().collect())),
         ui_font_weight: Some(FontWeightContent(400.0)),
-        buffer_font_family: Some(FontFamilyName("JetBrainsMono Nerd Font".into())),
+        buffer_font_family: Some(FontFamilyName("Menlo".into())),
         buffer_font_fallbacks: None,
         buffer_font_size: Some(FontSize(15.0)),
         buffer_font_weight: Some(FontWeightContent(400.0)),
@@ -705,4 +705,19 @@ fn language_overrides() -> LanguageToSettingsMap {
         .into_iter()
         .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_git_panel_docks_right_by_default() {
+        assert_eq!(settings().git_panel.unwrap().dock, Some(DockPosition::Right));
+    }
+
+    #[test]
+    fn test_buffer_font_defaults_to_menlo() {
+        assert_eq!(theme_settings().buffer_font_family, Some(FontFamilyName("Menlo".into())));
+    }
 }
