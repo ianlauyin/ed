@@ -7,8 +7,8 @@
   runnables, string/comment scopes).
 - The One Dark theme gives each code kind its own colour
   or style, so they never fall back to plain text or share a colour: variables,
-  parameters (italic), properties, function calls, method calls, definitions
-  (bold), macros (`function.special`), declaration keywords (italic),
+  parameters (italic), properties, function calls, method calls, macros
+  (`function.special`), declaration keywords (italic),
   control-flow keywords (`keyword.control`, upright), types, operators,
   strings, numbers, booleans and constants. Builtin constants (`null`, CSS
   values like `flex`) share the boolean colour.
