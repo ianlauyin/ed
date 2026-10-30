@@ -25,6 +25,7 @@ mod npx;
 mod package_json;
 mod python;
 mod rust;
+mod stylelint;
 mod tombi;
 mod tsgo;
 mod typescript;
@@ -48,6 +49,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let python_context_provider = Arc::new(python::PythonContextProvider);
     let rust_context_provider = Arc::new(rust::RustContextProvider);
     let rust_lsp_adapter = Arc::new(rust::RustLspAdapter);
+    let stylelint_lsp_adapter = Arc::new(stylelint::StylelintLspAdapter::new(fs.clone()));
     let typescript_context = Arc::new(typescript::TypeScriptContextProvider::new(fs.clone()));
     let tombi_lsp_adapter = Arc::new(tombi::TombiLspAdapter);
     let tsgo_lsp_adapter = Arc::new(tsgo::TsgoLspAdapter::new(fs));
@@ -62,7 +64,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo { name: "c", adapters: vec![], ..Default::default() },
         LanguageInfo { name: "cpp", adapters: vec![], ..Default::default() },
-        LanguageInfo { name: "css", adapters: vec![css_lsp_adapter, biome_lsp_adapter.clone()], ..Default::default() },
+        LanguageInfo {
+            name: "css",
+            adapters: vec![css_lsp_adapter, biome_lsp_adapter.clone(), stylelint_lsp_adapter],
+            ..Default::default()
+        },
         LanguageInfo { name: "diff", adapters: vec![], ..Default::default() },
         LanguageInfo { name: "env", adapters: vec![], ..Default::default() },
         LanguageInfo {

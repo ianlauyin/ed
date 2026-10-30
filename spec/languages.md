@@ -141,6 +141,15 @@
   worktree root. Formatting stays on the Biome CLI (below).
 - `lsp.tsgo.settings` / `lsp.biome.settings` are passed through as workspace
   configuration.
+- `stylelint` (`stylelint-language-server --stdio`, from
+  `@stylelint/language-server`) also runs for CSS, after the CSS server and
+  Biome. It provides lint diagnostics and code actions
+  (`source.fixAll.stylelint`) using the project's own `stylelint` and config; in
+  projects without `stylelint` installed it reports nothing. It resolves from the
+  nearest `node_modules/.bin` at or above the worktree root, then `PATH`, then
+  npx (the server needs Node ≥ 22.17). `lsp.stylelint.settings` is sent as the
+  server's `stylelint` configuration section (e.g. `validate`, `configFile`).
+  Formatting stays on Biome.
 - Server binary statuses no longer include checking-for-update or downloading.
 - No Vue.js support: no grammar, language server, `tsserver/request` bridge,
   default settings or `.vue` file icon. `.vue` files open as Plain Text.
