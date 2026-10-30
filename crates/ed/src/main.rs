@@ -309,7 +309,6 @@ fn main() {
         encoding_selector::init(cx);
         language_selector::init(cx);
         lsp_command_selector::init(cx);
-        theme_selector::init(cx);
         language_tools::init(cx);
 
         title_bar::init(cx);

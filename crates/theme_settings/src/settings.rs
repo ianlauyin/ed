@@ -19,7 +19,6 @@ use serde::Serialize;
 pub use settings::FontFamilyName;
 use settings::IntoGpui;
 use settings::Settings;
-use settings::SettingsContent;
 pub use settings::ThemeAppearanceMode;
 pub use settings::ThemeName;
 use theme::Appearance;
@@ -35,13 +34,6 @@ use crate::schema::theme_colors_refinement;
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
 const MIN_LINE_HEIGHT: f32 = 1.0;
-
-pub const fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
-    match appearance {
-        Appearance::Light => ThemeAppearanceMode::Light,
-        Appearance::Dark => ThemeAppearanceMode::Dark,
-    }
-}
 
 /// Customizable settings for the UI and theme system.
 #[derive(Clone, PartialEq)]
@@ -98,14 +90,6 @@ pub struct ThemeSettings {
 }
 
 settings::register_setting!(ThemeSettings);
-
-/// Returns the name of the default theme for the given [`Appearance`].
-pub const fn default_theme(appearance: Appearance) -> &'static str {
-    match appearance {
-        Appearance::Light => settings::DEFAULT_LIGHT_THEME,
-        Appearance::Dark => settings::DEFAULT_DARK_THEME,
-    }
-}
 
 #[derive(Default)]
 struct BufferFontSize(Pixels);
@@ -177,71 +161,6 @@ impl ThemeSelection {
             ThemeSelection::Static(_) => None,
             ThemeSelection::Dynamic { mode, .. } => Some(*mode),
         }
-    }
-}
-
-/// Sets the theme for the given appearance to the theme with the specified name.
-///
-/// The caller should make sure that the [`Appearance`] matches the theme associated with the name.
-///
-/// If the current [`ThemeAppearanceMode`] is set to [`System`] and the user's system [`Appearance`]
-/// is different than the new theme's [`Appearance`], this function will update the
-/// [`ThemeAppearanceMode`] to the new theme's appearance in order to display the new theme.
-///
-/// [`System`]: ThemeAppearanceMode::System
-pub fn set_theme(
-    current: &mut SettingsContent,
-    theme_name: impl Into<Arc<str>>,
-    theme_appearance: Appearance,
-    system_appearance: Appearance,
-) {
-    let theme_name = ThemeName(theme_name.into());
-
-    let Some(selection) = current.theme.theme.as_mut() else {
-        current.theme.theme = Some(settings::ThemeSelection::Static(theme_name));
-        return;
-    };
-
-    match selection {
-        settings::ThemeSelection::Static(theme) => {
-            *theme = theme_name;
-        }
-        settings::ThemeSelection::Dynamic { mode, light, dark } => {
-            match theme_appearance {
-                Appearance::Light => *light = theme_name,
-                Appearance::Dark => *dark = theme_name,
-            }
-
-            let should_update_mode = !(mode == &ThemeAppearanceMode::System && theme_appearance == system_appearance);
-
-            if should_update_mode {
-                *mode = appearance_to_mode(theme_appearance);
-            }
-        }
-    }
-}
-
-/// Sets the mode for the theme.
-pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
-    let theme = content.theme.as_mut();
-
-    if let Some(selection) = theme.theme.as_mut() {
-        match selection {
-            settings::ThemeSelection::Static(_) => {
-                *selection = settings::ThemeSelection::Dynamic {
-                    mode: ThemeAppearanceMode::System,
-                    light: ThemeName(settings::DEFAULT_LIGHT_THEME.into()),
-                    dark: ThemeName(settings::DEFAULT_DARK_THEME.into()),
-                };
-            }
-            settings::ThemeSelection::Dynamic { mode: mode_to_update, .. } => *mode_to_update = mode,
-        }
-    } else {
-        theme.theme = Some(settings::ThemeSelection::Dynamic {
-            mode,
-            light: ThemeName(settings::DEFAULT_LIGHT_THEME.into()),
-            dark: ThemeName(settings::DEFAULT_DARK_THEME.into()),
-        });
     }
 }
 

@@ -47,11 +47,6 @@ pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
             items: vec![
                 MenuItem::action("About ed", ed_actions::About),
                 MenuItem::separator(),
-                MenuItem::submenu(
-                    Menu::new("Settings")
-                        .items([MenuItem::action("Select Theme...", ed_actions::theme_selector::Toggle::default())]),
-                ),
-                MenuItem::separator(),
                 #[cfg(target_os = "macos")]
                 MenuItem::os_submenu("Services", gpui::SystemMenuType::Services),
                 MenuItem::separator(),

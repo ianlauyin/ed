@@ -5,7 +5,7 @@
   Python, Rust, TSX, TypeScript, YAML. They drive highlighting plus
   structure-aware features (auto-indent, brackets, outline, text objects,
   runnables, string/comment scopes).
-- The bundled One Dark / One Light themes give each code kind its own colour
+- The One Dark theme gives each code kind its own colour
   or style, so they never fall back to plain text or share a colour: variables,
   parameters (italic), properties, function calls, method calls, definitions
   (bold), macros (`function.special`), declaration keywords (italic),

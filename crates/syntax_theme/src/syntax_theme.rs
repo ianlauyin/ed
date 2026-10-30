@@ -192,7 +192,6 @@ mod bundled_themes {
         use gpui::HighlightStyle;
 
         use super::SyntaxTheme;
-        use super::load_theme;
 
         fn style(theme: &SyntaxTheme, capture_name: &str) -> HighlightStyle {
             let highlight_id =
@@ -201,8 +200,7 @@ mod bundled_themes {
         }
 
         #[test]
-        fn one_themes_style_each_code_kind_distinctly() {
-            let json = include_str!("../../../assets/themes/one/one.json");
+        fn one_dark_styles_each_code_kind_distinctly() {
             let code = [
                 "primary",
                 "variable",
@@ -223,29 +221,20 @@ mod bundled_themes {
             ];
             let css = ["selector", "property", "variable", "function", "constant.builtin", "number", "type", "keyword"];
             let data = ["property", "type", "string", "number", "boolean", "constant"];
-            for theme_name in ["One Dark", "One Light"] {
-                let theme: Arc<SyntaxTheme> = load_theme(json, theme_name);
-                for kinds in [&code[..], &css[..], &data[..]] {
-                    for (i, a) in kinds.iter().enumerate() {
-                        for b in &kinds[i + 1..] {
-                            assert_ne!(
-                                style(&theme, a),
-                                style(&theme, b),
-                                "{theme_name}: {a:?} and {b:?} share a style"
-                            );
-                        }
+            let theme: Arc<SyntaxTheme> = SyntaxTheme::one_dark();
+            for kinds in [&code[..], &css[..], &data[..]] {
+                for (i, a) in kinds.iter().enumerate() {
+                    for b in &kinds[i + 1..] {
+                        assert_ne!(style(&theme, a), style(&theme, b), "{a:?} and {b:?} share a style");
                     }
                 }
             }
         }
 
         #[test]
-        fn one_themes_keep_control_keywords_upright() {
-            let json = include_str!("../../../assets/themes/one/one.json");
-            for theme_name in ["One Dark", "One Light"] {
-                let theme: Arc<SyntaxTheme> = load_theme(json, theme_name);
-                assert_eq!(style(&theme, "keyword.control").font_style, Some(gpui::FontStyle::Normal), "{theme_name}");
-            }
+        fn one_dark_keeps_control_keywords_upright() {
+            let theme: Arc<SyntaxTheme> = SyntaxTheme::one_dark();
+            assert_eq!(style(&theme, "keyword.control").font_style, Some(gpui::FontStyle::Normal));
         }
     }
 }

@@ -11,6 +11,10 @@ macOS; the remote server runs natively on macOS and Linux.
   user settings/files. Snippets and themes come only from
   built-in code/assets (`assets/themes/`); the user config `themes/` folder is
   never read or watched, so the theme set is fixed for the process lifetime.
+- One Dark is the only theme (and the default). There is no theme selector,
+  "Select Theme..." menu item or light/dark `theme::ToggleMode` action. A
+  `theme` setting naming any other theme logs an error and falls back to One
+  Dark; `theme_overrides` still apply.
 - There are no icon themes: no `icon_theme` setting, selector, or menu item.
   File/folder/chevron icons are one hardcoded set (`file_icons` crate,
   `assets/icons/file_icons/`); to change icons, replace the asset files.

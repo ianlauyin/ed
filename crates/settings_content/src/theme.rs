@@ -236,16 +236,12 @@ pub enum ThemeSelection {
     },
 }
 
-pub const DEFAULT_LIGHT_THEME: &str = "One Light";
+/// The only bundled theme.
 pub const DEFAULT_DARK_THEME: &str = "One Dark";
 
 impl Default for ThemeSelection {
     fn default() -> Self {
-        Self::Dynamic {
-            mode: ThemeAppearanceMode::default(),
-            light: ThemeName(DEFAULT_LIGHT_THEME.into()),
-            dark: ThemeName(DEFAULT_DARK_THEME.into()),
-        }
+        Self::Static(ThemeName(DEFAULT_DARK_THEME.into()))
     }
 }
 
@@ -1175,4 +1171,17 @@ impl FontWeightContent {
     pub const BOLD: FontWeightContent = FontWeightContent(700.0);
     pub const EXTRA_BOLD: FontWeightContent = FontWeightContent(800.0);
     pub const BLACK: FontWeightContent = FontWeightContent(900.0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_DARK_THEME;
+    use super::ThemeName;
+    use super::ThemeSelection;
+
+    #[test]
+    fn default_theme_selection_is_one_dark() {
+        assert_eq!(ThemeSelection::default(), ThemeSelection::Static(ThemeName(DEFAULT_DARK_THEME.into())));
+        assert_eq!(DEFAULT_DARK_THEME, "One Dark");
+    }
 }

@@ -964,7 +964,6 @@ dependencies = [
  "tabular_data_preview",
  "terminal_view",
  "theme",
- "theme_selector",
  "theme_settings",
  "time",
  "title_bar",
@@ -4867,24 +4866,6 @@ dependencies = [
  "strum",
  "syntax_theme",
  "thiserror",
-]
-
-[[package]]
-name = "theme_selector"
-version = "0.1.0"
-dependencies = [
- "ed_actions",
- "fs",
- "fuzzy",
- "gpui",
- "log",
- "picker",
- "settings",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
 ]
 
 [[package]]

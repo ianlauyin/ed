@@ -259,26 +259,6 @@ pub mod project_panel {
         ]
     );
 }
-pub mod theme {
-    use gpui::actions;
-
-    actions!(theme, [ToggleMode]);
-}
-
-pub mod theme_selector {
-    use gpui::Action;
-    use serde::Deserialize;
-
-    /// Toggles the theme selector interface.
-    #[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-    #[action(namespace = theme_selector)]
-    #[serde(deny_unknown_fields)]
-    pub struct Toggle {
-        /// A list of theme names to filter the theme selector down to.
-        pub themes_filter: Option<Vec<String>>,
-    }
-}
-
 pub mod search {
     use gpui::Action;
     use gpui::actions;

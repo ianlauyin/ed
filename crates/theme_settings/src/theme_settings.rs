@@ -59,17 +59,13 @@ pub use crate::settings::adjust_git_commit_buffer_font_size;
 pub use crate::settings::adjust_markdown_preview_font_size;
 pub use crate::settings::adjust_ui_font_size;
 pub use crate::settings::adjusted_font_size;
-pub use crate::settings::appearance_to_mode;
 pub use crate::settings::buffer_line_height_from_settings;
 pub use crate::settings::clamp_font_size;
-pub use crate::settings::default_theme;
 pub use crate::settings::observe_buffer_font_size_adjustment;
 pub use crate::settings::reset_buffer_font_size;
 pub use crate::settings::reset_git_commit_buffer_font_size;
 pub use crate::settings::reset_markdown_preview_font_size;
 pub use crate::settings::reset_ui_font_size;
-pub use crate::settings::set_mode;
-pub use crate::settings::set_theme;
 pub use crate::settings::setup_ui_font;
 
 struct ThemeSettingsProviderImpl;
@@ -169,7 +165,7 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
         Ok(theme) => theme,
         Err(err) => {
             log::error!("{err}");
-            themes.get(default_theme(*system_appearance)).unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
+            themes.get(DEFAULT_DARK_THEME).unwrap()
         }
     };
     theme_settings.apply_theme_overrides(theme)

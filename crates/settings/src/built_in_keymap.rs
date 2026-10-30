@@ -522,8 +522,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-shift-h", "pane::DeploySearch").with_input(json!({"replace_enabled": true})),
             KeyBindingSpec::new("cmd-shift-t", "pane::ReopenClosedItem"),
             // KeyBindingSpec::new("cmd-k cmd-p", "workspace::ReopenLastPicker"),
-            // KeyBindingSpec::new("cmd-k cmd-t", "theme_selector::Toggle"),
-            // KeyBindingSpec::new("cmd-k cmd-shift-t", "theme::ToggleMode"),
             KeyBindingSpec::new("cmd-t", "project_symbols::Toggle"),
             KeyBindingSpec::new("cmd-p", "file_finder::Toggle"),
             KeyBindingSpec::new("ctrl-shift-tab", "tab_switcher::Toggle").with_input(json!({"select_last": true})),

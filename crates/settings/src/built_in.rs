@@ -23,6 +23,7 @@ use settings_content::CurrentLineHighlight;
 use settings_content::CursorAnimationSettingsContent;
 use settings_content::CursorShape;
 use settings_content::CursorShapeContent;
+use settings_content::DEFAULT_DARK_THEME;
 use settings_content::DefaultOpenBehavior;
 use settings_content::DelayMs;
 use settings_content::DiagnosticSeverityContent;
@@ -487,7 +488,7 @@ fn theme_settings() -> Box<ThemeSettingsContent> {
         buffer_font_features: Some(FontFeaturesContent(IndexMap::default())),
         git_commit_buffer_font_size: Some(FontSize(12.0)),
         mermaid_font_family: None,
-        theme: Some(ThemeSelection::Static(ThemeName("Nord".into()))),
+        theme: Some(ThemeSelection::Static(ThemeName(DEFAULT_DARK_THEME.into()))),
         unnecessary_code_fade: Some(CodeFade(0.3)),
         ..Default::default()
     })

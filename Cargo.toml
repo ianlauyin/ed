@@ -94,7 +94,6 @@ terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }
-theme_selector = { path = "crates/theme_selector" }
 theme_settings = { path = "crates/theme_settings" }
 time_format = { path = "crates/time_format" }
 title_bar = { path = "crates/title_bar" }
@@ -382,7 +381,6 @@ serde_json = { opt-level = 3 }
 session = { codegen-units = 1 }
 snippet = { codegen-units = 1 }
 taffy = { opt-level = 3 }
-theme_selector = { codegen-units = 1 }
 time_format = { codegen-units = 1 }
 tree-sitter = { opt-level = 3 }
 ui_input = { codegen-units = 1 }
