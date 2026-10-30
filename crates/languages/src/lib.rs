@@ -113,7 +113,12 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             manifest_name: Some(SharedString::new_static("Cargo.toml").into()),
             semantic_token_rules: Some(rust::semantic_token_rules()),
         },
-        LanguageInfo { name: "toml", adapters: vec![tombi_lsp_adapter], ..Default::default() },
+        LanguageInfo {
+            name: "toml",
+            adapters: vec![tombi_lsp_adapter],
+            semantic_token_rules: Some(tombi::semantic_token_rules()),
+            ..Default::default()
+        },
         LanguageInfo {
             name: "tsx",
             adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone()],

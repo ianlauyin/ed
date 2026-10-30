@@ -184,4 +184,68 @@ mod bundled_themes {
             load_theme(include_str!("../../../assets/themes/one/one.json"), "One Dark")
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use std::sync::Arc;
+
+        use gpui::HighlightStyle;
+
+        use super::SyntaxTheme;
+        use super::load_theme;
+
+        fn style(theme: &SyntaxTheme, capture_name: &str) -> HighlightStyle {
+            let highlight_id =
+                theme.highlight_id(capture_name).unwrap_or_else(|| panic!("no style for {capture_name:?}"));
+            *theme.get(highlight_id as usize).unwrap()
+        }
+
+        #[test]
+        fn one_themes_style_each_code_kind_distinctly() {
+            let json = include_str!("../../../assets/themes/one/one.json");
+            let code = [
+                "primary",
+                "variable",
+                "variable.parameter",
+                "property",
+                "function",
+                "function.method",
+                "function.definition",
+                "function.special",
+                "keyword",
+                "keyword.control",
+                "type",
+                "operator",
+                "string",
+                "number",
+                "boolean",
+                "constant",
+            ];
+            let css = ["selector", "property", "variable", "function", "constant.builtin", "number", "type", "keyword"];
+            let data = ["property", "type", "string", "number", "boolean", "constant"];
+            for theme_name in ["One Dark", "One Light"] {
+                let theme: Arc<SyntaxTheme> = load_theme(json, theme_name);
+                for kinds in [&code[..], &css[..], &data[..]] {
+                    for (i, a) in kinds.iter().enumerate() {
+                        for b in &kinds[i + 1..] {
+                            assert_ne!(
+                                style(&theme, a),
+                                style(&theme, b),
+                                "{theme_name}: {a:?} and {b:?} share a style"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn one_themes_keep_control_keywords_upright() {
+            let json = include_str!("../../../assets/themes/one/one.json");
+            for theme_name in ["One Dark", "One Light"] {
+                let theme: Arc<SyntaxTheme> = load_theme(json, theme_name);
+                assert_eq!(style(&theme, "keyword.control").font_style, Some(gpui::FontStyle::Normal), "{theme_name}");
+            }
+        }
+    }
 }

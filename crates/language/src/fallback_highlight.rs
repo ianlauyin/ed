@@ -116,6 +116,7 @@ const SCOPE_RULES: &[(&str, &str)] = &[
     ("entity.name.function", "function"),
     ("support.function", "function"),
     ("variable.function", "function"),
+    ("entity.name.tag.toml", "property"),
     ("entity.name.tag", "tag"),
     ("entity.other.attribute-name", "attribute"),
     ("entity.name.namespace", "namespace"),
@@ -583,11 +584,27 @@ mod tests {
         let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), source);
         let highlighter = FallbackHighlighter::for_buffer(None, Some("Cargo.toml"), buffer.snapshot()).unwrap();
         let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
-        assert!(runs.contains(&("version".into(), "tag".into())), "{runs:?}");
+        assert!(runs.contains(&("version".into(), "property".into())), "{runs:?}");
         assert!(runs.contains(&("\"1\"".into(), "string".into())), "{runs:?}");
         assert!(runs.contains(&("# c".into(), "comment".into())), "{runs:?}");
         assert!(runs.contains(&("}".into(), "punctuation".into())), "{runs:?}");
-        assert!(runs.contains(&("k".into(), "tag".into())), "{runs:?}");
+        assert!(runs.contains(&("k".into(), "property".into())), "{runs:?}");
+    }
+
+    #[test]
+    fn test_highlights_toml_value_kinds() {
+        let theme = theme();
+        set_theme(&theme);
+        let source = "[package]\nname = \"ed\"\nsize = 12\npublish = false\nat = 1979-05-27\n";
+        let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), source);
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("Cargo.toml"), buffer.snapshot()).unwrap();
+        let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
+        assert!(runs.contains(&("package".into(), "type".into())), "{runs:?}");
+        assert!(runs.contains(&("name".into(), "property".into())), "{runs:?}");
+        assert!(runs.contains(&("\"ed\"".into(), "string".into())), "{runs:?}");
+        assert!(runs.contains(&("12".into(), "number".into())), "{runs:?}");
+        assert!(runs.contains(&("false".into(), "boolean".into())), "{runs:?}");
+        assert!(runs.contains(&("1979-05-27".into(), "constant".into())), "{runs:?}");
     }
 
     #[test]

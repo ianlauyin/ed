@@ -33,8 +33,12 @@ pub(crate) fn rules() -> SemanticTokenRules {
             rule("property", &[], &["property"]),
             rule("enumMember", &[], &["type.enum.member", "type.enum", "variant"]),
             rule("decorator", &[], &["function.decorator", "function.annotation", "attribute"]),
+            rule("function", &["declaration"], &["function.definition", "function"]),
+            rule("function", &["definition"], &["function.definition", "function"]),
             rule("function", &["defaultLibrary"], &["function.builtin"]),
             rule("function", &[], &["function"]),
+            rule("method", &["declaration"], &["function.definition", "function.method", "function"]),
+            rule("method", &["definition"], &["function.definition", "function.method", "function"]),
             rule("method", &["defaultLibrary"], &["function.builtin"]),
             rule("method", &[], &["function.method", "function"]),
             rule("macro", &[], &["function.macro", "function"]),
@@ -43,6 +47,7 @@ pub(crate) fn rules() -> SemanticTokenRules {
             rule("comment", &[], &["comment"]),
             rule("string", &["documentation"], &["string.doc"]),
             rule("string", &[], &["string"]),
+            rule("keyword", &["controlFlow"], &["keyword.control", "keyword"]),
             rule("keyword", &[], &["keyword"]),
             rule("number", &[], &["number"]),
             rule("regexp", &[], &["string.regexp", "string"]),
@@ -59,5 +64,35 @@ fn rule(token_type: &str, modifiers: &[&str], styles: &[&str]) -> SemanticTokenR
         token_modifiers: modifiers.iter().map(|modifier| (*modifier).into()).collect(),
         style: styles.iter().map(|style| (*style).into()).collect(),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rules;
+
+    /// The first style of the highest-precedence rule matching the token.
+    fn style_for(token_type: &str, modifiers: &[&str]) -> String {
+        rules()
+            .rules
+            .into_iter()
+            .find(|rule| {
+                rule.token_type.as_deref() == Some(token_type)
+                    && rule.token_modifiers.iter().all(|modifier| modifiers.contains(&modifier.as_str()))
+            })
+            .and_then(|rule| rule.style.first().cloned())
+            .unwrap_or_else(|| panic!("no rule for {token_type:?} {modifiers:?}"))
+    }
+
+    #[test]
+    fn declarations_and_control_flow_get_their_own_styles() {
+        assert_eq!(style_for("function", &["declaration"]), "function.definition");
+        assert_eq!(style_for("function", &["definition"]), "function.definition");
+        assert_eq!(style_for("function", &[]), "function");
+        assert_eq!(style_for("function", &["defaultLibrary"]), "function.builtin");
+        assert_eq!(style_for("method", &["declaration", "static"]), "function.definition");
+        assert_eq!(style_for("method", &[]), "function.method");
+        assert_eq!(style_for("keyword", &["controlFlow"]), "keyword.control");
+        assert_eq!(style_for("keyword", &[]), "keyword");
     }
 }

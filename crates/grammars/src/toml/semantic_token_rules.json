@@ -1,0 +1,30 @@
+[
+  {
+    "token_type": "key",
+    "style": ["property"]
+  },
+  {
+    "token_type": "table",
+    "style": ["type"]
+  },
+  {
+    "token_type": "boolean",
+    "style": ["boolean"]
+  },
+  {
+    "token_type": "offsetDateTime",
+    "style": ["constant"]
+  },
+  {
+    "token_type": "localDateTime",
+    "style": ["constant"]
+  },
+  {
+    "token_type": "localDate",
+    "style": ["constant"]
+  },
+  {
+    "token_type": "localTime",
+    "style": ["constant"]
+  }
+]

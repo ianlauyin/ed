@@ -37,16 +37,16 @@
 
 ; Function and method definitions
 (function_expression
-  name: (identifier) @function)
+  name: (identifier) @function.definition)
 
 (function_declaration
-  name: (identifier) @function)
+  name: (identifier) @function.definition)
 
 (method_definition
   name: [
     (property_identifier)
     (private_property_identifier)
-  ] @function.method)
+  ] @function.definition)
 
 (method_definition
   name: (property_identifier) @constructor
@@ -56,7 +56,7 @@
   key: [
     (property_identifier)
     (private_property_identifier)
-  ] @function.method
+  ] @function.definition
   value: [
     (function_expression)
     (arrow_function)
@@ -67,21 +67,21 @@
     property: [
       (property_identifier)
       (private_property_identifier)
-    ] @function.method)
+    ] @function.definition)
   right: [
     (function_expression)
     (arrow_function)
   ])
 
 (variable_declarator
-  name: (identifier) @function
+  name: (identifier) @function.definition
   value: [
     (function_expression)
     (arrow_function)
   ])
 
 (assignment_expression
-  left: (identifier) @function
+  left: (identifier) @function.definition
   right: [
     (function_expression)
     (arrow_function)

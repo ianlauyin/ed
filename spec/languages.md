@@ -5,6 +5,25 @@
   Python, Rust, TSX, TypeScript, YAML. They drive highlighting plus
   structure-aware features (auto-indent, brackets, outline, text objects,
   runnables, string/comment scopes).
+- The bundled One Dark / One Light themes give each code kind its own colour
+  or style, so they never fall back to plain text or share a colour: variables,
+  parameters (italic), properties, function calls, method calls, definitions
+  (bold), macros (`function.special`), declaration keywords (italic),
+  control-flow keywords (`keyword.control`, upright), types, operators,
+  strings, numbers, booleans and constants. Builtin constants (`null`, CSS
+  values like `flex`) share the boolean colour.
+  - Rust, JavaScript, TypeScript and TSX tag function/method definitions
+    `@function.definition`, separately from calls.
+  - CSS: selectors, properties, `--custom-properties` (variable), functions,
+    values (`constant.builtin`), numbers and units each differ.
+  - JSON/JSONC and TOML: keys use the property colour; values are coloured by
+    kind; TOML table headers use the type colour. Fallback TOML highlighting and
+    tombi's semantic tokens (`key`, `table`, `boolean`, date/time) map to the
+    same captures.
+  - Default semantic-token rules map `function`/`method` tokens with a
+    `declaration`/`definition` modifier to `function.definition`, and
+    `keyword` + `controlFlow` to `keyword.control`, so language servers keep
+    the tree-sitter distinction.
 - Markdown uses the upstream `tree-sitter-md` crate from crates.io (no fork).
   Outlines and breadcrumbs use LSP document symbols by default
   (`document_symbols: "on"`), but Markdown overrides this to tree-sitter
