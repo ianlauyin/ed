@@ -11,7 +11,6 @@ use std::thread::{self};
 use std::time::Duration;
 
 use anyhow::Result;
-use anyhow::anyhow;
 use anyhow::bail;
 use futures::channel::oneshot;
 use gpui::Action;
