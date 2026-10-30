@@ -1022,6 +1022,9 @@ impl RenderOnce for Table {
         };
 
         let is_resizable = resizable_entity.is_some();
+        // Resizable handles span the header too, so a column can be dragged from its header edge.
+        let (body_resize_handles, table_resize_handles) =
+            if is_resizable { (None, resize_handles) } else { (resize_handles, None) };
 
         let table = div()
             .when_some(table_width, |this, width| this.w(width))
@@ -1099,13 +1102,14 @@ impl RenderOnce for Table {
                             .with_sizing_behavior(ListSizingBehavior::Auto),
                         ),
                     })
-                    .when_some(resize_handles, |parent, handles| parent.child(handles));
+                    .when_some(body_resize_handles, |parent, handles| parent.child(handles));
 
                 content.into_any_element()
             })
             .when_some(no_rows_rendered.then_some(self.empty_table_callback).flatten(), |this, callback| {
                 this.child(h_flex().size_full().p_3().items_start().justify_center().child(callback(window, cx)))
-            });
+            })
+            .when_some(table_resize_handles, |this, handles| this.relative().child(handles));
 
         if let Some(state) = interaction_state.as_ref() {
             let content = if is_resizable && !uses_pinned_layout {
@@ -1165,5 +1169,56 @@ impl RenderOnce for Table {
         } else {
             table.into_any_element()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn widths_px(state: &ResizableColumnsState, rem_size: Pixels) -> Vec<Pixels> {
+        state.widths.as_slice().iter().map(|width| width.to_pixels(rem_size)).collect()
+    }
+
+    #[test]
+    fn test_drag_to_resizes_only_dragged_column() {
+        let rem_size = px(16.);
+        let mut state = ResizableColumnsState::new(
+            3,
+            vec![px(40.), px(150.), px(150.)],
+            vec![TableResizeBehavior::None, TableResizeBehavior::Resizable, TableResizeBehavior::Resizable],
+        );
+
+        // Right edge of column 1 moves from 190px to 290px.
+        state.drag_to(1, px(290.), rem_size);
+        assert_eq!(widths_px(&state, rem_size), vec![px(40.), px(250.), px(150.)]);
+
+        state.drag_to(2, px(340.), rem_size);
+        assert_eq!(widths_px(&state, rem_size), vec![px(40.), px(250.), px(50.)]);
+    }
+
+    #[test]
+    fn test_drag_to_clamps_to_min_size() {
+        let rem_size = px(16.);
+        let mut state = ResizableColumnsState::new(
+            2,
+            vec![px(100.), px(100.)],
+            vec![TableResizeBehavior::Resizable, TableResizeBehavior::MinSize(4.)],
+        );
+
+        state.drag_to(0, px(-50.), rem_size);
+        state.drag_to(1, px(0.), rem_size);
+        let min_resizable = rem_size * TableResizeBehavior::Resizable.min_size().unwrap();
+        assert_eq!(widths_px(&state, rem_size), vec![min_resizable, px(64.)]);
+    }
+
+    #[test]
+    fn test_reset_column_to_initial_width() {
+        let rem_size = px(16.);
+        let mut state = ResizableColumnsState::new(1, vec![px(150.)], vec![TableResizeBehavior::Resizable]);
+
+        state.drag_to(0, px(300.), rem_size);
+        state.reset_column_to_initial_width(0);
+        assert_eq!(widths_px(&state, rem_size), vec![px(150.)]);
     }
 }

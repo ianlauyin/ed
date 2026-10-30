@@ -139,6 +139,10 @@
 
 - Markdown rendering, the preview and Mermaid diagrams: see `markdown/`.
 
+## Tabular data preview
+
+- CSV-like grid preview and column resizing: see `tabular-data-preview.md`.
+
 ## Spell checking
 
 - Spell checking, the bundled dictionaries and word lists: see `spellcheck.md`.
