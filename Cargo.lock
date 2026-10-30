@@ -946,7 +946,6 @@ dependencies = [
  "menu",
  "mimalloc",
  "outline",
- "outline_panel",
  "paths",
  "project",
  "project_panel",
@@ -3194,38 +3193,6 @@ dependencies = [
  "theme",
  "ui",
  "workspace",
-]
-
-[[package]]
-name = "outline_panel"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "collections",
- "db",
- "ed_actions",
- "editor",
- "file_icons",
- "fuzzy",
- "git",
- "gpui",
- "language",
- "log",
- "menu",
- "outline",
- "project",
- "search",
- "serde",
- "serde_json",
- "settings",
- "smallvec",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
- "worktree",
 ]
 
 [[package]]

@@ -31,7 +31,7 @@ use crate::display_map::DisplaySnapshot;
 impl Editor {
     /// Returns all document outline items for a buffer, using LSP or
     /// tree-sitter based on the `document_symbols` setting.
-    /// External consumers (outline modal, outline panel, breadcrumbs) should use this.
+    /// External consumers (outline modal, breadcrumbs) should use this.
     pub fn buffer_outline_items(
         &self,
         buffer_id: BufferId,

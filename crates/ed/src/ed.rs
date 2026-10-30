@@ -63,7 +63,6 @@ use language_tools::lsp_button::LspButton;
 use language_tools::lsp_button::{self};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 pub use open_listener::*;
-use outline_panel::OutlinePanel;
 use project::DirectoryLister;
 use project_panel::ProjectPanel;
 use quick_action_bar::QuickActionBar;
@@ -288,7 +287,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 fn initialize_panels(window: &Window, cx: &Context<Workspace>) -> Task<anyhow::Result<()>> {
     cx.spawn_in(window, async move |workspace_handle, cx| {
         let project_panel = ProjectPanel::load(workspace_handle.clone(), cx.clone());
-        let outline_panel = OutlinePanel::load(workspace_handle.clone(), cx.clone());
         let terminal_panel = TerminalPanel::load(workspace_handle.clone(), cx.clone());
         let git_panel = GitPanel::load(workspace_handle.clone(), cx.clone());
 
@@ -308,7 +306,6 @@ fn initialize_panels(window: &Window, cx: &Context<Workspace>) -> Task<anyhow::R
 
         futures::join!(
             add_panel_when_ready(project_panel, workspace_handle.clone(), cx.clone()),
-            add_panel_when_ready(outline_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(terminal_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(git_panel, workspace_handle.clone(), cx.clone()),
         );
@@ -523,14 +520,6 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
              window: &mut Window,
              cx: &mut Context<Workspace>| {
                 workspace.toggle_panel_focus::<ProjectPanel>(window, cx);
-            },
-        )
-        .register_action(
-            |workspace: &mut Workspace,
-             _: &outline_panel::ToggleFocus,
-             window: &mut Window,
-             cx: &mut Context<Workspace>| {
-                workspace.toggle_panel_focus::<OutlinePanel>(window, cx);
             },
         )
         .register_action(

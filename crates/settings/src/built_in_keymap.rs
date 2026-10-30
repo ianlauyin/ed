@@ -531,7 +531,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-shift-p", "command_palette::Toggle"),
             KeyBindingSpec::new("cmd-shift-m", "diagnostics::Deploy"),
             KeyBindingSpec::new("cmd-shift-e", "project_panel::ToggleFocus"),
-            KeyBindingSpec::new("cmd-shift-b", "outline_panel::ToggleFocus"),
             KeyBindingSpec::new("ctrl-shift-g", "git_panel::ToggleFocus"),
             KeyBindingSpec::new("cmd-alt-s", "workspace::SaveAll"),
             // KeyBindingSpec::new("cmd-k n", "encoding_selector::Toggle"),
@@ -652,24 +651,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         Some("ProjectSearchBar && !in_replace"),
         true,
         [KeyBindingSpec::new("cmd-enter", "project_search::SearchInNew")],
-    );
-    add_bindings(
-        &mut keymap,
-        Some("OutlinePanel && not_editing"),
-        true,
-        [
-            KeyBindingSpec::new("escape", "menu::Cancel"),
-            KeyBindingSpec::new("left", "outline_panel::CollapseSelectedEntry"),
-            KeyBindingSpec::new("right", "outline_panel::ExpandSelectedEntry"),
-            KeyBindingSpec::new("cmd-alt-c", "workspace::CopyPath"),
-            KeyBindingSpec::new("alt-cmd-shift-c", "workspace::CopyRelativePath"),
-            KeyBindingSpec::new("alt-cmd-r", "outline_panel::RevealInFileManager"),
-            KeyBindingSpec::new("space", "outline_panel::OpenSelectedEntry"),
-            KeyBindingSpec::new("shift-down", "menu::SelectNext"),
-            KeyBindingSpec::new("shift-up", "menu::SelectPrevious"),
-            KeyBindingSpec::new("alt-enter", "editor::OpenExcerpts"),
-            KeyBindingSpec::new("cmd-alt-enter", "editor::OpenExcerptsSplit"),
-        ],
     );
     add_bindings(
         &mut keymap,

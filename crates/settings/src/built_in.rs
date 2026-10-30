@@ -72,7 +72,6 @@ use settings_content::IncludeIgnoredContent;
 use settings_content::IndentGuideBackgroundColoring;
 use settings_content::IndentGuideColoring;
 use settings_content::IndentGuideSettingsContent;
-use settings_content::IndentGuidesSettingsContent;
 use settings_content::InlayHintSettingsContent;
 use settings_content::InlineDiagnosticsSettingsContent;
 use settings_content::ItemSettingsContent;
@@ -97,7 +96,6 @@ use settings_content::ModalWidthContent;
 use settings_content::MultiCursorModifier;
 use settings_content::OnNewWindow;
 use settings_content::OpenResultsIn;
-use settings_content::OutlinePanelSettingsContent;
 use settings_content::PaneSplitDirectionHorizontal;
 use settings_content::PaneSplitDirectionVertical;
 use settings_content::PathHyperlinkRegex;
@@ -281,20 +279,6 @@ pub fn settings() -> SettingsContent {
         }),
         hide_mouse: Some(HideMouseMode::OnTypingAndAction),
         line_indicator_format: Some(LineIndicatorFormat::Long),
-        outline_panel: Some(OutlinePanelSettingsContent {
-            button: Some(true),
-            default_width: Some(PixelSetting(300.0)),
-            dock: Some(DockSide::Right),
-            file_icons: Some(true),
-            folder_indicator: Some(FolderIndicator::Icon),
-            git_status: Some(true),
-            indent_size: Some(PixelSetting(20.0)),
-            auto_reveal_entries: Some(true),
-            auto_fold_dirs: Some(true),
-            indent_guides: Some(IndentGuidesSettingsContent { show: Some(ShowIndentGuides::Always) }),
-            expand_outlines_with_depth: Some(100),
-            multi_buffer_hide_symbols: Some(false),
-        }),
         project_panel: Some(ProjectPanelSettingsContent {
             button: Some(true),
             hide_gitignore: Some(false),

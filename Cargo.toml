@@ -61,7 +61,6 @@ multi_buffer = { path = "crates/multi_buffer" }
 notifications = { path = "crates/notifications" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
-outline_panel = { path = "crates/outline_panel" }
 path = { path = "crates/path" }
 paths = { path = "crates/paths" }
 picker = { path = "crates/picker" }
