@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::any::TypeId;
-use std::collections::HashSet;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -19,6 +19,9 @@ use editor::SplittableEditor;
 use editor::actions::OpenExcerpts;
 use editor::multibuffer_context_lines;
 use editor::scroll::Autoscroll;
+use editor::scroll::ScrollAnchor;
+use editor::scroll::ScrollOffset;
+use futures::StreamExt as _;
 use futures_lite::future::yield_now;
 use git::Oid;
 use git::repository::CommitDetails;
@@ -53,6 +56,7 @@ use language::File;
 use language::LanguageRegistry;
 use language::LineEnding;
 use language::OffsetRangeExt as _;
+use language::Point;
 use language::ReplicaId;
 use language::Rope;
 use language::TextBuffer;
@@ -61,6 +65,7 @@ use project::Project;
 use project::ProjectPath;
 use project::WorktreeId;
 use project::git_store::CommitDiff;
+use project::git_store::CommitFile;
 use project::git_store::Repository;
 use project::git_store::UnshallowState;
 use settings::DiffViewStyle;
@@ -182,9 +187,46 @@ fn project_file_not_found_message(repo_path: &RepoPath) -> String {
 }
 
 /// The changed file a commit view shows once its diff loads.
+#[derive(Debug, PartialEq)]
 enum InitialFile {
     Scroll(RepoPath),
     Revision(RepoPath),
+}
+
+impl InitialFile {
+    const fn path(&self) -> &RepoPath {
+        match self {
+            InitialFile::Scroll(repo_path) | InitialFile::Revision(repo_path) => repo_path,
+        }
+    }
+}
+
+/// How many changed files a commit view builds at once.
+const FILE_LOAD_CONCURRENCY: usize = 8;
+
+/// Indices of the `files` a commit view shows, limited to `filter`, with
+/// `first` moved to the front so it is built before the rest.
+fn file_load_order(files: &[CommitFile], filter: Option<&RepoPath>, first: Option<&RepoPath>) -> Vec<usize> {
+    let mut order: Vec<usize> =
+        (0..files.len()).filter(|&ix| filter.is_none_or(|filter| &files[ix].path == filter)).collect();
+    if let Some(first) = first
+        && let Some(position) = order.iter().position(|&ix| &files[ix].path == first)
+    {
+        let ix = order.remove(position);
+        order.insert(0, ix);
+    }
+    order
+}
+
+/// One changed file of a commit, built and ready to insert into the diff.
+struct LoadedCommitFile {
+    repo_path: RepoPath,
+    path_key: PathKey,
+    buffer: Entity<Buffer>,
+    buffer_diff: Entity<BufferDiff>,
+    excerpt_ranges: Vec<Range<Point>>,
+    status: FileStatus,
+    is_binary: bool,
 }
 
 struct CommitDiffAddon {
@@ -249,33 +291,59 @@ impl CommitView {
         window: &mut Window,
         cx: &mut App,
     ) {
-        Self::open_with_options(commit_sha, repo, workspace, stash, file_filter, false, None, window, cx)
+        Self::open_with_options(commit_sha, repo, workspace, stash, file_filter, false, None, None, window, cx)
     }
 
-    /// Opens the commit view and, once its diff loads, scrolls to `repo_path`.
+    /// Opens the commit view and scrolls to `repo_path` as soon as its diff is
+    /// built. `commit_diff` is the commit's already loaded diff, if any.
     pub fn open_at_file(
         commit_sha: String,
         repo: WeakEntity<Repository>,
         workspace: WeakEntity<Workspace>,
         repo_path: RepoPath,
+        commit_diff: Option<Arc<CommitDiff>>,
         window: &mut Window,
         cx: &mut App,
     ) {
         let initial_file = Some(InitialFile::Scroll(repo_path));
-        CommitView::open_with_options(commit_sha, repo, workspace, None, None, false, initial_file, window, cx)
+        CommitView::open_with_options(
+            commit_sha,
+            repo,
+            workspace,
+            None,
+            None,
+            false,
+            initial_file,
+            commit_diff,
+            window,
+            cx,
+        )
     }
 
-    /// Opens the commit view and, once its diff loads, `repo_path`'s revision tab.
+    /// Opens the commit view and `repo_path`'s revision tab as soon as its
+    /// diff is built. `commit_diff` is the commit's already loaded diff, if any.
     pub fn open_revision(
         commit_sha: String,
         repo: WeakEntity<Repository>,
         workspace: WeakEntity<Workspace>,
         repo_path: RepoPath,
+        commit_diff: Option<Arc<CommitDiff>>,
         window: &mut Window,
         cx: &mut App,
     ) {
         let initial_file = Some(InitialFile::Revision(repo_path));
-        CommitView::open_with_options(commit_sha, repo, workspace, None, None, false, initial_file, window, cx)
+        CommitView::open_with_options(
+            commit_sha,
+            repo,
+            workspace,
+            None,
+            None,
+            false,
+            initial_file,
+            commit_diff,
+            window,
+            cx,
+        )
     }
 
     fn open_with_options(
@@ -286,11 +354,19 @@ impl CommitView {
         file_filter: Option<RepoPath>,
         ignore_shallow_boundary: bool,
         initial_file: Option<InitialFile>,
+        loaded_diff: Option<Arc<CommitDiff>>,
         window: &Window,
         cx: &mut App,
     ) {
-        let commit_diff =
-            repo.update(cx, |repo, cx| repo.load_commit_diff(commit_sha.clone(), ignore_shallow_boundary, cx)).ok();
+        let commit_diff = match loaded_diff {
+            Some(diff) => Some(Task::ready(Ok(diff))),
+            None => repo
+                .update(cx, |repo, cx| {
+                    let diff = repo.load_commit_diff(commit_sha.clone(), ignore_shallow_boundary, cx);
+                    cx.background_spawn(async move { diff.await.map(Arc::new) })
+                })
+                .ok(),
+        };
         let commit_details = repo.update(cx, |repo, cx| repo.show_commit(commit_sha.clone(), cx)).ok();
 
         window
@@ -298,13 +374,8 @@ impl CommitView {
                 let commit_diff = commit_diff?;
                 let commit_details = commit_details?;
                 let (commit_diff, commit_details) = futures::join!(commit_diff, commit_details);
-                let mut commit_diff = commit_diff.log_err()?;
+                let commit_diff = commit_diff.log_err()?;
                 let commit_details = commit_details.log_err()?;
-
-                // Filter to specific file if requested
-                if let Some(ref filter_path) = file_filter {
-                    commit_diff.files.retain(|f| &f.path == filter_path);
-                }
 
                 let repo = repo.upgrade()?;
 
@@ -367,7 +438,7 @@ impl CommitView {
 
     fn new(
         commit: CommitDetails,
-        commit_diff: CommitDiff,
+        commit_diff: Arc<CommitDiff>,
         repository: Entity<Repository>,
         project: Entity<Project>,
         workspace_entity: Entity<Workspace>,
@@ -390,7 +461,7 @@ impl CommitView {
             let mut details = CommitDetailsPanel::new(Some(language_registry.clone()));
             if let Ok(sha) = commit.sha.parse::<Oid>() {
                 details.set_commit(&repository, sha, Vec::new(), gpui::Hsla::default(), cx);
-                details.set_diff(&commit_diff, cx);
+                details.set_diff(commit_diff.clone(), cx);
             }
             details
         });
@@ -414,6 +485,7 @@ impl CommitView {
         })
         .detach();
 
+        let commit_view = cx.weak_entity();
         let editor = cx.new(|cx| {
             let editor = SplittableEditor::new(
                 EditorSettings::get_global(cx).diff_view_style,
@@ -424,6 +496,9 @@ impl CommitView {
                 cx,
             );
             editor.set_diff_hunk_renderer(Some(Arc::new(HiddenDiffHunkRenderer)), cx);
+            editor.rhs_editor().update(cx, |editor, _cx| {
+                editor.register_addon(CommitDiffAddon { file_statuses: HashMap::default(), commit_view });
+            });
 
             editor
         });
@@ -431,110 +506,62 @@ impl CommitView {
 
         let repository_clone = repository.clone();
         let project_clone = project.clone();
+        let file_filter_clone = file_filter.clone();
 
+        // Files are built concurrently, the initial file first, and each is
+        // shown as soon as it is ready so the initial file does not wait for
+        // the rest of the commit.
         let load_diff_task = cx.spawn_in(window, async move |this, cx| {
-            let mut binary_buffer_ids: HashSet<language::BufferId> = HashSet::default();
-            let mut file_statuses: HashMap<language::BufferId, FileStatus> = HashMap::default();
+            let short_sha = commit_sha.get(0..git::SHORT_SHA_LENGTH).unwrap_or(&commit_sha);
+            let order = file_load_order(
+                &commit_diff.files,
+                file_filter_clone.as_ref(),
+                initial_file.as_ref().map(InitialFile::path),
+            );
+            let file_cx = cx.clone();
+            let mut loaded_files = futures::stream::iter(order)
+                .map(|ix| {
+                    load_commit_file(
+                        &commit_diff.files[ix],
+                        short_sha,
+                        &repository_clone,
+                        &project_clone,
+                        &language_registry,
+                        file_cx.clone(),
+                    )
+                })
+                .buffered(FILE_LOAD_CONCURRENCY);
+            let mut initial_file = initial_file;
 
-            for file in commit_diff.files {
-                let is_created = file.old_text.is_none();
-                let is_deleted = file.new_text.is_none();
-                let raw_new_text = file.new_text.unwrap_or_default();
-                let raw_old_text = file.old_text;
-
-                let is_binary = file.is_binary;
-
-                let new_text = if is_binary { "(binary file not shown)".to_string() } else { raw_new_text };
-                let old_text = if is_binary { None } else { raw_old_text };
-                let worktree_id = repository_clone
-                    .read_with(cx, |repository, cx| {
-                        worktree_id_for_repo_path(repository, project_clone.read(cx), &file.path, cx)
-                    })
-                    .context("project has no worktrees")?;
-                let short_sha = commit_sha.get(0..git::SHORT_SHA_LENGTH).unwrap_or(&commit_sha);
-                let file_name = file
-                    .path
-                    .file_name()
-                    .map(|name| name.to_string())
-                    .unwrap_or_else(|| file.path.display(PathStyle::local()).to_string());
-                let display_name = format!("{short_sha} - {file_name}");
-
-                let file =
-                    Arc::new(GitBlob { path: file.path.clone(), is_deleted, is_binary, worktree_id, display_name })
-                        as Arc<dyn language::File>;
-
-                let buffer = build_buffer(new_text, file, &language_registry, cx).await?;
-                let buffer_id = cx.update(|_, cx| buffer.read(cx).remote_id())?;
-
-                let status_code = if is_created {
-                    StatusCode::Added
-                } else if is_deleted {
-                    StatusCode::Deleted
-                } else {
-                    StatusCode::Modified
-                };
-                file_statuses.insert(
-                    buffer_id,
-                    FileStatus::Tracked(TrackedStatus {
-                        index_status: status_code,
-                        worktree_status: StatusCode::Unmodified,
-                    }),
-                );
-
-                if is_binary {
-                    binary_buffer_ids.insert(buffer_id);
-                }
-
-                let buffer_diff = if is_binary {
-                    cx.update(|_, cx| {
-                        let snapshot = buffer.read(cx).snapshot();
-                        cx.new(|cx| {
-                            BufferDiff::new_unchanged(
-                                &snapshot,
-                                snapshot.language().cloned(),
-                                Some(language_registry.clone()),
-                                cx,
-                            )
-                        })
-                    })?
-                } else {
-                    build_buffer_diff(old_text, &buffer, &language_registry, cx).await?
-                };
-
-                let (excerpt_ranges, path) = cx.update(|_, cx| {
-                    let snapshot = buffer.read(cx).snapshot();
-                    let path =
-                        PathKey::with_sort_prefix(FILE_NAMESPACE_SORT_PREFIX, snapshot.file().unwrap().path().clone());
-                    let ranges = if is_binary {
-                        vec![language::Point::zero()..snapshot.max_point()]
-                    } else {
-                        let diff_snapshot = buffer_diff.read(cx).snapshot(cx);
-                        let mut hunks = diff_snapshot.hunks(&snapshot).peekable();
-                        if hunks.peek().is_none() {
-                            vec![language::Point::zero()..snapshot.max_point()]
-                        } else {
-                            hunks.map(|hunk| hunk.buffer_range.to_point(&snapshot)).collect::<Vec<_>>()
-                        }
-                    };
-                    (ranges, path)
+            while let Some(file) = loaded_files.next().await {
+                let file = file?;
+                let buffer_id = cx.update(|_, cx| file.buffer.read(cx).remote_id())?;
+                this.update(cx, |this, cx| {
+                    this.editor.update(cx, |editor, cx| {
+                        editor.rhs_editor().update(cx, |editor, _cx| {
+                            if let Some(addon) = editor.addon_mut::<CommitDiffAddon>() {
+                                addon.file_statuses.insert(buffer_id, file.status);
+                            }
+                        });
+                    });
                 })?;
 
                 // Batch the insertion of excerpts and yield between batches, to avoid blocking the main thread when a single file has many hunks.
                 const EXCERPT_BATCH_SIZE: usize = 10;
-                let total = excerpt_ranges.len();
+                let total = file.excerpt_ranges.len();
                 let mut batch_end = 0;
                 while batch_end < total {
                     let is_first_batch = batch_end == 0;
                     batch_end = (batch_end + EXCERPT_BATCH_SIZE).min(total);
-                    let ranges = excerpt_ranges[..batch_end].to_vec();
+                    let ranges = file.excerpt_ranges[..batch_end].to_vec();
                     this.update_in(cx, |this, window, cx| {
                         this.editor.update(cx, |editor, cx| {
                             editor.update_excerpts_for_path(
-                                path.clone(),
-                                buffer.clone(),
+                                file.path_key.clone(),
+                                file.buffer.clone(),
                                 ranges,
                                 multibuffer_context_lines(cx),
-                                buffer_diff.clone(),
+                                file.buffer_diff.clone(),
                                 cx,
                             );
                             if is_first_batch && editor.diff_view_style() == DiffViewStyle::Split {
@@ -546,35 +573,23 @@ impl CommitView {
                         yield_now().await;
                     }
                 }
+
+                if file.is_binary {
+                    this.update(cx, |this, cx| {
+                        this.editor.update(cx, |editor, cx| {
+                            editor.rhs_editor().update(cx, |editor, cx| editor.fold_buffers([buffer_id], cx));
+                        });
+                    })?;
+                }
+
+                if let Some(initial_file) = initial_file.take_if(|initial| initial.path() == &file.repo_path) {
+                    this.update_in(cx, |this, window, cx| this.show_initial_file(&initial_file, window, cx))?;
+                }
             }
 
-            this.update(cx, |this, cx| {
-                let commit_view = cx.weak_entity();
-                this.editor.update(cx, |editor, cx| {
-                    editor.rhs_editor().update(cx, |editor, _cx| {
-                        editor.register_addon(CommitDiffAddon { file_statuses, commit_view });
-                    });
-                });
-                if !binary_buffer_ids.is_empty() {
-                    this.editor.update(cx, |editor, cx| {
-                        editor.rhs_editor().update(cx, |editor, cx| {
-                            editor.fold_buffers(binary_buffer_ids, cx);
-                        });
-                    });
-                }
-            })?;
-
+            // The initial file is not in this commit; still reveal it in the sidebar.
             if let Some(initial_file) = initial_file {
-                this.update_in(cx, |this, window, cx| match &initial_file {
-                    InitialFile::Scroll(repo_path) => {
-                        this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
-                        this.scroll_to_file(repo_path, window, cx);
-                    }
-                    InitialFile::Revision(repo_path) => {
-                        this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
-                        this.open_file_revision(repo_path, window, cx);
-                    }
-                })?;
+                this.update_in(cx, |this, window, cx| this.show_initial_file(&initial_file, window, cx))?;
             }
 
             anyhow::Ok(())
@@ -664,6 +679,7 @@ impl CommitView {
                                                     file_filter,
                                                     false,
                                                     None,
+                                                    None,
                                                     window,
                                                     cx,
                                                 )
@@ -696,6 +712,7 @@ impl CommitView {
                                     stash,
                                     file_filter.clone(),
                                     true,
+                                    None,
                                     None,
                                     window,
                                     cx,
@@ -758,10 +775,40 @@ impl CommitView {
         true
     }
 
-    fn scroll_to_file(&self, repo_path: &RepoPath, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.select_file(repo_path, window, cx) {
-            return;
+    fn show_initial_file(&self, initial_file: &InitialFile, window: &mut Window, cx: &mut Context<Self>) {
+        match initial_file {
+            InitialFile::Scroll(repo_path) => {
+                self.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
+                self.scroll_to_file(repo_path, window, cx);
+            }
+            InitialFile::Revision(repo_path) => {
+                self.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
+                self.open_file_revision(repo_path, window, cx);
+            }
         }
+    }
+
+    /// Moves the diff's cursor to `repo_path` and scrolls its header to the
+    /// top. The scroll is anchored inside the file, so files inserted above
+    /// it while the diff is still loading don't push it out of view.
+    fn scroll_to_file(&self, repo_path: &RepoPath, window: &mut Window, cx: &mut Context<Self>) {
+        let path_key = PathKey::with_sort_prefix(FILE_NAMESPACE_SORT_PREFIX, repo_path.as_ref().clone());
+        let Some(position) = self.multibuffer.read(cx).location_for_path(&path_key, cx) else {
+            return;
+        };
+        self.editor.update(cx, |editor, cx| {
+            editor.rhs_editor().update(cx, |editor, cx| {
+                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
+                    s.select_ranges([position..position]);
+                });
+                let snapshot = editor.display_snapshot(cx);
+                let header_rows =
+                    if snapshot.buffer_snapshot().show_headers() { snapshot.buffer_header_height() } else { 0 };
+                let scroll_anchor =
+                    ScrollAnchor { anchor: position, offset: gpui::point(0., -ScrollOffset::from(header_rows)) };
+                editor.set_scroll_anchor(scroll_anchor, window, cx);
+            })
+        });
         let focus_handle = self.editor.read(cx).rhs_editor().read(cx).focus_handle(cx);
         window.focus(&focus_handle, cx);
     }
@@ -1003,6 +1050,85 @@ impl language::File for GitBlob {
     fn can_open(&self) -> bool {
         !self.is_binary
     }
+}
+
+/// Builds `file`'s buffer, its diff against the parent commit and the ranges
+/// of its hunks.
+async fn load_commit_file(
+    file: &CommitFile,
+    short_sha: &str,
+    repository: &Entity<Repository>,
+    project: &Entity<Project>,
+    language_registry: &Arc<LanguageRegistry>,
+    mut cx: AsyncWindowContext,
+) -> Result<LoadedCommitFile> {
+    let is_binary = file.is_binary;
+    let new_text =
+        if is_binary { "(binary file not shown)".to_string() } else { file.new_text.clone().unwrap_or_default() };
+    let old_text = if is_binary { None } else { file.old_text.clone() };
+    let worktree_id = repository
+        .read_with(&cx, |repository, cx| worktree_id_for_repo_path(repository, project.read(cx), &file.path, cx))
+        .context("project has no worktrees")?;
+    let file_name = file
+        .path
+        .file_name()
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| file.path.display(PathStyle::local()).to_string());
+    let blob = Arc::new(GitBlob {
+        path: file.path.clone(),
+        is_deleted: file.new_text.is_none(),
+        is_binary,
+        worktree_id,
+        display_name: format!("{short_sha} - {file_name}"),
+    }) as Arc<dyn language::File>;
+
+    let buffer = build_buffer(new_text, blob, language_registry, &mut cx).await?;
+    let buffer_diff = if is_binary {
+        cx.update(|_, cx| {
+            let snapshot = buffer.read(cx).snapshot();
+            cx.new(|cx| {
+                BufferDiff::new_unchanged(&snapshot, snapshot.language().cloned(), Some(language_registry.clone()), cx)
+            })
+        })?
+    } else {
+        build_buffer_diff(old_text, &buffer, language_registry, &mut cx).await?
+    };
+
+    let (path_key, excerpt_ranges) = cx.update(|_, cx| {
+        let snapshot = buffer.read(cx).snapshot();
+        let path_key = PathKey::with_sort_prefix(FILE_NAMESPACE_SORT_PREFIX, file.path.as_ref().clone());
+        let full_range = vec![Point::zero()..snapshot.max_point()];
+        let excerpt_ranges = if is_binary {
+            full_range
+        } else {
+            let diff_snapshot = buffer_diff.read(cx).snapshot(cx);
+            let mut hunks = diff_snapshot.hunks(&snapshot).peekable();
+            if hunks.peek().is_none() {
+                full_range
+            } else {
+                hunks.map(|hunk| hunk.buffer_range.to_point(&snapshot)).collect()
+            }
+        };
+        (path_key, excerpt_ranges)
+    })?;
+
+    let status_code = match (&file.old_text, &file.new_text) {
+        (None, _) => StatusCode::Added,
+        (_, None) => StatusCode::Deleted,
+        _ => StatusCode::Modified,
+    };
+    let status =
+        FileStatus::Tracked(TrackedStatus { index_status: status_code, worktree_status: StatusCode::Unmodified });
+
+    Ok(LoadedCommitFile {
+        repo_path: file.path.clone(),
+        path_key,
+        buffer,
+        buffer_diff,
+        excerpt_ranges,
+        status,
+        is_binary,
+    })
 }
 
 pub(crate) async fn build_buffer(
@@ -1250,9 +1376,21 @@ mod tests {
     use editor::Addon;
     use git::repository::RepoPath;
     use gpui::WeakEntity;
+    use project::git_store::CommitFile;
 
     use super::CommitDiffAddon;
+    use super::InitialFile;
+    use super::file_load_order;
     use super::project_file_not_found_message;
+
+    fn commit_file(path: &str) -> CommitFile {
+        CommitFile {
+            path: RepoPath::new(path).unwrap(),
+            old_text: Some("old".to_string()),
+            new_text: Some("new".to_string()),
+            is_binary: false,
+        }
+    }
 
     #[test]
     fn test_project_file_not_found_message() {
@@ -1267,5 +1405,27 @@ mod tests {
     fn test_commit_diff_addon_open_file_label() {
         let addon = CommitDiffAddon { file_statuses: HashMap::default(), commit_view: WeakEntity::new_invalid() };
         assert_eq!(addon.open_file_label(), Some("Open Revision"));
+    }
+
+    #[test]
+    fn test_initial_file_path() {
+        let path = RepoPath::new("src/lib.rs").unwrap();
+        assert_eq!(InitialFile::Scroll(path.clone()).path(), &path);
+        assert_eq!(InitialFile::Revision(path.clone()).path(), &path);
+    }
+
+    #[test]
+    fn test_file_load_order() {
+        let files = vec![commit_file("a.rs"), commit_file("b.rs"), commit_file("c.rs")];
+        let b = RepoPath::new("b.rs").unwrap();
+        let c = RepoPath::new("c.rs").unwrap();
+        let missing = RepoPath::new("missing.rs").unwrap();
+
+        assert_eq!(file_load_order(&files, None, None), vec![0, 1, 2]);
+        assert_eq!(file_load_order(&files, None, Some(&c)), vec![2, 0, 1]);
+        assert_eq!(file_load_order(&files, None, Some(&missing)), vec![0, 1, 2]);
+        assert_eq!(file_load_order(&files, Some(&b), None), vec![1]);
+        assert_eq!(file_load_order(&files, Some(&b), Some(&c)), vec![1]);
+        assert!(file_load_order(&[], None, Some(&b)).is_empty());
     }
 }

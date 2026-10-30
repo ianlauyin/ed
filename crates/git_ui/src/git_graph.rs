@@ -17,6 +17,7 @@ use git::Oid;
 use git::repository::InitialGraphCommitData;
 use git::repository::LogOrder;
 use git::repository::LogSource;
+use git::repository::RepoPath;
 use git::repository::SearchCommitArgs;
 use git::repository::commit_hash_search_query;
 use gpui::Action;
@@ -867,6 +868,14 @@ pub fn open_or_reuse_graph(
     }
 }
 
+/// The path a file history reveals in each commit's changed files.
+fn history_reveal_path(log_source: &LogSource) -> Option<RepoPath> {
+    match log_source {
+        LogSource::Path(path) => Some(path.clone()),
+        LogSource::All | LogSource::Branch(_) | LogSource::Sha(_) => None,
+    }
+}
+
 fn lane_center_x(bounds: Bounds<Pixels>, lane: f32) -> Pixels {
     bounds.origin.x + LEFT_PADDING + lane * LANE_WIDTH + LANE_WIDTH / 2.0
 }
@@ -1517,6 +1526,7 @@ impl GitGraph {
                     repository.downgrade(),
                     self.workspace.clone(),
                     repo_path.clone(),
+                    self.commit_details.read(cx).diff(),
                     window,
                     cx,
                 );
@@ -1531,6 +1541,7 @@ impl GitGraph {
                     repository.downgrade(),
                     self.workspace.clone(),
                     repo_path.clone(),
+                    self.commit_details.read(cx).diff(),
                     window,
                     cx,
                 );
@@ -1726,9 +1737,13 @@ impl GitGraph {
             .get(commit.color_idx)
             .copied()
             .unwrap_or_else(|| accent_colors.0.first().copied().unwrap_or_default());
+        let history_path = history_reveal_path(&self.log_source);
         self.commit_details.update(cx, |details, cx| {
             details.set_commit(&repository, sha, ref_names, ref_color, cx);
             details.load_diff(cx);
+            if let Some(path) = history_path {
+                details.reveal_file(&path, cx);
+            }
         });
 
         cx.emit(ItemEvent::Edit);
@@ -3122,6 +3137,14 @@ fn newest_commit_to_select(selected: Option<usize>, has_pending: bool, commit_co
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_history_reveal_path() {
+        let path = RepoPath::new("crates/ui/src/ui_input.rs").unwrap();
+        assert_eq!(history_reveal_path(&LogSource::Path(path.clone())), Some(path));
+        assert_eq!(history_reveal_path(&LogSource::All), None);
+        assert_eq!(history_reveal_path(&LogSource::Branch("main".into())), None);
+    }
 
     #[test]
     fn test_newest_commit_to_select() {

@@ -93,6 +93,9 @@ blobs with no language server, so they are not mixed into editor panes.
   view's commit. It has no close button; the graph selects the newest commit
   once commits load (unless a specific commit is being selected, e.g. "Show in
   Git Graph"), so the sidebar is always shown except for an empty history.
+- In a file history graph (View History / File History), the sidebar reveals
+  that file in each selected commit's changed files (folders expanded, row
+  highlighted, scrolled into view once the files load).
 
 ## Commit view
 
@@ -101,6 +104,12 @@ blobs with no language server, so they are not mixed into editor panes.
 - Clicking a changed file in the sidebar scrolls the diff to it. In the graph,
   it opens the whole commit view and scrolls to that file; there is no "View
   Commit" button, since clicking a file is the way in.
+- Opening from the graph reuses the diff the sidebar already loaded instead of
+  reading the commit from git again. The commit view builds files
+  concurrently, the clicked file first, and inserts each one as soon as it is
+  ready, so it scrolls to the clicked file without waiting for the rest of the
+  commit. The scroll puts the file's header at the top and is anchored inside
+  that file, so files inserted above it while loading don't move it out of view.
 - While one of the commit's revision tabs is active, clicking a changed file
   opens that file's revision instead (like "Open Revision" on its excerpt, so it
   follows the preview-tab settings and lands on the first hunk). The click

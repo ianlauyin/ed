@@ -87,6 +87,8 @@ pub struct CommitDetailsPanel {
     ref_names: Vec<SharedString>,
     ref_color: Hsla,
     files: Option<Vec<ChangedFileEntry>>,
+    /// Kept so opening a file in the commit view skips reloading it from git.
+    diff: Option<Arc<CommitDiff>>,
     diff_stats: (usize, usize),
     message: Option<Entity<Markdown>>,
     message_scroll_handle: ScrollHandle,
@@ -115,6 +117,7 @@ impl CommitDetailsPanel {
             ref_names: Vec::new(),
             ref_color: Hsla::default(),
             files: None,
+            diff: None,
             diff_stats: (0, 0),
             message: None,
             message_scroll_handle: ScrollHandle::new(),
@@ -155,6 +158,7 @@ impl CommitDetailsPanel {
         self.repository = repository.downgrade();
         self.sha = Some(sha);
         self.files = None;
+        self.diff = None;
         self.diff_stats = (0, 0);
         self.message = None;
         self.expanded_dirs.clear();
@@ -192,7 +196,7 @@ impl CommitDetailsPanel {
             if let Ok(diff) = diff_task.await {
                 this.update(cx, |this, cx| {
                     if this.sha == Some(sha) {
-                        this.set_diff(&diff, cx);
+                        this.set_diff(Arc::new(diff), cx);
                     }
                 })
                 .ok();
@@ -200,10 +204,16 @@ impl CommitDetailsPanel {
         }));
     }
 
-    pub fn set_diff(&mut self, diff: &CommitDiff, cx: &mut Context<Self>) {
+    pub fn set_diff(&mut self, diff: Arc<CommitDiff>, cx: &mut Context<Self>) {
         self.files = Some(diff.files.iter().map(ChangedFileEntry::from_commit_file).collect());
-        self.diff_stats = compute_diff_stats(diff);
+        self.diff_stats = compute_diff_stats(&diff);
+        self.diff = Some(diff);
         cx.notify();
+    }
+
+    /// The current commit's loaded diff, if it has finished loading.
+    pub fn diff(&self) -> Option<Arc<CommitDiff>> {
+        self.diff.clone()
     }
 
     /// Highlights `repo_path` in the changed files, expanding its folders and
@@ -462,7 +472,9 @@ impl CommitDetailsPanel {
         } else {
             Rc::default()
         };
-        if std::mem::take(&mut self.scroll_to_revealed)
+        // Keep a pending reveal until the changed files have loaded.
+        if self.files.is_some()
+            && std::mem::take(&mut self.scroll_to_revealed)
             && let Some(ix) = self
                 .revealed_path
                 .as_ref()
