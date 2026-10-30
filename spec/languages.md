@@ -208,6 +208,13 @@
   diagnostics and code actions (`source.fixAll.biome`,
   `source.organizeImports.biome`). It resolves like the Biome formatter, from the
   worktree root. Formatting stays on the Biome CLI (below).
+- `stylelint` (`stylelint-language-server --stdio`, from
+  `@stylelint/language-server`) also runs for CSS, after the CSS server and
+  Biome. It provides lint diagnostics and code actions
+  (`source.fixAll.stylelint`) using the project's own `stylelint` and config; in
+  projects without `stylelint` installed it reports nothing. It resolves from the
+  nearest `node_modules/.bin` at or above the worktree root, then `PATH`, then
+  npx (the server needs Node ≥ 22.17). Formatting stays on Biome.
 - There are no `lsp.<server>` settings. Each adapter hardcodes its server's
   binary arguments, initialization options and workspace configuration
   (rust-analyzer: nightly rustfmt, clippy check, all cargo features). A

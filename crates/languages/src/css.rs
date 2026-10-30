@@ -13,11 +13,13 @@ use language::language_settings::WordsCompletionMode;
 use lsp::LanguageServerBinary;
 use lsp::LanguageServerName;
 use lsp::Uri;
+use project::Fs;
 use rustc_hash::FxHashMap;
 use serde_json::json;
 
 use crate::LanguageDef;
 use crate::npx;
+use crate::stylelint::StylelintLspAdapter;
 
 pub(crate) struct CssLspAdapter;
 
@@ -86,10 +88,10 @@ pub(crate) fn settings() -> LanguageSettings {
     }
 }
 
-pub(crate) fn languages(biome: Arc<dyn LspAdapter>) -> Vec<LanguageDef> {
+pub(crate) fn languages(biome: Arc<dyn LspAdapter>, fs: Arc<dyn Fs>) -> Vec<LanguageDef> {
     vec![LanguageDef {
         grammar: Some(tree_sitter_css::LANGUAGE.into()),
-        adapters: vec![Arc::new(CssLspAdapter), biome],
+        adapters: vec![Arc::new(CssLspAdapter), biome, Arc::new(StylelintLspAdapter::new(fs))],
         ..LanguageDef::new("css", settings())
     }]
 }

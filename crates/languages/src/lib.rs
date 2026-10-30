@@ -33,6 +33,7 @@ mod package_json;
 mod plain_text;
 mod python;
 mod rust;
+mod stylelint;
 mod terraform;
 mod tombi;
 mod tsgo;
@@ -46,7 +47,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let biome: Arc<dyn LspAdapter> = Arc::new(biome::BiomeLspAdapter::new(Arc::clone(&fs)));
     let definitions = [
         bash::languages(),
-        css::languages(Arc::clone(&biome)),
+        css::languages(Arc::clone(&biome), Arc::clone(&fs)),
         diff::languages(),
         env::languages(),
         git_commit::languages(),
