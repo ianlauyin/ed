@@ -45,7 +45,9 @@ repository's `$PATH`; if none is found, the repository is not opened.
   editor and terminal cards, so it reads as editable content against the
   chrome-coloured panel.
 - There is no commit modal: the commit editor lives only in the panel, with a
-  single top-right button that toggles filling the panel. `git::Commit` /
+  single top-right button that toggles filling the panel. While filled, the
+  button stays visible in the accent colour (like the pane zoom toggle) so the
+  expanded state is obvious. `git::Commit` /
   `git::Amend` from outside the editor open the panel and focus its commit
   editor (amend loads the last commit message) instead of opening a modal.
 - Removing untracked files uses "Delete" wording everywhere (menu items,
