@@ -75,8 +75,9 @@ blobs with no language server, so they are not mixed into editor panes.
   from `git_graph::Open` / File History, commits from the graph, blame, commit
   tooltips, the stash picker and the git panel. Opening one switches to Git
   History mode. The repository-wide graph is always the first tab.
-- "Open File" on a commit diff excerpt opens that revision as a read-only tab
-  in the history pane, since it can't use workspace features. Buffers that are
+- "Open Revision" (the buffer header button, "Open File" elsewhere) on a
+  commit diff excerpt opens that revision as a read-only tab in the history
+  pane, since it can't use workspace features. Buffers that are
   project files still open in the editor. The revision tab keeps its commit's
   sidebar, with the file revealed (folders expanded, row highlighted) whenever
   the tab is focused.
@@ -95,13 +96,27 @@ blobs with no language server, so they are not mixed into editor panes.
 
 - The diff card has no header of its own; commit details are in the history
   sidebar. The toolbar keeps buffer search and "Show in Git Graph".
-- Clicking a changed file in the sidebar scrolls the diff to it, instead
-  of opening a single-file commit view as it does for the graph's selected commit.
+- Clicking a changed file in the sidebar scrolls the diff to it. In the graph,
+  it opens the whole commit view and scrolls to that file; there is no "View
+  Commit" button, since clicking a file is the way in.
 - While one of the commit's revision tabs is active, clicking a changed file
-  opens that file's revision instead (like "Open File" on its excerpt, so it
+  opens that file's revision instead (like "Open Revision" on its excerpt, so it
   follows the preview-tab settings and lands on the first hunk). The click
   always acts on the visible tab's mode: diff stays diff, revision stays
   revision.
+
+## Changed files context menu
+
+Right-clicking a changed file in the commit details sidebar (graph or commit
+view) offers:
+
+- "Open Revision": opens the file's revision tab at that commit. From the
+  graph this opens the commit view, then its revision.
+- "Open Project File": opens the file from the project in Workspace mode. If
+  the path is no longer a file in the project (moved or deleted since the
+  commit), a toast says so instead.
+- Changed file rows have no hover tooltip, so it doesn't compete with the
+  menu.
 
 ## Git graph
 

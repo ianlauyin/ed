@@ -117,6 +117,7 @@ use crate::commit_details_panel::CommitDetailsEvent;
 use crate::commit_details_panel::CommitDetailsPanel;
 use crate::commit_details_panel::render_ref_chip;
 use crate::commit_view::CommitView;
+use crate::commit_view::open_project_file;
 
 const COMMIT_CIRCLE_RADIUS: Pixels = px(4.5);
 const COMMIT_CIRCLE_STROKE_WIDTH: Pixels = px(1.5);
@@ -1174,7 +1175,7 @@ impl GitGraph {
         })
         .detach();
 
-        let commit_details = cx.new(|_| CommitDetailsPanel::new(true, Some(languages)));
+        let commit_details = cx.new(|_| CommitDetailsPanel::new(Some(languages)));
         cx.subscribe_in(&commit_details, window, Self::handle_commit_details_event).detach();
 
         let mut this = GitGraph {
@@ -1506,21 +1507,38 @@ impl GitGraph {
         cx: &mut Context<Self>,
     ) {
         match event {
-            CommitDetailsEvent::OpenCommit => self.open_selected_commit_view(window, cx),
             CommitDetailsEvent::OpenFile(repo_path) => {
                 let (Some(sha), Some(repository)) = (self.commit_details.read(cx).sha(), self.get_repository(cx))
                 else {
                     return;
                 };
-                CommitView::open(
+                CommitView::open_at_file(
                     sha.to_string(),
                     repository.downgrade(),
                     self.workspace.clone(),
-                    None,
-                    Some(repo_path.clone()),
+                    repo_path.clone(),
                     window,
                     cx,
                 );
+            }
+            CommitDetailsEvent::OpenRevision(repo_path) => {
+                let (Some(sha), Some(repository)) = (self.commit_details.read(cx).sha(), self.get_repository(cx))
+                else {
+                    return;
+                };
+                CommitView::open_revision(
+                    sha.to_string(),
+                    repository.downgrade(),
+                    self.workspace.clone(),
+                    repo_path.clone(),
+                    window,
+                    cx,
+                );
+            }
+            CommitDetailsEvent::OpenProjectFile(repo_path) => {
+                if let Some(repository) = self.get_repository(cx) {
+                    open_project_file(&self.workspace, &repository, repo_path, window, cx);
+                }
             }
             CommitDetailsEvent::DeployRefMenu { position, name } => {
                 if let Some(selected_idx) = self.selected_entry_idx {

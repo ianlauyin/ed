@@ -1088,6 +1088,12 @@ pub trait Addon: 'static {
         None
     }
 
+    /// Replaces "Open File" on buffer headers, e.g. when the excerpt opens
+    /// something other than the project file.
+    fn open_file_label(&self) -> Option<&'static str> {
+        None
+    }
+
     fn to_any(&self) -> &dyn std::any::Any;
 
     fn to_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {

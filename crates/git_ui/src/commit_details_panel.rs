@@ -12,11 +12,14 @@ use git::repository::RepoPath;
 use git::status::FileStatus;
 use git::status::StatusCode;
 use git::status::TrackedStatus;
+use gpui::Anchor;
 use gpui::AnyElement;
 use gpui::App;
 use gpui::ClipboardItem;
+use gpui::DismissEvent;
 use gpui::Entity;
 use gpui::EventEmitter;
+use gpui::Focusable;
 use gpui::Hsla;
 use gpui::MouseButton;
 use gpui::MouseDownEvent;
@@ -25,10 +28,13 @@ use gpui::Point;
 use gpui::ScrollHandle;
 use gpui::ScrollStrategy;
 use gpui::SharedString;
+use gpui::Subscription;
 use gpui::Task;
 use gpui::UniformListScrollHandle;
 use gpui::WeakEntity;
 use gpui::Window;
+use gpui::anchored;
+use gpui::deferred;
 use gpui::prelude::*;
 use gpui::px;
 use gpui::uniform_list;
@@ -41,6 +47,7 @@ use project::git_store::CommitDiff;
 use project::git_store::CommitFile;
 use project::git_store::Repository;
 use ui::Chip;
+use ui::ContextMenu;
 use ui::DiffStat;
 use ui::Disclosure;
 use ui::Divider;
@@ -60,10 +67,12 @@ const COPIED_STATE_DURATION: Duration = Duration::from_secs(2);
 const TREE_INDENT: f32 = 20.0;
 
 pub enum CommitDetailsEvent {
-    /// "View Commit" was clicked (graph only).
-    OpenCommit,
     /// A changed file was clicked.
     OpenFile(RepoPath),
+    /// "Open Revision" on a changed file's context menu.
+    OpenRevision(RepoPath),
+    /// "Open Project File" on a changed file's context menu.
+    OpenProjectFile(RepoPath),
     /// A ref chip was right-clicked.
     DeployRefMenu { position: Point<Pixels>, name: SharedString },
 }
@@ -77,8 +86,6 @@ pub struct CommitDetailsPanel {
     sha: Option<Oid>,
     ref_names: Vec<SharedString>,
     ref_color: Hsla,
-    /// The graph hosts close / "View Commit" buttons; the commit view does not.
-    in_graph: bool,
     files: Option<Vec<ChangedFileEntry>>,
     diff_stats: (usize, usize),
     message: Option<Entity<Markdown>>,
@@ -92,6 +99,7 @@ pub struct CommitDetailsPanel {
     scroll_to_revealed: bool,
     metadata_collapsed: bool,
     message_collapsed: bool,
+    context_menu: Option<(Entity<ContextMenu>, Point<Pixels>, Subscription)>,
     _message_task: Option<Task<()>>,
     _diff_task: Option<Task<()>>,
 }
@@ -99,14 +107,13 @@ pub struct CommitDetailsPanel {
 impl EventEmitter<CommitDetailsEvent> for CommitDetailsPanel {}
 
 impl CommitDetailsPanel {
-    pub fn new(in_graph: bool, languages: Option<Arc<LanguageRegistry>>) -> Self {
+    pub fn new(languages: Option<Arc<LanguageRegistry>>) -> Self {
         Self {
             repository: WeakEntity::new_invalid(),
             languages,
             sha: None,
             ref_names: Vec::new(),
             ref_color: Hsla::default(),
-            in_graph,
             files: None,
             diff_stats: (0, 0),
             message: None,
@@ -119,6 +126,7 @@ impl CommitDetailsPanel {
             scroll_to_revealed: false,
             metadata_collapsed: false,
             message_collapsed: false,
+            context_menu: None,
             _message_task: None,
             _diff_task: None,
         }
@@ -218,6 +226,35 @@ impl CommitDetailsPanel {
     pub fn toggle_view_mode(&mut self, cx: &mut Context<Self>) {
         self.view_mode = self.view_mode.toggled();
         self.files_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+        cx.notify();
+    }
+
+    fn deploy_file_context_menu(
+        &mut self,
+        position: Point<Pixels>,
+        repo_path: RepoPath,
+        window: &mut Window,
+        cx: &mut Context<CommitDetailsPanel>,
+    ) {
+        let panel = cx.weak_entity();
+        let context_menu = ContextMenu::build(window, cx, move |menu, _, _| {
+            menu.entry("Open Revision", None, {
+                let panel = panel.clone();
+                let repo_path = repo_path.clone();
+                move |_, cx| {
+                    panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenRevision(repo_path.clone()))).ok();
+                }
+            })
+            .entry("Open Project File", None, move |_, cx| {
+                panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenProjectFile(repo_path.clone()))).ok();
+            })
+        });
+        window.focus(&context_menu.focus_handle(cx), cx);
+        let subscription = cx.subscribe(&context_menu, |this: &mut CommitDetailsPanel, _, _: &DismissEvent, cx| {
+            this.context_menu.take();
+            cx.notify();
+        });
+        self.context_menu = Some((context_menu, position, subscription));
         cx.notify();
     }
 
@@ -551,17 +588,9 @@ impl Render for CommitDetailsPanel {
             .child(self.render_message(window, cx))
             .child(Divider::horizontal())
             .child(self.render_changed_files(window, cx))
-            .when(self.in_graph, |this| {
-                this.child(Divider::horizontal()).child(
-                    h_flex().p_1p5().w_full().child(
-                        Button::new("view-commit", "View Commit")
-                            .full_width()
-                            .start_icon(Icon::new(IconName::GitCommit).size(IconSize::Small).color(Color::Muted))
-                            .style(ButtonStyle::OutlinedGhost)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(CommitDetailsEvent::OpenCommit))),
-                    ),
-                )
-            })
+            .children(self.context_menu.as_ref().map(|(menu, position, _)| {
+                deferred(anchored().position(*position).anchor(Anchor::TopLeft).child(menu.clone())).with_priority(1)
+            }))
             .into_any_element()
     }
 }
@@ -699,7 +728,6 @@ impl ChangedFileEntry {
         panel: WeakEntity<CommitDetailsPanel>,
     ) -> AnyElement {
         let file_name = self.file_name.clone();
-        let dir_path = self.dir_path.clone();
         let repo_path = self.repo_path.clone();
 
         ListItem::new(("changed-file", ix))
@@ -708,16 +736,24 @@ impl ChangedFileEntry {
             .indent_step_size(px(TREE_INDENT))
             .toggle_state(is_revealed)
             .start_slot(git_status_icon(self.status))
-            .child(Label::new(file_name.clone()).size(LabelSize::Small).truncate())
+            .child(Label::new(file_name).size(LabelSize::Small).truncate())
             .when_some(directory_label, |this, directory_label| {
                 this.child(Label::new(directory_label).size(LabelSize::Small).color(Color::Muted).truncate_start())
             })
-            .tooltip({
-                let meta = if dir_path.is_empty() { file_name } else { format!("{}/{}", dir_path, file_name).into() };
-                move |_, cx| Tooltip::with_meta("View Changes", None, meta.clone(), cx)
+            .on_click({
+                let panel = panel.clone();
+                let repo_path = repo_path.clone();
+                move |_, _, cx| {
+                    panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenFile(repo_path.clone()))).ok();
+                }
             })
-            .on_click(move |_, _, cx| {
-                panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenFile(repo_path.clone()))).ok();
+            .on_secondary_mouse_down(move |event, window, cx| {
+                cx.stop_propagation();
+                panel
+                    .update(cx, |panel, cx| {
+                        panel.deploy_file_context_menu(event.position, repo_path.clone(), window, cx);
+                    })
+                    .ok();
             })
             .into_any_element()
     }

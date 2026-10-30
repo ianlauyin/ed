@@ -76,6 +76,7 @@ use util::truncate_and_trailoff;
 use workspace::Item;
 use workspace::ItemHandle;
 use workspace::ItemNavHistory;
+use workspace::Toast;
 use workspace::ToolbarItemEvent;
 use workspace::ToolbarItemLocation;
 use workspace::ToolbarItemView;
@@ -83,6 +84,7 @@ use workspace::Workspace;
 use workspace::WorkspaceMode;
 use workspace::item::ItemEvent;
 use workspace::item::TabTooltipContent;
+use workspace::notifications::NotificationId;
 use workspace::notifications::NotifyTaskExt;
 use workspace::pane;
 use workspace::pane::SaveIntent;
@@ -147,6 +149,44 @@ pub(crate) fn worktree_id_for_repo_path(
         .or_else(|| project.worktrees(cx).next().map(|worktree| worktree.read(cx).id()))
 }
 
+/// Opens the project file at `repo_path`, or shows a toast when the commit's
+/// file is no longer in the project.
+pub(crate) fn open_project_file(
+    workspace: &WeakEntity<Workspace>,
+    repository: &Entity<Repository>,
+    repo_path: &RepoPath,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let Some(workspace) = workspace.upgrade() else {
+        return;
+    };
+    let project_path = repository.read(cx).repo_path_to_project_path(repo_path, cx).filter(|project_path| {
+        workspace.read(cx).project().read(cx).entry_for_path(project_path, cx).is_some_and(|entry| entry.is_file())
+    });
+    workspace.update(cx, |workspace, cx| match project_path {
+        Some(project_path) => {
+            workspace.open_path_preview(project_path, None, true, false, true, window, cx).detach_and_log_err(cx);
+        }
+        None => {
+            let message = project_file_not_found_message(repo_path);
+            workspace.show_toast(Toast::new(NotificationId::unique::<ProjectFileNotFound>(), message), cx);
+        }
+    });
+}
+
+struct ProjectFileNotFound;
+
+fn project_file_not_found_message(repo_path: &RepoPath) -> String {
+    format!("{} is not in the project. It may have been moved or deleted.", repo_path.display(PathStyle::local()))
+}
+
+/// The changed file a commit view shows once its diff loads.
+enum InitialFile {
+    Scroll(RepoPath),
+    Revision(RepoPath),
+}
+
 struct CommitDiffAddon {
     file_statuses: HashMap<language::BufferId, FileStatus>,
     commit_view: WeakEntity<CommitView>,
@@ -159,6 +199,10 @@ impl Addon for CommitDiffAddon {
 
     fn override_status_for_buffer_id(&self, buffer_id: language::BufferId, _cx: &App) -> Option<FileStatus> {
         self.file_statuses.get(&buffer_id).copied()
+    }
+
+    fn open_file_label(&self) -> Option<&'static str> {
+        Some("Open Revision")
     }
 
     fn extend_buffer_header_context_menu(
@@ -205,7 +249,33 @@ impl CommitView {
         window: &mut Window,
         cx: &mut App,
     ) {
-        Self::open_with_options(commit_sha, repo, workspace, stash, file_filter, false, window, cx)
+        Self::open_with_options(commit_sha, repo, workspace, stash, file_filter, false, None, window, cx)
+    }
+
+    /// Opens the commit view and, once its diff loads, scrolls to `repo_path`.
+    pub fn open_at_file(
+        commit_sha: String,
+        repo: WeakEntity<Repository>,
+        workspace: WeakEntity<Workspace>,
+        repo_path: RepoPath,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let initial_file = Some(InitialFile::Scroll(repo_path));
+        CommitView::open_with_options(commit_sha, repo, workspace, None, None, false, initial_file, window, cx)
+    }
+
+    /// Opens the commit view and, once its diff loads, `repo_path`'s revision tab.
+    pub fn open_revision(
+        commit_sha: String,
+        repo: WeakEntity<Repository>,
+        workspace: WeakEntity<Workspace>,
+        repo_path: RepoPath,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let initial_file = Some(InitialFile::Revision(repo_path));
+        CommitView::open_with_options(commit_sha, repo, workspace, None, None, false, initial_file, window, cx)
     }
 
     fn open_with_options(
@@ -215,6 +285,7 @@ impl CommitView {
         stash: Option<usize>,
         file_filter: Option<RepoPath>,
         ignore_shallow_boundary: bool,
+        initial_file: Option<InitialFile>,
         window: &Window,
         cx: &mut App,
     ) {
@@ -252,6 +323,7 @@ impl CommitView {
                                 workspace_handle,
                                 stash,
                                 file_filter,
+                                initial_file,
                                 window,
                                 cx,
                             )
@@ -302,6 +374,7 @@ impl CommitView {
         workspace: WeakEntity<Workspace>,
         stash: Option<usize>,
         file_filter: Option<RepoPath>,
+        initial_file: Option<InitialFile>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -314,15 +387,15 @@ impl CommitView {
         });
 
         let details = cx.new(|cx| {
-            let mut details = CommitDetailsPanel::new(false, Some(language_registry.clone()));
+            let mut details = CommitDetailsPanel::new(Some(language_registry.clone()));
             if let Ok(sha) = commit.sha.parse::<Oid>() {
                 details.set_commit(&repository, sha, Vec::new(), gpui::Hsla::default(), cx);
                 details.set_diff(&commit_diff, cx);
             }
             details
         });
-        cx.subscribe_in(&details, window, |this: &mut Self, _, event, window, cx| {
-            if let CommitDetailsEvent::OpenFile(repo_path) = event {
+        cx.subscribe_in(&details, window, |this: &mut Self, _, event, window, cx| match event {
+            CommitDetailsEvent::OpenFile(repo_path) => {
                 this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
                 if this.is_revision_tab_active(cx) {
                     this.open_file_revision(repo_path, window, cx);
@@ -330,6 +403,14 @@ impl CommitView {
                     this.scroll_to_file(repo_path, window, cx);
                 }
             }
+            CommitDetailsEvent::OpenRevision(repo_path) => {
+                this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
+                this.open_file_revision(repo_path, window, cx);
+            }
+            CommitDetailsEvent::OpenProjectFile(repo_path) => {
+                open_project_file(&this.workspace, &this.repository, repo_path, window, cx);
+            }
+            CommitDetailsEvent::DeployRefMenu { .. } => {}
         })
         .detach();
 
@@ -483,6 +564,19 @@ impl CommitView {
                 }
             })?;
 
+            if let Some(initial_file) = initial_file {
+                this.update_in(cx, |this, window, cx| match &initial_file {
+                    InitialFile::Scroll(repo_path) => {
+                        this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
+                        this.scroll_to_file(repo_path, window, cx);
+                    }
+                    InitialFile::Revision(repo_path) => {
+                        this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
+                        this.open_file_revision(repo_path, window, cx);
+                    }
+                })?;
+            }
+
             anyhow::Ok(())
         });
 
@@ -569,6 +663,7 @@ impl CommitView {
                                                     stash,
                                                     file_filter,
                                                     false,
+                                                    None,
                                                     window,
                                                     cx,
                                                 )
@@ -601,6 +696,7 @@ impl CommitView {
                                     stash,
                                     file_filter.clone(),
                                     true,
+                                    None,
                                     window,
                                     cx,
                                 );
@@ -1146,4 +1242,30 @@ impl ToolbarItemView for CommitViewToolbar {
 
 fn stash_matches_index(sha: &str, stash_index: usize, repo: &Repository) -> bool {
     repo.stash_entries.entries.get(stash_index).map(|entry| entry.oid.to_string() == sha).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use collections::HashMap;
+    use editor::Addon;
+    use git::repository::RepoPath;
+    use gpui::WeakEntity;
+
+    use super::CommitDiffAddon;
+    use super::project_file_not_found_message;
+
+    #[test]
+    fn test_project_file_not_found_message() {
+        let repo_path = RepoPath::new("crates/util/src/shell.rs").unwrap();
+        assert_eq!(
+            project_file_not_found_message(&repo_path),
+            "crates/util/src/shell.rs is not in the project. It may have been moved or deleted."
+        );
+    }
+
+    #[test]
+    fn test_commit_diff_addon_open_file_label() {
+        let addon = CommitDiffAddon { file_statuses: HashMap::default(), commit_view: WeakEntity::new_invalid() };
+        assert_eq!(addon.open_file_label(), Some("Open Revision"));
+    }
 }
