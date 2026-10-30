@@ -208,7 +208,6 @@ mod bundled_themes {
                 "property",
                 "function",
                 "function.method",
-                "function.definition",
                 "function.special",
                 "keyword",
                 "keyword.control",
@@ -235,6 +234,13 @@ mod bundled_themes {
         fn one_dark_keeps_control_keywords_upright() {
             let theme: Arc<SyntaxTheme> = SyntaxTheme::one_dark();
             assert_eq!(style(&theme, "keyword.control").font_style, Some(gpui::FontStyle::Normal));
+        }
+
+        #[test]
+        fn one_dark_function_definitions_match_calls() {
+            let theme: Arc<SyntaxTheme> = SyntaxTheme::one_dark();
+            assert_eq!(style(&theme, "function.definition"), style(&theme, "function"));
+            assert_eq!(style(&theme, "function.definition").font_weight, None);
         }
     }
 }

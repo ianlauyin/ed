@@ -5,6 +5,8 @@
 
 set -l root (path dirname (status filename))
 cd $root; or exit 1
+# The bundle is packaged from target/release, so cargo must build there.
+set -e CARGO_TARGET_DIR
 
 set -l app_version (string match -rg '^version = "(.+)"' < crates/ed/Cargo.toml)[1]
 set -l resources crates/ed/resources
