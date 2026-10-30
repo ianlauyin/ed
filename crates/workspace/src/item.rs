@@ -338,6 +338,12 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         true
     }
 
+    /// A view the pane shows as its own card to the left of the item's card,
+    /// e.g. commit details beside the commit diff.
+    fn side_card(&self, _: &App) -> Option<AnyView> {
+        None
+    }
+
     fn pixel_position_of_cursor(&self, _: &App) -> Option<Point<Pixels>> {
         None
     }
@@ -493,6 +499,7 @@ pub trait ItemHandle: 'static + Send {
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)>;
     fn breadcrumb_prefix(&self, window: &mut Window, cx: &mut App) -> Option<gpui::AnyElement>;
     fn show_toolbar(&self, cx: &App) -> bool;
+    fn side_card(&self, cx: &App) -> Option<AnyView>;
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>>;
     fn downgrade_item(&self) -> Box<dyn WeakItemHandle>;
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings;
@@ -900,6 +907,10 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn show_toolbar(&self, cx: &App) -> bool {
         self.read(cx).show_toolbar()
+    }
+
+    fn side_card(&self, cx: &App) -> Option<AnyView> {
+        self.read(cx).side_card(cx)
     }
 
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>> {

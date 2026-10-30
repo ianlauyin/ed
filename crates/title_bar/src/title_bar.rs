@@ -46,6 +46,7 @@ use util::ResultExt;
 use workspace::MultiWorkspace;
 use workspace::ToggleWorktreeSecurity;
 use workspace::Workspace;
+use workspace::WorkspaceMode;
 
 use crate::application_menu::ApplicationMenu;
 
@@ -181,11 +182,9 @@ impl Render for TitleBar {
                                     ))
                                 })
                                 .when_some(repository.filter(|_| is_git_enabled), |title_bar, repository| {
-                                    title_bar.children(self.render_worktree_and_branch(
-                                        repository,
-                                        linked_worktree_name,
-                                        cx,
-                                    ))
+                                    title_bar
+                                        .children(self.render_worktree_and_branch(repository, linked_worktree_name, cx))
+                                        .children(self.render_mode_switch(cx))
                                 })
                         })
                 })
@@ -543,6 +542,60 @@ impl TitleBar {
                 move |_window, cx| Tooltip::for_action("Recent Projects", &ed_actions::OpenRecent::default(), cx),
             )
             .anchor(gpui::Anchor::TopLeft)
+    }
+
+    /// Round "Workspace" / "Git History" tabs that switch what fills the window. The active one is
+    /// marked by text contrast and an accent icon rather than a fill, so it stays quiet.
+    fn render_mode_switch(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let mode = self.workspace.upgrade()?.read(cx).mode();
+        let colors = cx.theme().colors();
+        let pill = |id: &'static str, label: &'static str, icon: IconName, selected: bool| {
+            h_flex()
+                .id(id)
+                .h(px(22.))
+                .px_2()
+                .gap_1()
+                .rounded_full()
+                .cursor_pointer()
+                .hover(|style| style.bg(colors.ghost_element_hover))
+                .child(Icon::new(icon).size(IconSize::XSmall).color(if selected {
+                    Color::Accent
+                } else {
+                    Color::Muted
+                }))
+                .child(Label::new(label).size(LabelSize::Small).color(if selected {
+                    Color::Default
+                } else {
+                    Color::Muted
+                }))
+        };
+
+        let workspace = self.workspace.clone();
+        let show_editor = pill("workspace-mode-editor", "Workspace", IconName::Code, mode == WorkspaceMode::Editor)
+            .tooltip(|_window, cx| Tooltip::for_action("Workspace", &workspace::ShowEditor, cx))
+            .on_click(move |_, window, cx| {
+                workspace.update(cx, |workspace, cx| workspace.set_mode(WorkspaceMode::Editor, window, cx)).ok();
+            });
+
+        let workspace = self.workspace.clone();
+        let show_history =
+            pill("workspace-mode-git-history", "Git History", IconName::GitGraph, mode == WorkspaceMode::GitHistory)
+                .tooltip(|_window, cx| Tooltip::for_action("Git History", &ed_actions::git_graph::Open, cx))
+                .on_click(move |_, window, cx| {
+                    // Return to the open history tabs; only an empty history opens the graph.
+                    let has_history = workspace
+                        .read_with(cx, |workspace, cx| workspace.git_history_pane().read(cx).items_len() > 0)
+                        .unwrap_or(false);
+                    if has_history {
+                        workspace
+                            .update(cx, |workspace, cx| workspace.set_mode(WorkspaceMode::GitHistory, window, cx))
+                            .ok();
+                    } else {
+                        window.dispatch_action(Box::new(ed_actions::git_graph::Open), cx);
+                    }
+                });
+
+        Some(h_flex().ml_2().gap_0p5().child(show_editor).child(show_history).into_any_element())
     }
 
     fn render_worktree_and_branch(

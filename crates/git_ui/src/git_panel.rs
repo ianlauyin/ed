@@ -6689,15 +6689,6 @@ impl Panel for GitPanel {
         Some("Git Panel")
     }
 
-    fn secondary_button(&self, _: &Window, _: &App) -> Option<workspace::PanelSecondaryButton> {
-        Some(workspace::PanelSecondaryButton {
-            id: "git-graph-button",
-            icon: IconName::GitGraph,
-            tooltip: "Open Git Graph",
-            action: Box::new(crate::git_graph::Open),
-        })
-    }
-
     fn toggle_action(&self) -> Box<dyn Action> {
         Box::new(ToggleFocus)
     }

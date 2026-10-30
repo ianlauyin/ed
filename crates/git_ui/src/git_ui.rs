@@ -57,6 +57,7 @@ use crate::text_diff_view::TextDiffView;
 pub mod branch_diff;
 pub mod branch_picker;
 mod commit_context_menu;
+pub mod commit_details_panel;
 pub mod commit_tooltip;
 pub mod commit_view;
 mod conflict_view;

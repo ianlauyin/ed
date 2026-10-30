@@ -25,6 +25,11 @@ because it hurt readability; an opaque window is also cheaper to composite.
   tab stands out: it takes the card colour and joins the card below it, like a
   browser tab. This replaced cards that wrapped the tab bar, where inactive tabs
   shared the card colour and looked continuous with the active one.
+- In Git History mode (`git.md`) the history sidebar and pane fill the area of
+  the docks and center panes, and the status bar is hidden, so the bottom gap
+  shows. The sidebar shows the active history item's `Item::side_card` and is
+  styled like a left dock (flat, resizable, 8px gap before the pane), so the
+  tab bar starts after it rather than above it.
 - Docks have no border and blend into the chrome. Panes inside them (the
   terminal) draw their own cards; a non-pane panel docked at the bottom just
   sits on the chrome.

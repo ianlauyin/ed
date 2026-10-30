@@ -1164,9 +1164,8 @@ impl Project {
             });
             cx.subscribe(&buffer_store, Self::on_buffer_store_event).detach();
 
-            let environment = cx.new(|cx| {
-                ProjectEnvironment::new(worktree_store.downgrade(), Some(remote.downgrade()), false, cx)
-            });
+            let environment =
+                cx.new(|cx| ProjectEnvironment::new(worktree_store.downgrade(), Some(remote.downgrade()), false, cx));
 
             let lsp_store = cx.new(|cx| {
                 LspStore::new_remote(

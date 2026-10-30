@@ -1284,6 +1284,7 @@ pub struct Editor {
     disable_expand_excerpt_buttons: bool,
     delegate_expand_excerpts: bool,
     delegate_open_excerpts: bool,
+    side_card: Option<gpui::AnyView>,
     enable_lsp_data: bool,
     needs_initial_data_update: bool,
     enable_runnables: bool,
@@ -2202,6 +2203,7 @@ impl Editor {
             disable_expand_excerpt_buttons: !full_mode,
             delegate_expand_excerpts: false,
             delegate_open_excerpts: false,
+            side_card: None,
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
             enable_runnables: full_mode,
@@ -7908,7 +7910,7 @@ impl Editor {
         window.defer(cx, move |window, cx| {
             workspace
                 .update(cx, |workspace, cx| {
-                    let pane =
+                    let workspace_pane =
                         if split { workspace.adjacent_pane(window, cx) } else { workspace.active_pane().clone() };
 
                     for (buffer, (ranges, scroll_offset)) in new_selections_by_buffer {
@@ -7918,6 +7920,10 @@ impl Editor {
                         } else {
                             (false, false)
                         };
+                        let in_history = workspace.mode().opens_in_history_pane(is_project_file);
+                        let pane =
+                            if in_history { workspace.git_history_pane().clone() } else { workspace_pane.clone() };
+                        let target_pane = (split || in_history).then(|| pane.clone());
 
                         // If project file is none workspace.open_project_item will fail to open the excerpt
                         // in a pre existing workspace item if one exists, because Buffer entity_id will be None
@@ -7952,7 +7958,7 @@ impl Editor {
                                 let allow_new_preview =
                                     PreviewTabsSettings::get_global(cx).enable_preview_from_multibuffer;
                                 workspace.open_project_item::<Self>(
-                                    split.then_some(pane.clone()),
+                                    target_pane,
                                     buffer,
                                     true,
                                     true,

@@ -107,18 +107,6 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     fn enabled(&self, _cx: &App) -> bool {
         true
     }
-    /// An extra status bar button rendered right after this panel's own button.
-    fn secondary_button(&self, _window: &Window, _cx: &App) -> Option<PanelSecondaryButton> {
-        None
-    }
-}
-
-/// See `Panel::secondary_button`.
-pub struct PanelSecondaryButton {
-    pub id: &'static str,
-    pub icon: ui::IconName,
-    pub tooltip: &'static str,
-    pub action: Box<dyn Action>,
 }
 
 pub trait PanelHandle: Send + Sync {
@@ -146,7 +134,6 @@ pub trait PanelHandle: Send + Sync {
     fn to_any(&self) -> AnyView;
     fn activation_priority(&self, cx: &App) -> u32;
     fn enabled(&self, cx: &App) -> bool;
-    fn secondary_button(&self, window: &Window, cx: &App) -> Option<PanelSecondaryButton>;
     fn move_to_next_position(&self, window: &mut Window, cx: &mut App) {
         let current_position = self.position(window, cx);
         let next_position = [DockPosition::Left, DockPosition::Bottom, DockPosition::Right]
@@ -234,10 +221,6 @@ where
 
     fn icon_label(&self, window: &Window, cx: &App) -> Option<String> {
         self.read(cx).icon_label(window, cx)
-    }
-
-    fn secondary_button(&self, window: &Window, cx: &App) -> Option<PanelSecondaryButton> {
-        self.read(cx).secondary_button(window, cx)
     }
 
     fn to_any(&self) -> AnyView {
@@ -1172,19 +1155,6 @@ impl Render for PanelButtons {
 
                 let focus_handle = dock.panel_button_focus_handle(window, cx);
                 let icon_label = entry.panel.icon_label(window, cx);
-                let secondary_button = entry.panel.secondary_button(window, cx).map(|button| {
-                    let action = button.action;
-                    let tooltip = button.tooltip;
-                    IconButton::new(button.id, button.icon)
-                        .icon_size(IconSize::Small)
-                        .tab_index(0isize)
-                        .tooltip({
-                            let action = action.boxed_clone();
-                            move |_window, cx| Tooltip::for_action(tooltip, &*action, cx)
-                        })
-                        .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
-                });
-
                 let primary_button = right_click_menu(name)
                     .menu(move |window, cx| {
                         const POSITIONS: [DockPosition; 3] =
@@ -1240,7 +1210,7 @@ impl Render for PanelButtons {
                         )
                     });
 
-                Some(h_flex().gap_1().child(primary_button).children(secondary_button))
+                Some(primary_button)
             })
             .collect();
 
