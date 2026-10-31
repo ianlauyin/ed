@@ -55,9 +55,6 @@ impl Shell {
 pub enum ShellKind {
     #[default]
     Posix,
-    Csh,
-    Tcsh,
-    Rc,
     Fish,
 }
 
@@ -78,10 +75,7 @@ impl fmt::Display for ShellKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ShellKind::Posix => write!(f, "sh"),
-            ShellKind::Csh => write!(f, "csh"),
-            ShellKind::Tcsh => write!(f, "tcsh"),
             ShellKind::Fish => write!(f, "fish"),
-            ShellKind::Rc => write!(f, "rc"),
         }
     }
 }
@@ -97,9 +91,6 @@ impl ShellKind {
 
         match &*program {
             "fish" => ShellKind::Fish,
-            "csh" => ShellKind::Csh,
-            "tcsh" => ShellKind::Tcsh,
-            "rc" => ShellKind::Rc,
             // Some other shell detected, the user might install and use a
             // unix-like shell.
             _ => ShellKind::Posix,
@@ -119,57 +110,33 @@ impl ShellKind {
     }
 
     pub fn try_quote<'a>(&self, arg: &'a str) -> Option<Cow<'a, str>> {
-        match self {
-            ShellKind::Csh | ShellKind::Tcsh => Self::quote_csh(arg),
-            ShellKind::Posix | ShellKind::Rc | ShellKind::Fish => shlex::try_quote(arg).ok(),
-        }
-    }
-
-    pub fn quote_csh(arg: &str) -> Option<Cow<'_, str>> {
-        if arg.contains('\0') {
-            return None;
-        }
-        if Self::is_unquoted_safe(arg) && !arg.starts_with('%') {
-            return Some(Cow::Borrowed(arg));
-        }
-        if arg.is_empty() {
-            return Some(Cow::Borrowed("''"));
-        }
-        let mut quoted = String::with_capacity(arg.len() + 2);
-        let mut in_quotes = false;
-        for character in arg.chars() {
-            match character {
-                '\'' | '!' | '\\' => {
-                    if in_quotes {
-                        quoted.push('\'');
-                        in_quotes = false;
-                    }
-                    quoted.push('\\');
-                    quoted.push(character);
-                }
-                character => {
-                    if !in_quotes {
-                        quoted.push('\'');
-                        in_quotes = true;
-                    }
-                    if character == '\n' {
-                        quoted.push('\\');
-                    }
-                    quoted.push(character);
-                }
-            }
-        }
-        if in_quotes {
-            quoted.push('\'');
-        }
-        Some(Cow::Owned(quoted))
-    }
-
-    fn is_unquoted_safe(arg: &str) -> bool {
-        !arg.is_empty() && arg.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_./:,+@%".contains(&byte))
+        shlex::try_quote(arg).ok()
     }
 
     pub fn split(&self, input: &str) -> Option<Vec<String>> {
         shlex::split(input)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shell_kind_new() {
+        assert_eq!(ShellKind::new("/opt/homebrew/bin/fish"), ShellKind::Fish);
+        assert_eq!(ShellKind::new("fish"), ShellKind::Fish);
+        assert_eq!(ShellKind::new("/bin/zsh"), ShellKind::Posix);
+        assert_eq!(ShellKind::new("/bin/tcsh"), ShellKind::Posix);
+        assert_eq!(ShellKind::new("rc"), ShellKind::Posix);
+    }
+
+    #[test]
+    fn test_try_quote() {
+        for kind in [ShellKind::Posix, ShellKind::Fish] {
+            assert_eq!(kind.try_quote("plain").as_deref(), Some("plain"));
+            assert_eq!(kind.try_quote("has space").as_deref(), Some("'has space'"));
+            assert_eq!(kind.try_quote("nul\0"), None);
+        }
     }
 }

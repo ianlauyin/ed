@@ -210,6 +210,18 @@ pub mod git {
     );
 }
 
+pub mod git_graph {
+    use gpui::actions;
+
+    actions!(
+        git_graph,
+        [
+            /// Switches the window to Git History mode, showing the git graph.
+            Open
+        ]
+    );
+}
+
 pub mod toast {
     use gpui::actions;
 

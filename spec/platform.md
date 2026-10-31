@@ -34,9 +34,9 @@ remote detection, command execution, and proxy startup are removed.
   `cli_default_open_behavior` setting; open requests follow
   `default_open_behavior`.
 - Terminals, tasks, environment capture, and SSH commands only understand
-  POSIX-family shells (sh/bash/zsh, fish, csh/tcsh, rc). Any other shell is
-  treated as POSIX; PowerShell, cmd, Nushell, Xonsh, and Elvish quoting and
-  syntax are not supported.
+  POSIX shells (sh/bash/zsh) and fish. Any other shell is treated as POSIX;
+  csh/tcsh, rc, PowerShell, cmd, Nushell, Xonsh, and Elvish quoting and syntax
+  are not supported.
 - The terminal uses upstream `alacritty/alacritty` (`alacritty_terminal`, pinned
   git rev), not Zed's fork. PTYs are spawned off the main thread; the spawning
   thread temporarily takes the main thread's signal mask so the shell doesn't

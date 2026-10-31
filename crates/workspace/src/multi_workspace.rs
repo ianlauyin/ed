@@ -887,7 +887,7 @@ impl MultiWorkspace {
                 return Ok(());
             }
 
-            cx.update(|cx| Workspace::new_local(paths, app_state, None, None, None, OpenMode::NewWindow, cx)).await?;
+            cx.update(|cx| Workspace::new_local(paths, app_state, None, None, OpenMode::NewWindow, cx)).await?;
 
             Ok(())
         })
@@ -1075,7 +1075,6 @@ impl MultiWorkspace {
                         effective_path_list.paths().to_vec(),
                         app_state,
                         requesting_window,
-                        None,
                         init,
                         open_mode,
                         cx,
@@ -1450,7 +1449,6 @@ impl MultiWorkspace {
                             let project = Project::local(
                                 app_state.languages.clone(),
                                 app_state.fs.clone(),
-                                None,
                                 project::LocalProjectFlags::default(),
                                 cx,
                             );

@@ -5097,17 +5097,16 @@ impl GitPanel {
         };
 
         let vertical_buttons = v_flex().h_full().p_1p5().child({
-            let (icon, label) = if self.commit_editor_expanded {
-                (IconName::Minimize, "Collapse Commit Editor")
-            } else {
-                (IconName::Maximize, "Expand Commit Editor")
-            };
+            let expanded = self.commit_editor_expanded;
+            let label = if expanded { "Collapse Commit Editor" } else { "Expand Commit Editor" };
             let focus_handle = self.focus_handle.clone();
 
-            IconButton::new("fill-commit-editor", icon)
+            IconButton::new("fill-commit-editor", IconName::Maximize)
                 .icon_size(IconSize::Small)
                 .icon_color(Color::Hidden)
                 .hover_color(Color::Muted)
+                .toggle_state(expanded)
+                .selected_icon(IconName::Minimize)
                 .tooltip({
                     move |_window, cx| Tooltip::for_action_in(label, &git::ToggleFillCommitEditor, &focus_handle, cx)
                 })
@@ -6687,15 +6686,6 @@ impl Panel for GitPanel {
 
     fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<&'static str> {
         Some("Git Panel")
-    }
-
-    fn secondary_button(&self, _: &Window, _: &App) -> Option<workspace::PanelSecondaryButton> {
-        Some(workspace::PanelSecondaryButton {
-            id: "git-graph-button",
-            icon: IconName::GitGraph,
-            tooltip: "Open Git Graph",
-            action: Box::new(crate::git_graph::Open),
-        })
     }
 
     fn toggle_action(&self) -> Box<dyn Action> {

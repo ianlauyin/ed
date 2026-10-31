@@ -264,6 +264,11 @@ impl Editor {
         self.delegate_open_excerpts = delegate;
     }
 
+    /// The view shown beside this editor in the git history sidebar.
+    pub fn set_side_card(&mut self, side_card: Option<gpui::AnyView>) {
+        self.side_card = side_card;
+    }
+
     pub(super) const fn set_delegate_expand_excerpts(&mut self, delegate: bool) {
         self.delegate_expand_excerpts = delegate;
     }

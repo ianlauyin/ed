@@ -1229,7 +1229,7 @@ impl Item for TerminalView {
                     }
                 }
             },
-            None => (IconName::Terminal, Color::Muted, None),
+            None => (IconName::Terminal, params.icon_color(), None),
         };
 
         let self_handle = self.self_handle.clone();

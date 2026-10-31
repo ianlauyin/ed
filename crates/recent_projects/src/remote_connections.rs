@@ -176,7 +176,6 @@ pub async fn open_remote_project(
             let project = project::Project::local(
                 app_state.languages.clone(),
                 app_state.fs.clone(),
-                None,
                 project::LocalProjectFlags { init_worktree_trust: false },
                 cx,
             );

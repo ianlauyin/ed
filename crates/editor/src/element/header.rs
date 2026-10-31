@@ -259,6 +259,7 @@ pub(crate) fn render_buffer_header(
     let show_header_background = opaque_window || colors.editor_subheader_background.is_opaque();
 
     let show_open_file_button = can_open_excerpts && relative_path.is_some() && (is_selected || header_hovered);
+    let open_file_label = editor_read.addons.values().find_map(|addon| addon.open_file_label()).unwrap_or("Open File");
 
     let header = div()
         .id(("buffer-header", buffer_id.to_proto()))
@@ -390,7 +391,7 @@ pub(crate) fn render_buffer_header(
                                                 }),
                                         )
                                         .tooltip(move |_, cx| {
-                                            Tooltip::with_meta("Open File", None, full_path.clone(), cx)
+                                            Tooltip::with_meta(open_file_label, None, full_path.clone(), cx)
                                         })
                                         .on_click(window.listener_for(editor, {
                                             let jump_data = jump_data.clone();
@@ -442,7 +443,7 @@ pub(crate) fn render_buffer_header(
                                 })
                                 .when(show_open_file_button, |this| {
                                     this.child(
-                                        Button::new("open-file-button", "Open File")
+                                        Button::new("open-file-button", open_file_label)
                                             .style(ButtonStyle::OutlinedCustom(cx.theme().colors().border.opacity(0.6)))
                                             .layer(ui::ElevationIndex::ElevatedSurface)
                                             .when(is_selected, |this| {

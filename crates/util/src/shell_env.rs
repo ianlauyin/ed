@@ -72,8 +72,6 @@ async fn capture_unix(
     args: &[String],
     directory: &Path,
 ) -> Result<collections::HashMap<String, String>> {
-    use std::os::unix::process::CommandExt;
-
     use crate::command::new_std_command;
 
     let shell_kind = ShellKind::new(shell_path);
@@ -86,30 +84,12 @@ async fn capture_unix(
     // so file descriptor 0 (stdin) is used instead. This impacts zsh, old bash; perhaps others.
     // See: https://github.com/zed-industries/zed/pull/32136#issuecomment-2999645482
     const FD_STDIN: std::os::fd::RawFd = 0;
-    const FD_STDOUT: std::os::fd::RawFd = 1;
 
-    let (fd_num, redir) = match shell_kind {
-        ShellKind::Rc => (FD_STDIN, format!(">[1={}]", FD_STDIN)), // `[1=0]`
-        ShellKind::Tcsh => (FD_STDOUT, "".to_string()),
-        _ => (FD_STDIN, format!(">&{}", FD_STDIN)), // `>&0`
-    };
-
-    match shell_kind {
-        ShellKind::Csh | ShellKind::Tcsh => {
-            // For csh/tcsh, login shell requires passing `-` as 0th argument (instead of `-l`)
-            command.arg0("-");
-        }
-        ShellKind::Fish => {
-            // in fish, asdf, direnv attach to the `fish_prompt` event
-            command_string.push_str("emit fish_prompt;");
-            command.arg("-l");
-        }
-        _ => {
-            command.arg("-l");
-        }
+    if shell_kind == ShellKind::Fish {
+        // in fish, asdf, direnv attach to the `fish_prompt` event
+        command_string.push_str("emit fish_prompt;");
     }
-
-    command.args(["-i", "-c"]);
+    command.args(["-l", "-i", "-c"]);
 
     // Prefix with "./" if the path starts with "-" to prevent cd from interpreting it as a flag
     let dir_str = directory.to_string_lossy();
@@ -118,13 +98,13 @@ async fn capture_unix(
 
     // cd into the directory, triggering directory specific side-effects (asdf, direnv, etc)
     crate::write_str!(command_string, "cd {};", quoted_dir);
-    crate::write_str!(command_string, "{} --printenv {}", quoted_ed_path, redir);
+    crate::write_str!(command_string, "{} --printenv >&{}", quoted_ed_path, FD_STDIN);
 
     command.arg(&command_string);
 
     super::set_pre_exec_to_start_new_session(&mut command);
 
-    let (env_output, process_output) = spawn_and_read_fd(command, fd_num).await?;
+    let (env_output, process_output) = spawn_and_read_fd(command, FD_STDIN).await?;
     let env_output = String::from_utf8_lossy(&env_output);
 
     parse_env_output(

@@ -331,6 +331,10 @@ impl Item for Editor {
         self.nav_history = Some(history);
     }
 
+    fn side_card(&self, _: &App) -> Option<gpui::AnyView> {
+        self.side_card.clone()
+    }
+
     fn deactivated(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let selection = self.selections.newest_anchor();
         self.push_to_nav_history(selection.head(), None, true, false, cx);

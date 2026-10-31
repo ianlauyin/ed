@@ -124,7 +124,7 @@ impl HeadlessProject {
             );
         }
 
-        let environment = cx.new(|cx| ProjectEnvironment::new(None, worktree_store.downgrade(), None, true, cx));
+        let environment = cx.new(|cx| ProjectEnvironment::new(worktree_store.downgrade(), None, true, cx));
         let manifest_tree = ManifestTree::new(worktree_store.clone(), cx);
 
         let buffer_store = cx.new(|cx| {
