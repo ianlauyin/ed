@@ -49,6 +49,10 @@ migrator, or Vim/Helix mode.
     is fixed to `<project names> — <active file name>` (no title template, so
     no settings or Git branch subscriptions drive title updates);
   - no accessible mode.
+- Markdown preview preferences are hardcoded too: UI font family and size for
+  text, buffer font family for code, semibold (600) headings, content centered
+  and capped at 1200px, and no auto-opening of markdown files in the preview.
+  Preview zoom (cmd +/-/0) is in-memory only, even for the persisting actions.
 - Semantic token fallback mappings are constructed in Rust. Personal rules take
   precedence over language/extension rules, which take precedence over fallback
   mappings. Rule order and theme-style fallback order are preserved. There is no

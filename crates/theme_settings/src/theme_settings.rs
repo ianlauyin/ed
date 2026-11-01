@@ -90,7 +90,6 @@ pub fn init(cx: &mut App) {
     let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
     let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
     let mut prev_git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
-    let mut prev_markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
 
     cx.observe_global::<SettingsStore>(move |cx| {
         let settings = ThemeSettings::get_global(cx);
@@ -98,7 +97,6 @@ pub fn init(cx: &mut App) {
         let buffer_font_size_settings = settings.buffer_font_size_settings();
         let ui_font_size_settings = settings.ui_font_size_settings();
         let git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
-        let markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
 
         if buffer_font_size_settings != prev_buffer_font_size_settings {
             prev_buffer_font_size_settings = buffer_font_size_settings;
@@ -113,11 +111,6 @@ pub fn init(cx: &mut App) {
         if git_commit_buffer_font_size_settings != prev_git_commit_buffer_font_size_settings {
             prev_git_commit_buffer_font_size_settings = git_commit_buffer_font_size_settings;
             reset_git_commit_buffer_font_size(cx);
-        }
-
-        if markdown_preview_font_size_settings != prev_markdown_preview_font_size_settings {
-            prev_markdown_preview_font_size_settings = markdown_preview_font_size_settings;
-            reset_markdown_preview_font_size(cx);
         }
     })
     .detach();

@@ -2199,10 +2199,6 @@ impl Workspace {
         &self.app_state
     }
 
-    pub const fn is_restoring(&self) -> bool {
-        self.restoring_workspace
-    }
-
     pub fn set_panels_task(&mut self, task: Task<Result<()>>) {
         self._panels_task = Some(task);
     }

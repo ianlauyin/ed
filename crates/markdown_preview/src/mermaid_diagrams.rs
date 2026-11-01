@@ -324,9 +324,7 @@ fn render_to_svg(source: &str, theme: &mermaid::Theme) -> anyhow::Result<String>
 /// Diagrams scale with it, so at the configured size they render at 1:1.
 fn preview_zoom(cx: &App) -> f32 {
     let settings = ThemeSettings::get_global(cx);
-    let configured = theme_settings::clamp_font_size(
-        settings.markdown_preview_font_size_settings().unwrap_or(settings.ui_font_size_settings()),
-    );
+    let configured = theme_settings::clamp_font_size(settings.ui_font_size_settings());
     settings.markdown_preview_font_size(cx) / configured
 }
 

@@ -3,7 +3,6 @@ use gpui::Context;
 use gpui::Font;
 use gpui::FontFallbacks;
 use gpui::FontStyle;
-use gpui::FontWeight;
 use gpui::Global;
 use gpui::Pixels;
 use gpui::SharedString;
@@ -38,20 +37,9 @@ pub struct ThemeSettings {
     /// The terminal font family can be overridden using it's own setting.
     pub buffer_font: Font,
     git_commit_buffer_font_size: Option<Pixels>,
-    /// The font family to use for rendering in the markdown preview.
-    /// Falls back to the UI font family if unset.
-    markdown_preview_font_family: Option<SharedString>,
-    /// The font family to use for code in the markdown preview.
-    /// Falls back to the buffer font family if unset.
-    markdown_preview_code_font_family: Option<SharedString>,
-    /// The font size to use for rendering in the markdown preview.
-    /// Falls back to the UI font size if unset.
-    markdown_preview_font_size: Option<Pixels>,
     /// The font family used for Mermaid diagrams.
     /// Falls back to the UI font family if unset.
     mermaid_font_family: Option<SharedString>,
-    /// The font weight for headings in the markdown preview.
-    markdown_preview_heading_font_weight: FontWeight,
     /// The line height for buffers, and the terminal.
     ///
     /// Changing this may affect the spacing of some UI elements.
@@ -116,18 +104,6 @@ impl ThemeSettings {
             .unwrap_or_else(|| self.buffer_font_size(cx))
     }
 
-    /// Returns the font family to use in the markdown preview,
-    /// falling back to the UI font family when unset.
-    pub fn markdown_preview_font_family(&self) -> &SharedString {
-        self.markdown_preview_font_family.as_ref().unwrap_or(&self.ui_font.family)
-    }
-
-    /// Returns the font family to use for code in the markdown preview,
-    /// falling back to the buffer font family when unset.
-    pub fn markdown_preview_code_font_family(&self) -> &SharedString {
-        self.markdown_preview_code_font_family.as_ref().unwrap_or(&self.buffer_font.family)
-    }
-
     /// Returns the font family to use for Mermaid diagrams, falling back to
     /// the buffer font family when unset: diagrams are laid out for a
     /// monospace font.
@@ -135,21 +111,12 @@ impl ThemeSettings {
         self.mermaid_font_family.as_ref().unwrap_or(&self.buffer_font.family)
     }
 
-    /// Returns the font weight to use for headings in the markdown preview.
-    pub const fn markdown_preview_heading_font_weight(&self) -> FontWeight {
-        self.markdown_preview_heading_font_weight
-    }
-
-    /// Returns the markdown preview font size.
+    /// Returns the markdown preview font size: the configured UI font size, unless zoomed.
     ///
-    /// Note: the fallback deliberately uses `self.ui_font_size` instead of `ui_font_size(cx)`,
+    /// Note: this deliberately uses `self.ui_font_size` instead of `ui_font_size(cx)`,
     /// so that temporary UI zoom does not also resize the markdown preview.
     pub fn markdown_preview_font_size(&self, cx: &App) -> Pixels {
-        cx.try_global::<MarkdownPreviewFontSize>()
-            .map(|size| size.0)
-            .or(self.markdown_preview_font_size)
-            .map(clamp_font_size)
-            .unwrap_or_else(|| clamp_font_size(self.ui_font_size))
+        clamp_font_size(cx.try_global::<MarkdownPreviewFontSize>().map_or(self.ui_font_size, |size| size.0))
     }
 
     /// Returns the buffer font size, read from the settings.
@@ -170,14 +137,6 @@ impl ThemeSettings {
 
     pub const fn git_commit_buffer_font_size_settings(&self) -> Option<Pixels> {
         self.git_commit_buffer_font_size
-    }
-
-    /// Returns the markdown preview font size, read from the settings.
-    ///
-    /// The real markdown preview font size is stored in-memory, to support temporary
-    /// font size changes. Use [`Self::markdown_preview_font_size`] to get the real font size.
-    pub const fn markdown_preview_font_size_settings(&self) -> Option<Pixels> {
-        self.markdown_preview_font_size
     }
 
     /// Returns the buffer's line height.
@@ -341,7 +300,6 @@ fn font_fallbacks_from_settings(fallbacks: Option<Vec<settings::FontFamilyName>>
 impl settings::Settings for ThemeSettings {
     fn from_settings(settings_content: &settings::SettingsContent) -> Self {
         let content = &settings_content.theme;
-        let markdown_preview = settings_content.markdown_preview.as_ref();
         Self {
             ui_font_size: clamp_font_size(content.ui_font_size.unwrap().into_gpui()),
             ui_font: Font {
@@ -361,20 +319,7 @@ impl settings::Settings for ThemeSettings {
             buffer_font_size: clamp_font_size(content.buffer_font_size.unwrap().into_gpui()),
             buffer_line_height: buffer_line_height_from_settings(content.buffer_line_height.unwrap()),
             git_commit_buffer_font_size: content.git_commit_buffer_font_size.map(|s| s.into_gpui()),
-            markdown_preview_font_family: markdown_preview
-                .and_then(|preview| preview.font_family.as_ref())
-                .map(|f| f.0.clone().into()),
-            markdown_preview_code_font_family: markdown_preview
-                .and_then(|preview| preview.code_font_family.as_ref())
-                .map(|f| f.0.clone().into()),
-            markdown_preview_font_size: markdown_preview
-                .and_then(|preview| preview.font_size)
-                .map(|size| size.into_gpui()),
             mermaid_font_family: content.mermaid_font_family.as_ref().map(|font| font.0.clone().into()),
-            markdown_preview_heading_font_weight: markdown_preview
-                .and_then(|preview| preview.heading_font_weight)
-                .map(|weight| weight.into_gpui())
-                .unwrap_or(FontWeight::SEMIBOLD),
             unnecessary_code_fade: content.unnecessary_code_fade.unwrap().0.clamp(0.0, 0.9),
         }
     }

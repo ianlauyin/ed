@@ -87,7 +87,6 @@ use settings_content::LspNotificationSettingsContent;
 use settings_content::LspPullDiagnosticsSettingsContent;
 use settings_content::LspSettings;
 use settings_content::LspSettingsMap;
-use settings_content::MarkdownPreviewSettingsContent;
 use settings_content::MinimapContent;
 use settings_content::MinimapThumb;
 use settings_content::MinimapThumbBorder;
@@ -260,15 +259,6 @@ pub fn settings() -> SettingsContent {
             }),
         }),
         image_viewer: Some(ImageViewerSettingsContent { unit: Some(ImageFileSizeUnit::Binary) }),
-        markdown_preview: Some(MarkdownPreviewSettingsContent {
-            font_family: None,
-            code_font_family: None,
-            font_size: None,
-            heading_font_weight: Some(FontWeightContent(600.0)),
-            open_markdown_files_in_preview: Some(false),
-            limit_content_width: Some(true),
-            max_width: Some(PixelSetting(1200.0)),
-        }),
         hide_mouse: Some(HideMouseMode::OnTypingAndAction),
         line_indicator_format: Some(LineIndicatorFormat::Long),
         outline_panel: Some(OutlinePanelSettingsContent {
