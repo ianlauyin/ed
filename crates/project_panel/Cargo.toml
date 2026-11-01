@@ -32,7 +32,6 @@ serde.workspace = true
 settings.workspace = true
 smallvec.workspace = true
 svg_preview.workspace = true
-theme_settings.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true

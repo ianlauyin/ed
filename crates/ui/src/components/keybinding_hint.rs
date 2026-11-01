@@ -204,7 +204,7 @@ impl RenderOnce for KeybindingHint {
         base.text_style().font_style = Some(FontStyle::Italic);
 
         base.gap_1()
-            .font_buffer(cx)
+            .font_buffer()
             .text_size(size)
             .text_color(colors.text_disabled)
             .children(self.prefix)

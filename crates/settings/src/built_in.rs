@@ -1,5 +1,4 @@
 use collections::HashMap;
-use collections::IndexMap;
 use settings_content::ActivateOnClose;
 use settings_content::ActivePaneModifiers;
 use settings_content::AllLanguageSettingsContent;
@@ -42,9 +41,6 @@ use settings_content::FileFinderSettingsContent;
 use settings_content::FileTypeMap;
 use settings_content::FocusFollowsMouse;
 use settings_content::FolderIndicator;
-use settings_content::FontFamilyName;
-use settings_content::FontFeaturesContent;
-use settings_content::FontSize;
 use settings_content::FontWeightContent;
 use settings_content::FormatOnSave;
 use settings_content::Formatter;
@@ -464,19 +460,7 @@ fn workspace_settings() -> WorkspaceSettingsContent {
 
 fn theme_settings() -> Box<ThemeSettingsContent> {
     Box::new(ThemeSettingsContent {
-        ui_font_size: Some(FontSize(16.0)),
-        ui_font_family: Some(FontFamilyName(".SystemUIFont".into())),
-        ui_font_fallbacks: None,
-        ui_font_features: Some(FontFeaturesContent([("calt".into(), 0)].into_iter().collect())),
-        ui_font_weight: Some(FontWeightContent(400.0)),
-        buffer_font_family: Some(FontFamilyName("JetBrainsMono Nerd Font".into())),
-        buffer_font_fallbacks: None,
-        buffer_font_size: Some(FontSize(15.0)),
-        buffer_font_weight: Some(FontWeightContent(400.0)),
         buffer_line_height: Some(BufferLineHeight::Comfortable),
-        buffer_font_features: Some(FontFeaturesContent(IndexMap::default())),
-        git_commit_buffer_font_size: Some(FontSize(12.0)),
-        mermaid_font_family: None,
         unnecessary_code_fade: Some(CodeFade(0.3)),
     })
 }

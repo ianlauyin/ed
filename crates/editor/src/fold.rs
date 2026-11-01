@@ -785,7 +785,7 @@ impl Editor {
                         .bg(cx.theme().status().hint_background)
                         .border_b_1()
                         .size_full()
-                        .font(ThemeSettings::get_global(cx).buffer_font.clone())
+                        .font(ui::font::buffer_font().clone())
                         .border_color(cx.theme().status().hint)
                         .child("\\n")
                         .into_any()

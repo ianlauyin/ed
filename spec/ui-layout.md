@@ -20,6 +20,20 @@ because it hurt readability; an opaque window is also cheaper to composite.
   OS light/dark appearance is not tracked. Native window chrome is forced to the
   theme's appearance.
 
+## Fonts
+
+- Fonts are constants in `ui::font`, not settings: UI font `.SystemUIFont`
+  16px with ligatures off, buffer font `JetBrainsMono Nerd Font` 15px, both
+  weight 400. Mermaid diagrams use the buffer font family. To change them, edit
+  `ui::font` and rebuild.
+- Font families never change at runtime; only sizes change, through in-memory
+  zoom that resets on restart. `ed::{Increase,Decrease,Reset}UiFontSize`,
+  `ed::{Increase,Decrease,Reset}BufferFontSize`, and `ed::ResetAllZoom` take
+  no arguments and never write settings. Sizes clamp to 6–100px.
+- The markdown preview (default: UI font size) and the git commit editor
+  (default: 12px) zoom independently of the buffer when focused.
+- `ui` reads fonts directly; `theme` provides no font settings.
+
 ## Behaviour
 
 - The chrome is the theme's `panel_background`; `background`, the title bar

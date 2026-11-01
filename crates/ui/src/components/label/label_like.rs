@@ -67,7 +67,7 @@ pub trait LabelCommon {
     fn single_line(self) -> Self;
 
     /// Sets the font to the buffer's
-    fn buffer_font(self, cx: &App) -> Self;
+    fn buffer_font(self) -> Self;
 
     /// Styles the label to look like inline code.
     fn inline_code(self, cx: &App) -> Self;
@@ -210,8 +210,8 @@ impl LabelCommon for LabelLike {
         self
     }
 
-    fn buffer_font(mut self, cx: &App) -> Self {
-        let font = theme::theme_settings(cx).buffer_font(cx).clone();
+    fn buffer_font(mut self) -> Self {
+        let font = crate::font::buffer_font().clone();
         self.weight = Some(font.weight);
         self.base = self.base.font(font);
         self
@@ -220,7 +220,7 @@ impl LabelCommon for LabelLike {
     fn inline_code(mut self, cx: &App) -> Self {
         self.base = self
             .base
-            .font(theme::theme_settings(cx).buffer_font(cx).clone())
+            .font(crate::font::buffer_font().clone())
             .bg(cx.theme().colors().element_background)
             .rounded_sm()
             .px_0p5();
@@ -269,7 +269,7 @@ impl RenderOnce for LabelLike {
                 this.min_w_0().overflow_x_hidden().whitespace_nowrap().text_ellipsis_middle()
             })
             .text_color(color)
-            .font_weight(self.weight.unwrap_or(theme::theme_settings(cx).ui_font(cx).weight))
+            .font_weight(self.weight.unwrap_or(crate::font::ui_font().weight))
             .children(self.children)
     }
 }

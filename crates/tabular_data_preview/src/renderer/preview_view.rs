@@ -40,7 +40,7 @@ impl Render for TableView {
                                 .items_center()
                                 .justify_center()
                                 .text_ui(cx)
-                                .font_buffer(cx)
+                                .font_buffer()
                                 .text_color(cx.theme().colors().text_muted)
                                 .when(is_loading, |div| {
                                     div.child(h_flex().gap_2().child(SpinnerLabel::new()).child("Loading…"))

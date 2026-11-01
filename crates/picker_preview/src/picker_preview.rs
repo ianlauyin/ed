@@ -323,7 +323,7 @@ impl EditorPreview {
             .size_full()
             .items_center()
             .justify_center()
-            .font_ui(cx)
+            .font_ui()
             .text_ui(cx)
             .text_color(Color::Muted.color(cx))
             .child(content)

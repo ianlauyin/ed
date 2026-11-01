@@ -10,8 +10,6 @@ use gpui::FocusHandle;
 use gpui::Hsla;
 use gpui::IntoElement;
 use gpui::TextStyle;
-use settings::Settings;
-use theme_settings::ThemeSettings;
 use ui::IconButton;
 use ui::IconButtonShape;
 use ui::Tooltip;
@@ -101,14 +99,13 @@ pub(crate) fn render_text_input(editor: &Entity<Editor>, color_override: Option<
         }
     };
 
-    let settings = ThemeSettings::get_global(app);
     let text_style = TextStyle {
         color,
-        font_family: settings.buffer_font.family.clone(),
-        font_features: settings.buffer_font.features.clone(),
-        font_fallbacks: settings.buffer_font.fallbacks.clone(),
+        font_family: ui::font::buffer_font().family.clone(),
+        font_features: ui::font::buffer_font().features.clone(),
+        font_fallbacks: ui::font::buffer_font().fallbacks.clone(),
         font_size: rems(0.875).into(),
-        font_weight: settings.buffer_font.weight,
+        font_weight: ui::font::buffer_font().weight,
         line_height: relative(1.3),
         ..TextStyle::default()
     };

@@ -21,8 +21,6 @@ use markdown::MarkdownElement;
 use notifications::status_toast::StatusToast;
 use project::git_store::Repository;
 use project::git_store::UnshallowState;
-use settings::Settings;
-use theme_settings::ThemeSettings;
 use time::OffsetDateTime;
 use time::UtcOffset;
 use ui::Chip;
@@ -64,14 +62,14 @@ pub(crate) fn commit_tag_chips(tag_names: &[SharedString]) -> Option<impl IntoEl
                 .when(!hidden_tags.is_empty(), |this| {
                     let hidden_tags = hidden_tags.to_vec();
                     this.child(Chip::new(format!("+{}", hidden_tags.len())).tooltip(Tooltip::element(
-                        move |_window, cx| {
+                        move |_window, _cx| {
                             v_flex()
                                 .gap_1()
                                 .children(itertools::Itertools::intersperse_with(
                                     hidden_tags.iter().map(|tag_name| {
                                         Label::new(tag_name.clone())
                                             .size(LabelSize::Small)
-                                            .buffer_font(cx)
+                                            .buffer_font()
                                             .into_any_element()
                                     }),
                                     || Divider::horizontal().into_any_element(),
@@ -176,7 +174,7 @@ impl Render for CommitTooltip {
 
         let tag_names = self.commit.tag_names.clone();
 
-        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
+        let ui_font_size = ui::font::ui_font_size(cx);
         let message_max_height = window.line_height() * 12 + (ui_font_size / 0.4);
         let repo = self.repository.clone();
         let workspace = self.workspace.clone();

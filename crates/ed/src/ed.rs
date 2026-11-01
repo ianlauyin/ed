@@ -68,11 +68,9 @@ use search::project_search::ProjectSearchBar;
 use settings::DefaultOpenBehavior;
 use settings::Settings;
 use settings::SettingsStore;
-use settings::update_settings_file;
 use terminal_view::terminal_panel::TerminalPanel;
 use terminal_view::terminal_panel::{self};
 use theme::ActiveTheme;
-use theme_settings::ThemeSettings;
 use ui::PopoverMenuHandle;
 use ui::prelude::*;
 use util::ResultExt;
@@ -402,107 +400,27 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
             })
             .detach()
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::IncreaseUiFontSize, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, cx| {
-                        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx) + px(1.0);
-                        let _ = settings
-                            .theme
-                            .ui_font_size
-                            .insert(f32::from(theme_settings::clamp_font_size(ui_font_size)).into());
-                    });
-                } else {
-                    theme_settings::adjust_ui_font_size(cx, |size| size + px(1.0));
-                }
-            }
+        .register_action(|_, _: &ed_actions::IncreaseUiFontSize, _window, cx| {
+            ui::font::adjust_ui_font_size(cx, |size| size + px(1.0));
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::DecreaseUiFontSize, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, cx| {
-                        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx) - px(1.0);
-                        let _ = settings
-                            .theme
-                            .ui_font_size
-                            .insert(f32::from(theme_settings::clamp_font_size(ui_font_size)).into());
-                    });
-                } else {
-                    theme_settings::adjust_ui_font_size(cx, |size| size - px(1.0));
-                }
-            }
+        .register_action(|_, _: &ed_actions::DecreaseUiFontSize, _window, cx| {
+            ui::font::adjust_ui_font_size(cx, |size| size - px(1.0));
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::ResetUiFontSize, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, _| {
-                        settings.theme.ui_font_size = None;
-                    });
-                } else {
-                    theme_settings::reset_ui_font_size(cx);
-                }
-            }
+        .register_action(|_, _: &ed_actions::ResetUiFontSize, _window, cx| {
+            ui::font::reset_ui_font_size(cx);
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::IncreaseBufferFontSize, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, cx| {
-                        let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size(cx) + px(1.0);
-                        let _ = settings
-                            .theme
-                            .buffer_font_size
-                            .insert(f32::from(theme_settings::clamp_font_size(buffer_font_size)).into());
-                    });
-                } else {
-                    theme_settings::increase_buffer_font_size(cx);
-                }
-            }
+        .register_action(|_, _: &ed_actions::IncreaseBufferFontSize, _window, cx| {
+            ui::font::adjust_buffer_font_size(cx, |size| size + px(1.0));
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::DecreaseBufferFontSize, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, cx| {
-                        let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size(cx) - px(1.0);
-                        let _ = settings
-                            .theme
-                            .buffer_font_size
-                            .insert(f32::from(theme_settings::clamp_font_size(buffer_font_size)).into());
-                    });
-                } else {
-                    theme_settings::decrease_buffer_font_size(cx);
-                }
-            }
+        .register_action(|_, _: &ed_actions::DecreaseBufferFontSize, _window, cx| {
+            ui::font::adjust_buffer_font_size(cx, |size| size - px(1.0));
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::ResetBufferFontSize, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, _| {
-                        settings.theme.buffer_font_size = None;
-                    });
-                } else {
-                    theme_settings::reset_buffer_font_size(cx);
-                }
-            }
+        .register_action(|_, _: &ed_actions::ResetBufferFontSize, _window, cx| {
+            ui::font::reset_buffer_font_size(cx);
         })
-        .register_action({
-            let fs = app_state.fs.clone();
-            move |_, action: &ed_actions::ResetAllZoom, _window, cx| {
-                if action.persist {
-                    update_settings_file(fs.clone(), cx, move |settings, _| {
-                        settings.theme.ui_font_size = None;
-                        settings.theme.buffer_font_size = None;
-                    });
-                } else {
-                    theme_settings::reset_ui_font_size(cx);
-                    theme_settings::reset_buffer_font_size(cx);
-                }
-            }
+        .register_action(|_, _: &ed_actions::ResetAllZoom, _window, cx| {
+            ui::font::reset_ui_font_size(cx);
+            ui::font::reset_buffer_font_size(cx);
         })
         .register_action(
             |workspace: &mut Workspace,
@@ -568,14 +486,11 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
                 .detach_and_log_err(cx);
             }
         })
-        .register_action({
-            let app_state = app_state.clone();
-            move |_, _: &NewFile, _, cx| {
-                open_new(workspace::OpenOptions::default(), app_state.clone(), cx, |workspace, window, cx| {
-                    Editor::new_file(workspace, &NewFile, window, cx)
-                })
-                .detach_and_log_err(cx);
-            }
+        .register_action(move |_, _: &NewFile, _, cx| {
+            open_new(workspace::OpenOptions::default(), app_state.clone(), cx, |workspace, window, cx| {
+                Editor::new_file(workspace, &NewFile, window, cx)
+            })
+            .detach_and_log_err(cx);
         });
 }
 

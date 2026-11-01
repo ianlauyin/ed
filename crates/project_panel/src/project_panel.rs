@@ -127,7 +127,6 @@ use settings::ShowIndentGuides;
 use settings::update_settings_file;
 use smallvec::SmallVec;
 use svg_preview::svg_preview_view::SvgPreviewView;
-use theme_settings::ThemeSettings;
 use ui::ContextMenu;
 use ui::DecoratedIcon;
 use ui::IconDecoration;
@@ -4243,7 +4242,7 @@ impl ProjectPanel {
         if !scale_factor.is_finite() || scale_factor <= 0.0 {
             return;
         }
-        let font_size = ThemeSettings::get_global(cx).ui_font_size(cx).as_f32();
+        let font_size = ui::font::ui_font_size(cx).as_f32();
         let minimum_row_height = (1.5 * font_size * scale_factor).floor() / scale_factor;
         let row_count = (window.viewport_size().height.as_f32() / minimum_row_height).ceil();
         if minimum_row_height <= 0.0 || !row_count.is_finite() || row_count <= 0.0 {
@@ -6911,7 +6910,7 @@ impl Render for ProjectPanel {
 
 impl Render for DraggedProjectEntryView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let ui_font = ThemeSettings::get_global(cx).ui_font.clone();
+        let ui_font = ui::font::ui_font().clone();
         h_flex().font(ui_font).pl(self.click_offset.x + px(12.)).pt(self.click_offset.y + px(12.)).child(
             div().flex().gap_1().items_center().py_1().px_2().rounded_lg().bg(cx.theme().colors().background).map(
                 |this| {

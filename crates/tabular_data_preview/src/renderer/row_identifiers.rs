@@ -184,7 +184,7 @@ impl TableView {
             .text_color(cx.theme().colors().text_muted)
             .justify_center()
             .items_center()
-            .font_buffer(cx)
+            .font_buffer()
             .text_ui(cx)
             .child(row_identifier)
             .into_any_element();

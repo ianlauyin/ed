@@ -122,7 +122,7 @@ impl RenderOnce for Chip {
                 this.child(Icon::new(icon).size(IconSize::XSmall).color(self.icon_color))
             })
             .child(
-                Label::new(self.label.clone()).size(self.label_size).color(self.label_color).buffer_font(cx).truncate(),
+                Label::new(self.label.clone()).size(self.label_size).color(self.label_color).buffer_font().truncate(),
             )
             .id(self.label.clone())
             .when_some(self.tooltip, |this, tooltip| this.tooltip(tooltip))

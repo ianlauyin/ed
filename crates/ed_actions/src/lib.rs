@@ -33,68 +33,25 @@ actions!(
     ]
 );
 
-/// Decreases the font size in the editor buffer.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct DecreaseBufferFontSize {
-    #[serde(default)]
-    pub persist: bool,
-}
-
-/// Increases the font size in the editor buffer.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct IncreaseBufferFontSize {
-    #[serde(default)]
-    pub persist: bool,
-}
-
-/// Resets the buffer font size to the default value.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct ResetBufferFontSize {
-    #[serde(default)]
-    pub persist: bool,
-}
-
-/// Decreases the font size of the user interface.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct DecreaseUiFontSize {
-    #[serde(default)]
-    pub persist: bool,
-}
-
-/// Increases the font size of the user interface.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct IncreaseUiFontSize {
-    #[serde(default)]
-    pub persist: bool,
-}
-
-/// Resets the UI font size to the default value.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct ResetUiFontSize {
-    #[serde(default)]
-    pub persist: bool,
-}
-
-/// Resets all zoom levels (UI and buffer font sizes) to their default values.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, Action)]
-#[action(namespace = ed)]
-#[serde(deny_unknown_fields)]
-pub struct ResetAllZoom {
-    #[serde(default)]
-    pub persist: bool,
-}
+actions!(
+    ed,
+    [
+        /// Decreases the font size in the editor buffer.
+        DecreaseBufferFontSize,
+        /// Increases the font size in the editor buffer.
+        IncreaseBufferFontSize,
+        /// Resets the buffer font size to the default value.
+        ResetBufferFontSize,
+        /// Decreases the font size of the user interface.
+        DecreaseUiFontSize,
+        /// Increases the font size of the user interface.
+        IncreaseUiFontSize,
+        /// Resets the UI font size to the default value.
+        ResetUiFontSize,
+        /// Resets all zoom levels (UI and buffer font sizes) to their default values.
+        ResetAllZoom,
+    ]
+);
 
 pub mod editor {
     use gpui::actions;

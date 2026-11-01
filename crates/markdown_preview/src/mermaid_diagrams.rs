@@ -33,14 +33,14 @@ use markdown::Markdown;
 use markdown::MarkdownStyle;
 use markdown::parser::CodeBlockKind;
 use markdown::parser::MarkdownEvent;
-use settings::Settings as _;
-use theme_settings::ThemeSettings;
 use ui::CopyButton;
 use ui::ScrollAxes;
 use ui::Scrollbars;
 use ui::TintColor;
 use ui::WithScrollbar;
 use ui::prelude::*;
+
+use crate::markdown_preview_style::preview_font_size;
 
 type MermaidDiagramCache = HashMap<DiagramContents, Arc<CachedMermaidDiagram>>;
 
@@ -320,12 +320,10 @@ fn render_to_svg(source: &str, theme: &mermaid::Theme) -> anyhow::Result<String>
     mermaid::render(source, &options, theme).map(|rendered| rendered.svg).map_err(|error| anyhow::anyhow!("{error:?}"))
 }
 
-/// How far the preview font is zoomed (cmd +/-) from its configured size.
-/// Diagrams scale with it, so at the configured size they render at 1:1.
+/// How far the preview font is zoomed (cmd +/-) from its default size.
+/// Diagrams scale with it, so at the default size they render at 1:1.
 fn preview_zoom(cx: &App) -> f32 {
-    let settings = ThemeSettings::get_global(cx);
-    let configured = theme_settings::clamp_font_size(settings.ui_font_size_settings());
-    settings.markdown_preview_font_size(cx) / configured
+    preview_font_size(cx) / ui::font::UI_FONT_SIZE
 }
 
 /// The editor theme as a diagram theme.
@@ -339,7 +337,7 @@ fn mermaid_theme(cx: &App) -> mermaid::Theme {
         mermaid::Color::rgb(channel(color.r), channel(color.g), channel(color.b))
     };
     let accents = cx.theme().accents();
-    let font_family = ThemeSettings::get_global(cx).mermaid_font_family();
+    let font_family = &ui::font::buffer_font().family;
     mermaid::Theme {
         background: color(background),
         foreground: color(colors.text),

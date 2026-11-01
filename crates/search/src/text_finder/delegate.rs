@@ -66,7 +66,6 @@ use project::search::SearchResult;
 use settings::Settings;
 use smol::future::yield_now;
 use text::Anchor;
-use theme_settings::ThemeSettings;
 use ui::Disclosure;
 use ui::Divider;
 use ui::FluentBuilder;
@@ -1154,14 +1153,13 @@ fn matched_line_window(snapshot: &language::BufferSnapshot, match_range: &Range<
 /// Renders the matched source line with syntax highlighting, overlaying the
 /// search match with a highlighted background and bold weight.
 fn render_matched_line(search_match: &SearchMatch, cx: &App) -> StyledText {
-    let settings = ThemeSettings::get_global(cx);
     let text_style = TextStyle {
         color: cx.theme().colors().text,
-        font_family: settings.buffer_font.family.clone(),
-        font_features: settings.buffer_font.features.clone(),
-        font_fallbacks: settings.buffer_font.fallbacks.clone(),
-        font_size: settings.buffer_font_size(cx).into(),
-        font_weight: settings.buffer_font.weight,
+        font_family: ui::font::buffer_font().family.clone(),
+        font_features: ui::font::buffer_font().features.clone(),
+        font_fallbacks: ui::font::buffer_font().fallbacks.clone(),
+        font_size: ui::font::buffer_font_size(cx).into(),
+        font_weight: ui::font::buffer_font().weight,
         line_height: relative(1.),
         ..Default::default()
     };

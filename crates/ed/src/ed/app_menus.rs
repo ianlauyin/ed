@@ -9,10 +9,10 @@ use terminal_view::terminal_panel;
 
 pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
     let mut view_items = vec![
-        MenuItem::action("Zoom In", ed_actions::IncreaseBufferFontSize { persist: false }),
-        MenuItem::action("Zoom Out", ed_actions::DecreaseBufferFontSize { persist: false }),
-        MenuItem::action("Reset Zoom", ed_actions::ResetBufferFontSize { persist: false }),
-        MenuItem::action("Reset All Zoom", ed_actions::ResetAllZoom { persist: false }),
+        MenuItem::action("Zoom In", ed_actions::IncreaseBufferFontSize),
+        MenuItem::action("Zoom Out", ed_actions::DecreaseBufferFontSize),
+        MenuItem::action("Reset Zoom", ed_actions::ResetBufferFontSize),
+        MenuItem::action("Reset All Zoom", ed_actions::ResetAllZoom),
         MenuItem::separator(),
         MenuItem::action("Toggle Left Dock", workspace::ToggleLeftDock),
         MenuItem::action("Toggle Right Dock", workspace::ToggleRightDock),

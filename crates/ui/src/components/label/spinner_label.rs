@@ -152,8 +152,8 @@ impl LabelCommon for SpinnerLabel {
         self
     }
 
-    fn buffer_font(mut self, cx: &App) -> Self {
-        self.base = self.base.buffer_font(cx);
+    fn buffer_font(mut self) -> Self {
+        self.base = self.base.buffer_font();
         self
     }
 

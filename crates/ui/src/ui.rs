@@ -7,6 +7,7 @@
 //! - `ui_input` - the single line input component
 
 mod components;
+pub mod font;
 pub mod prelude;
 mod styles;
 mod traits;

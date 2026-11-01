@@ -192,7 +192,7 @@ where
     C: AppContext + Borrow<App>,
 {
     let app = (*cx).borrow();
-    let ui_font = theme::theme_settings(app).ui_font(app).clone();
+    let ui_font = crate::font::ui_font().clone();
 
     // padding to avoid tooltip appearing right below the mouse cursor
     div().pl_2().pt_2p5().child(

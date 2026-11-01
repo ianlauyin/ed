@@ -31,7 +31,6 @@ use markdown::MarkdownStyle;
 use parking_lot::Mutex;
 use project::project_settings::ProjectSettings;
 use settings::Settings;
-use theme_settings::ThemeSettings;
 use ui::CopyButton;
 use ui::Tooltip;
 use ui::prelude::*;
@@ -382,11 +381,10 @@ impl EventEmitter<DismissEvent> for LanguageServerPrompt {}
 impl EventEmitter<SuppressEvent> for LanguageServerPrompt {}
 
 pub fn markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
-    let settings = ThemeSettings::get_global(cx);
-    let ui_font_family = settings.ui_font.family.clone();
-    let ui_font_fallbacks = settings.ui_font.fallbacks.clone();
-    let buffer_font_family = settings.buffer_font.family.clone();
-    let buffer_font_fallbacks = settings.buffer_font.fallbacks.clone();
+    let ui_font_family = ui::font::ui_font().family.clone();
+    let ui_font_fallbacks = ui::font::ui_font().fallbacks.clone();
+    let buffer_font_family = ui::font::buffer_font().family.clone();
+    let buffer_font_fallbacks = ui::font::buffer_font().fallbacks.clone();
 
     let mut base_text_style = window.text_style();
     base_text_style.refine(&TextStyleRefinement {
