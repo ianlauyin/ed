@@ -944,7 +944,7 @@ pub fn open_or_reuse_graph(
 
 /// Whether a graph of `log_source` is the repository-wide one, a permanent
 /// first tab in the history pane.
-fn is_repository_graph(log_source: &LogSource) -> bool {
+const fn is_repository_graph(log_source: &LogSource) -> bool {
     matches!(log_source, LogSource::All)
 }
 
