@@ -138,7 +138,11 @@
   and CSS (alongside the JSON and CSS servers for those). It provides lint
   diagnostics and code actions (`source.fixAll.biome`,
   `source.organizeImports.biome`). It resolves like the Biome formatter, from the
-  worktree root. Formatting stays on the Biome CLI (below).
+  worktree root. When the worktree root (and its ancestors) has no `biome.json(c)`,
+  it instead uses the shallowest config within 3 levels below (skipping
+  `node_modules`, hidden and build directories): Biome and its `node_modules/.bin`
+  are resolved from that directory and `--config-path` points at it. Only one
+  such directory is used per worktree. Formatting stays on the Biome CLI (below).
 - `lsp.tsgo.settings` / `lsp.biome.settings` are passed through as workspace
   configuration.
 - `stylelint` (`stylelint-language-server --stdio`, from
