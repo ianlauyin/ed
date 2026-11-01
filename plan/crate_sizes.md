@@ -7,7 +7,11 @@ release profile (`lto = "thin"`, `codegen-units = 1`).
 
 ## Whole binary
 
-The stripped binary (what `release.sh` ships) is about 83 MiB:
+Update: with `panic = "abort"` and the `ed` package override removed (it
+silently stopped cargo from passing `-C strip`), the shipped binary went from
+117.6 MiB (unstripped) to 64.9 MiB: `.text` 49.4 MiB, unwind / exception
+tables under 0.3 MiB, symbol table gone. The table below is the snapshot before
+those changes, sized as if stripped (about 83 MiB):
 
 | Part | Size | What it is |
 |---|---|---|
@@ -15,7 +19,7 @@ The stripped binary (what `release.sh` ships) is about 83 MiB:
 | `__TEXT,__const` | 10.9 MiB | read-only data: tree-sitter parse tables, embedded assets (icons, themes, spell dictionary ~0.9 MiB), string literals |
 | unwind / exception tables | 8.0 MiB | `__gcc_except_tab` 3.8, `__eh_frame` 3.1, `__unwind_info` 1.1. `panic = "abort"` would remove most of `__gcc_except_tab` |
 | `__DATA_CONST` | 2.4 MiB | vtables, relocated constants |
-| symbol table | ~36 MiB | only in unstripped builds (e.g. after `cargo bloat`), `strip = true` removes it |
+| symbol table | ~36 MiB | was shipped: the `ed` package override dropped `-C strip` |
 
 The binary is memory-mapped, so pages that are never touched cost no RAM. The
 size mostly matters for disk usage and cold-start page-ins, not for memory
