@@ -48,12 +48,16 @@ fn traffic_light_room(offset: Pixels, fullscreen: bool) -> Pixels {
     if fullscreen { px(0.) } else { (px(TRAFFIC_LIGHT_PADDING) - offset).max(px(0.)) }
 }
 
+/// The folder tab bar's inset before its first tab or start content.
+const TAB_BAR_FOLDER_INSET: Pixels = px(10.);
+
 /// Room the tab bar after a `sidebar_width` sidebar keeps before its tabs for
-/// a `header_width` window header above that sidebar: the tabs start where
-/// they would after the narrowest sidebar the header fits on.
-fn sidebar_header_overhang(header_width: Pixels, sidebar_width: Pixels) -> Pixels {
-    // The sidebar ends with the card gap before the panes.
-    (header_width + CARD_GAP - sidebar_width).max(px(0.))
+/// a `header_width` window header above that sidebar, so the tabs start where
+/// they do with the sidebar hidden: right after the header and the tab bar
+/// start slot's `start_padding`. Header and sidebar both start `CARD_GAP` in,
+/// and the tabs beside a sidebar start the folder inset after it.
+fn sidebar_header_overhang(header_width: Pixels, sidebar_width: Pixels, start_padding: Pixels) -> Pixels {
+    (header_width + start_padding - TAB_BAR_FOLDER_INSET - sidebar_width).max(px(0.))
 }
 
 /// The window header, drawn above the sidebar or at the start of the header
@@ -357,7 +361,7 @@ impl Workspace {
         let header_width = self.window_header.read(cx).sidebar_width;
         let overhang = self
             .header_sidebar_width(mode, window, cx)
-            .map(|sidebar_width| sidebar_header_overhang(header_width, sidebar_width))
+            .map(|sidebar_width| sidebar_header_overhang(header_width, sidebar_width, DynamicSpacing::Base06.px(cx)))
             .filter(|overhang| *overhang > px(0.))
             .and_then(|overhang| Some((self.tab_bar_header_pane(mode, cx)?, overhang)));
         let top_row: Vec<Entity<Pane>> = group.top_row_panes().into_iter().cloned().collect();
@@ -395,7 +399,6 @@ mod tests {
     use super::TAB_BAR_START_OFFSET;
     use super::sidebar_header_overhang;
     use super::traffic_light_room;
-    use crate::CARD_GAP;
 
     #[test]
     fn test_traffic_light_room() {
@@ -407,11 +410,12 @@ mod tests {
 
     #[test]
     fn test_sidebar_header_overhang() {
-        // A sidebar wide enough for the header and its gap leaves no overhang.
-        assert_eq!(sidebar_header_overhang(px(300.), px(400.)), px(0.));
-        assert_eq!(sidebar_header_overhang(px(300.), px(300.) + CARD_GAP), px(0.));
-        // Narrower, the tabs stop where that sidebar would put them.
-        assert_eq!(sidebar_header_overhang(px(300.), px(200.)), px(100.) + CARD_GAP);
-        assert_eq!(sidebar_header_overhang(px(300.), px(0.)), px(300.) + CARD_GAP);
+        // A sidebar wide enough that its tabs already clear the header leaves no room.
+        assert_eq!(sidebar_header_overhang(px(300.), px(400.), px(6.)), px(0.));
+        assert_eq!(sidebar_header_overhang(px(300.), px(296.), px(6.)), px(0.));
+        // Narrower, the room puts the first tab right after the header and the start padding.
+        assert_eq!(sidebar_header_overhang(px(300.), px(200.), px(6.)), px(96.));
+        assert_eq!(sidebar_header_overhang(px(300.), px(0.), px(6.)), px(296.));
+        assert_eq!(sidebar_header_overhang(px(300.), px(200.), px(8.)), px(98.));
     }
 }

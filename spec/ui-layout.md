@@ -73,8 +73,8 @@ because it hurt readability; an opaque window is also cheaper to composite.
   over the mode's content, never clipped by the sidebar: when the sidebar is
   narrower than the header, the header overhangs it and the top-left tab bar
   keeps room before its tabs (which moves the window), so the tabs stop where
-  the narrowest sidebar that fits the header would put them; only the cards
-  below follow the sidebar's edge. With no sidebar
+  they sit with the sidebar hidden and hold still when it is toggled; only the
+  cards below follow the sidebar's edge. With no sidebar
   shown, or while something is zoomed, the same group moves to the start of the
   top-left pane's tab bar, at the same x, so nothing jumps when the sidebar is
   toggled. A zoomed dock covers the panes, so it gets a header row of its own.
