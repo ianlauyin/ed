@@ -63,9 +63,15 @@ blobs with no language server, so they are not mixed into editor panes.
 
 - Round "Workspace" / "Git History" tabs in the title bar, after a divider
   following the branch picker, switch modes. They are shown whenever the branch is. "Git
-  History" returns to the open history tabs, or opens the repository graph if
-  there are none. `workspace::ShowEditor` and `git_graph::Open` switch from the
-  keyboard. The active tab has no fill: it shows full-contrast text and an
+  History" (`git_graph::Show`) follows the active repository (the folder picked
+  in the title bar): it returns to the active history tab if that tab belongs
+  to the active repository, otherwise it opens (or reuses) that repository's
+  graph. A tab belongs to its graph's repository, or to the repository of the
+  commit in its sidebar. `workspace::ShowEditor` and `git_graph::Open` switch
+  from the keyboard.
+- While Git History is shown, picking another folder (changing the active
+  repository) applies the same rule, so the history switches to that
+  repository's graph; tabs of other repositories stay open. The active tab has no fill: it shows full-contrast text and an
   accent-coloured icon, while inactive tabs are muted. Both show the ghost
   hover background, so the filled pill no longer pulls focus from the content.
 - Git History mode hides the docks and editor panes. The status bar stays and

@@ -217,7 +217,11 @@ pub mod git_graph {
         git_graph,
         [
             /// Switches the window to Git History mode, showing the git graph.
-            Open
+            Open,
+            /// Switches the window to Git History mode for the active repository:
+            /// keeps the active history tab if it belongs to that repository,
+            /// otherwise shows the repository's graph.
+            Show
         ]
     );
 }

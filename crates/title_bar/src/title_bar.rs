@@ -579,22 +579,10 @@ impl TitleBar {
                 workspace.update(cx, |workspace, cx| workspace.set_mode(WorkspaceMode::Editor, window, cx)).ok();
             });
 
-        let workspace = self.workspace.clone();
         let show_history =
             pill("workspace-mode-git-history", "Git History", IconName::GitGraph, mode == WorkspaceMode::GitHistory)
-                .tooltip(|_window, cx| Tooltip::for_action("Git History", &ed_actions::git_graph::Open, cx))
-                .on_click(move |_, window, cx| {
-                    // Return to the open history tabs; only an empty history opens the graph.
-                    let has_history =
-                        workspace.read_with(cx, |workspace, cx| !workspace.git_history_is_empty(cx)).unwrap_or(false);
-                    if has_history {
-                        workspace
-                            .update(cx, |workspace, cx| workspace.set_mode(WorkspaceMode::GitHistory, window, cx))
-                            .ok();
-                    } else {
-                        window.dispatch_action(Box::new(ed_actions::git_graph::Open), cx);
-                    }
-                });
+                .tooltip(|_window, cx| Tooltip::for_action("Git History", &ed_actions::git_graph::Show, cx))
+                .on_click(|_, window, cx| window.dispatch_action(Box::new(ed_actions::git_graph::Show), cx));
 
         Some(
             h_flex()

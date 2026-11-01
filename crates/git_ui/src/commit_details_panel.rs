@@ -46,6 +46,7 @@ use project::git_store::CommitDataState;
 use project::git_store::CommitDiff;
 use project::git_store::CommitFile;
 use project::git_store::Repository;
+use project::git_store::RepositoryId;
 use ui::Chip;
 use ui::ContextMenu;
 use ui::DiffStat;
@@ -209,6 +210,11 @@ impl CommitDetailsPanel {
         self.diff_stats = compute_diff_stats(&diff);
         self.diff = Some(diff);
         cx.notify();
+    }
+
+    /// The repository of the shown commit, while it is still open.
+    pub fn repository_id(&self, cx: &App) -> Option<RepositoryId> {
+        self.repository.upgrade().map(|repository| repository.read(cx).id)
     }
 
     /// The current commit's loaded diff, if it has finished loading.

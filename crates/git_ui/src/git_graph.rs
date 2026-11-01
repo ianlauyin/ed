@@ -9,6 +9,7 @@ use collections::HashMap;
 use collections::IndexSet;
 use ed_actions::buffer_search;
 pub use ed_actions::git_graph::Open;
+pub use ed_actions::git_graph::Show;
 use ed_actions::search::SelectNextMatch;
 use ed_actions::search::SelectPreviousMatch;
 use ed_actions::search::ToggleCaseSensitive;
@@ -107,6 +108,7 @@ use workspace::Workspace;
 use workspace::WorkspaceMode;
 use workspace::item::Item;
 use workspace::item::ItemEvent;
+use workspace::item::ItemHandle;
 use workspace::item::TabTooltipContent;
 
 use crate::commit_context_menu::CommitContextMenuData;
@@ -723,7 +725,23 @@ impl GraphData {
 }
 
 pub fn init(cx: &mut App) {
-    cx.observe_new(|workspace: &mut workspace::Workspace, _, _| {
+    cx.observe_new(|workspace: &mut workspace::Workspace, window, cx| {
+        // Git History follows the folder picked in the title bar while shown.
+        if let Some(window) = window {
+            let git_store = workspace.project().read(cx).git_store().clone();
+            cx.subscribe_in(&git_store, window, |workspace, _, event, window, cx| {
+                if let GitStoreEvent::ActiveRepositoryChanged(Some(_)) = event
+                    && workspace.mode() == WorkspaceMode::GitHistory
+                {
+                    show_active_repository_history(workspace, window, cx);
+                }
+            })
+            .detach();
+        }
+
+        workspace.register_action(|workspace, _: &Show, window, cx| {
+            show_active_repository_history(workspace, window, cx);
+        });
         workspace.register_action_renderer(|div, workspace, window, cx| {
             div.when_some(resolve_file_history_target(workspace, window, cx), |div, (repo_id, log_source)| {
                 let git_store = workspace.project().read(cx).git_store().clone();
@@ -823,6 +841,38 @@ fn resolve_file_history_target(workspace: &Workspace, window: &Window, cx: &App)
     let git_store = workspace.project().read(cx).git_store();
     let (repo, repo_path) = git_store.read(cx).repository_and_path_for_project_path(&project_path, cx)?;
     Some((repo.read(cx).id, LogSource::Path(repo_path)))
+}
+
+/// Switches to Git History for the active repository: keeps the active history
+/// tab if it belongs to that repository, otherwise shows its graph.
+pub fn show_active_repository_history(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
+    let project = workspace.project().read(cx);
+    let active_repo_id = project.active_repository(cx).map(|repo| repo.read(cx).id);
+    let git_store = project.git_store().clone();
+    let shown_repo_id =
+        workspace.git_history_pane().read(cx).active_item().and_then(|item| history_item_repo_id(item.as_ref(), cx));
+
+    if let Some(repo_id) = graph_repo_to_show(active_repo_id, shown_repo_id) {
+        open_or_reuse_graph(workspace, repo_id, git_store, LogSource::All, None, window, cx);
+    } else if !workspace.git_history_is_empty(cx) {
+        workspace.set_mode(WorkspaceMode::GitHistory, window, cx);
+    }
+}
+
+/// The repository whose graph must be shown so Git History matches the active
+/// repository, or `None` when the active history tab already shows it.
+fn graph_repo_to_show(active_repo_id: Option<RepositoryId>, shown_repo_id: Option<RepositoryId>) -> Option<RepositoryId> {
+    active_repo_id.filter(|active_repo_id| shown_repo_id != Some(*active_repo_id))
+}
+
+/// The repository a history tab belongs to: a graph's own, otherwise that of
+/// the commit in its sidebar (commit views, revisions and their previews).
+fn history_item_repo_id(item: &dyn ItemHandle, cx: &App) -> Option<RepositoryId> {
+    if let Some(graph) = item.downcast::<GitGraph>() {
+        return Some(graph.read(cx).repo_id);
+    }
+    let details = item.side_card(cx)?.downcast::<CommitDetailsPanel>().ok()?;
+    details.read(cx).repository_id(cx)
 }
 
 /// Shows the git graph for `repo_id` and `log_source` in the git history
@@ -3197,6 +3247,17 @@ mod tests {
         assert_eq!(history_reveal_path(&LogSource::Path(path.clone())), Some(path));
         assert_eq!(history_reveal_path(&LogSource::All), None);
         assert_eq!(history_reveal_path(&LogSource::Branch("main".into())), None);
+    }
+
+    #[test]
+    fn test_graph_repo_to_show() {
+        let a = RepositoryId(1);
+        let b = RepositoryId(2);
+        assert_eq!(graph_repo_to_show(Some(a), Some(a)), None);
+        assert_eq!(graph_repo_to_show(Some(b), Some(a)), Some(b));
+        assert_eq!(graph_repo_to_show(Some(a), None), Some(a));
+        assert_eq!(graph_repo_to_show(None, Some(a)), None);
+        assert_eq!(graph_repo_to_show(None, None), None);
     }
 
     #[test]
