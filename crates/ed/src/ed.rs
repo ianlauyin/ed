@@ -79,9 +79,9 @@ use ui::prelude::*;
 use util::ResultExt;
 use uuid::Uuid;
 use workspace::AppState;
+use workspace::CloseIntent;
 use workspace::CloseProject;
 use workspace::CloseWindow;
-use workspace::MultiWorkspace;
 use workspace::NewFile;
 use workspace::NewWindow;
 use workspace::OpenLog;
@@ -186,20 +186,20 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     init_cursor_hide_mode(cx);
     init_app_appearance(cx);
 
-    cx.observe_new(|_: &mut MultiWorkspace, window, cx| {
+    cx.observe_new(|_: &mut Workspace, window, cx| {
         let Some(window) = window else {
             return;
         };
 
-        let multi_workspace_handle = cx.entity().downgrade();
+        // The window's workspace can be replaced, so look up the current root
+        // when the window is asked to close.
         window.on_window_should_close(cx, move |window, cx| {
-            multi_workspace_handle
-                .update(cx, |multi_workspace, cx| {
-                    // We'll handle closing asynchronously
-                    multi_workspace.close_window(&CloseWindow, window, cx);
-                    false
-                })
-                .unwrap_or(true)
+            let Some(workspace) = window.root::<Workspace>().flatten() else {
+                return true;
+            };
+            // We'll handle closing asynchronously
+            workspace.update(cx, |workspace, cx| workspace.close_window(&CloseWindow, window, cx));
+            false
         });
     })
     .detach();
@@ -541,15 +541,29 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             move |workspace, _: &CloseProject, window, cx| {
-                let Some(window_handle) = window.window_handle().downcast::<MultiWorkspace>() else {
+                let Some(window_handle) = window.window_handle().downcast::<Workspace>() else {
                     return;
                 };
-                let old_group_key = workspace.project_group_key(cx);
-                cx.spawn_in(window, async move |_, cx| {
-                    let task = window_handle.update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.remove_project_group(&old_group_key, window, cx)
-                    })?;
-                    task.await?;
+                let app_state = workspace.app_state().clone();
+                cx.spawn_in(window, async move |workspace, cx| {
+                    let should_continue = workspace
+                        .update_in(cx, |workspace, window, cx| {
+                            workspace.prepare_to_close(CloseIntent::ReplaceWindow, window, cx)
+                        })?
+                        .await?;
+                    if should_continue {
+                        cx.update(|_, cx| {
+                            Workspace::new_local(
+                                Vec::new(),
+                                app_state,
+                                Some(window_handle),
+                                None,
+                                workspace::OpenMode::Activate,
+                                cx,
+                            )
+                        })?
+                        .await?;
+                    }
                     anyhow::Ok(())
                 })
                 .detach_and_log_err(cx);
@@ -713,8 +727,8 @@ fn quit(_: &Quit, cx: &mut App) {
 
     let should_confirm = WorkspaceSettings::get_global(cx).confirm_quit;
     cx.spawn(async move |cx| {
-        let mut workspace_windows: Vec<WindowHandle<MultiWorkspace>> = cx.update(|cx| {
-            cx.windows().into_iter().filter_map(|window| window.downcast::<MultiWorkspace>()).collect::<Vec<_>>()
+        let mut workspace_windows: Vec<WindowHandle<Workspace>> = cx.update(|cx| {
+            cx.windows().into_iter().filter_map(|window| window.downcast::<Workspace>()).collect::<Vec<_>>()
         });
 
         // If multiple windows have unsaved changes, and need a save prompt,
@@ -723,8 +737,8 @@ fn quit(_: &Quit, cx: &mut App) {
             workspace_windows.sort_by_key(|window| window.is_active(cx) == Some(false));
         });
 
-        if should_confirm && let Some(multi_workspace) = workspace_windows.first() {
-            let answer = multi_workspace
+        if should_confirm && let Some(workspace_window) = workspace_windows.first() {
+            let answer = workspace_window
                 .update(cx, |_, window, cx| {
                     window.prompt(PromptLevel::Info, "Are you sure you want to quit?", None, &["Quit", "Cancel"], cx)
                 })
@@ -912,7 +926,7 @@ pub fn open_new_ssh_project_from_project(
         return Task::ready(Err(anyhow::anyhow!("Not an ssh project")));
     };
     let connection_options = ssh_client.read(cx).connection_options();
-    let requesting_window = if create_new_window { None } else { window.window_handle().downcast::<MultiWorkspace>() };
+    let requesting_window = if create_new_window { None } else { window.window_handle().downcast::<Workspace>() };
     cx.spawn_in(window, async move |_, cx| {
         open_remote_project(
             connection_options,

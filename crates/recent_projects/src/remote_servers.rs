@@ -65,7 +65,6 @@ use util::paths::PathStyle;
 use util::paths::RemotePathBuf;
 use workspace::DismissDecision;
 use workspace::ModalView;
-use workspace::MultiWorkspace;
 use workspace::OpenOptions;
 use workspace::Toast;
 use workspace::Workspace;
@@ -214,21 +213,18 @@ impl ProjectPicker {
                     let window = if create_new_window {
                         let options = cx.update(|_, cx| (app_state.build_window_options)(None, cx)).log_err()?;
                         cx.open_window(options, |window, cx| {
-                            let workspace =
-                                cx.new(|cx| Workspace::new(None, project.clone(), app_state.clone(), window, cx));
-                            cx.new(|cx| MultiWorkspace::new(workspace, window, cx))
+                            cx.new(|cx| Workspace::new(None, project.clone(), app_state.clone(), window, cx))
                         })
                         .log_err()
                     } else {
-                        cx.window_handle().downcast::<MultiWorkspace>()
+                        cx.window_handle().downcast::<Workspace>()
                     }?;
 
-                    let items = open_remote_project_with_existing_connection(
-                        connection, project, paths, app_state, window, None, None, cx,
-                    )
-                    .await
-                    .log_err()
-                    .map(|(_workspace, items)| items);
+                    let items =
+                        open_remote_project_with_existing_connection(connection, project, paths, app_state, window, cx)
+                            .await
+                            .log_err()
+                            .map(|(_workspace, items)| items);
 
                     if let Some(items) = items {
                         for (item, path) in items.into_iter().zip(paths_with_positions) {
@@ -1138,7 +1134,7 @@ impl RemoteServerProjects {
 
         let replace_window = match (create_new_window, secondary_confirm) {
             (true, false) | (false, true) => None,
-            (true, true) | (false, false) => window.window_handle().downcast::<MultiWorkspace>(),
+            (true, true) | (false, false) => window.window_handle().downcast::<Workspace>(),
         };
 
         cx.spawn_in(window, async move |_, cx| {

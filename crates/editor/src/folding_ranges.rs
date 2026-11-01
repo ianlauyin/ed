@@ -77,10 +77,6 @@ impl Editor {
         });
     }
 
-    pub fn document_folding_ranges_enabled(&self, cx: &ui::App) -> bool {
-        self.use_document_folding_ranges && self.display_map.read(cx).has_lsp_folding_ranges()
-    }
-
     /// Removes LSP folding creases for buffers whose `lsp_folding_ranges`
     /// setting has been turned off, and triggers a refresh so newly-enabled
     /// buffers get their ranges fetched.

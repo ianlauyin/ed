@@ -51,7 +51,7 @@ ed (binary: wires everything, opens windows)
   stores).
 - `workspace` knows `project` but no concrete item types (no `Editor`, no
   panels). It talks to them through traits: `Item`, `ProjectItem`, `Panel`,
-  `StatusItemView`, `ToolbarItemView`, `ModalView`, `Sidebar`.
+  `StatusItemView`, `ToolbarItemView`, `ModalView`.
 - `ui` components are almost all `RenderOnce`: plain values built during a
   parent's `render`, holding no state between frames. Stateful widgets are
   views in feature crates.
@@ -94,23 +94,32 @@ each an entity with its own event enum:
 One OS window has this view tree:
 
 ```
-MultiWorkspace                window root; holds several Workspaces, shows one
- └─ Workspace                 one per project; owns Entity<Project>
-     ├─ center: PaneGroup     split tree of Panes (Workspace mode)
-     ├─ git_history_center    separate PaneGroup (Git History mode)
-     │   └─ Pane              tabs: Vec<Box<dyn ItemHandle>>, Toolbar
-     │       └─ Item          Editor, ImageView, ProjectSearchView, ...
-     ├─ left/bottom/right Dock
-     │   └─ Panel             ProjectPanel, OutlinePanel, TerminalPanel, GitPanel
-     ├─ StatusBar             StatusItemViews
-     ├─ ModalLayer            at most one ModalView (pickers, prompts)
-     ├─ ToastLayer, notifications
-     └─ titlebar_item         TitleBar
+Workspace                 window root, one per window; owns Entity<Project>
+ ├─ center: PaneGroup     split tree of Panes (Workspace mode)
+ ├─ git_history_center    separate PaneGroup (Git History mode)
+ │   └─ Pane              tabs: Vec<Box<dyn ItemHandle>>, Toolbar
+ │       └─ Item          Editor, ImageView, ProjectSearchView, ...
+ ├─ left/bottom/right Dock
+ │   └─ Panel             ProjectPanel, OutlinePanel, TerminalPanel, GitPanel
+ ├─ StatusBar             StatusItemViews
+ ├─ ModalLayer            at most one ModalView (pickers, prompts)
+ ├─ ToastLayer, notifications
+ └─ titlebar_item         TitleBar
 ```
 
-- `MultiWorkspace` keeps every `Workspace` it holds alive (each with its own
-  `Project`), grouped by project; switching swaps which one renders. Only the
-  displayed workspace writes the window title / edited state.
+- A window holds exactly one `Workspace`. Opening another project in the same
+  window (recent projects, Close Project, switching or creating a git worktree)
+  first runs the current workspace's close prompts, then replaces the window's
+  root with a new `Workspace` (`replace_window_workspace`); the old one leaves
+  the session and is released, keeping its DB row for recent projects. Nothing
+  keeps a second workspace alive in the background, and there are no
+  per-window project groups or workspace sidebar.
+- Only the window's root workspace writes the window title / edited state.
+- `WindowHandle<Workspace>::update` leases the root workspace, so code inside it
+  uses the root it is given rather than updating the same `Entity<Workspace>`
+  again (a double lease panics). Callbacks that may run for a non-root
+  workspace update through the untyped `AnyWindowHandle`.
+- Session restore reopens one window per workspace of the previous session.
 - `Workspace` holds the only strong `Project` handle that matters; panes,
   items and panels keep `Entity<Project>` or `WeakEntity` copies. When the
   workspace goes, the project goes.
@@ -185,10 +194,11 @@ downcasts to the item types it cares about, and (re)subscribes to that item.
 ## Lifecycle
 
 - `Workspace::new_local` / `open_paths` creates a `Project`, opens a window
-  whose root is a `MultiWorkspace` holding a new `Workspace`, and restores
+  (or replaces the requesting window's root) with a new `Workspace`, and restores
   the serialized workspace (panes, items via `SerializableItem`, docks) from
   the DB.
 - `observe_new::<Workspace>` in `ed` then adds panels, status bar items and
-  workspace actions. `observe_new::<MultiWorkspace>` handles window close.
+  workspace actions, and routes the window's close request to its current root
+  `Workspace`.
 - Items, panes and docks persist themselves by enqueuing serialization on
   relevant events; the workspace debounces writes to the DB.

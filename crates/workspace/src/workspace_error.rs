@@ -75,23 +75,12 @@ impl ErrorAction {
         Self { label: "Dismiss".into(), icon: None, tooltip: None, handler: ErrorActionHandler::Dismiss }
     }
 
-    /// Show `icon` at the start (left) of the action button label.
-    pub const fn with_icon(mut self, icon: IconName) -> Self {
-        self.icon = Some(ActionIcon::start(icon));
-        self
-    }
-
     /// Show `icon` at the end (right) of the action button label.
     ///
     /// Useful for actions that navigate the user elsewhere — for example the trailing
     /// `⇗` produced by [`Self::link`].
     pub const fn with_end_icon(mut self, icon: IconName) -> Self {
         self.icon = Some(ActionIcon::end(icon));
-        self
-    }
-
-    pub fn with_tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
-        self.tooltip = Some(tooltip.into());
         self
     }
 

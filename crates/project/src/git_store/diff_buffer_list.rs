@@ -189,18 +189,6 @@ impl DiffBufferList {
         self.statuses_by_path.clone()
     }
 
-    pub fn base_oid_for_path(&self, path: &RepoPath) -> Option<Option<git::Oid>> {
-        let status = self
-            .tree_diff
-            .as_ref()
-            .and_then(|diff| diff.entries.get(path))
-            .or_else(|| self.committed_tree_diff.as_ref().and_then(|diff| diff.entries.get(path)))?;
-        Some(match status {
-            TreeDiffStatus::Added => None,
-            TreeDiffStatus::Modified { old } | TreeDiffStatus::Deleted { old } => Some(*old),
-        })
-    }
-
     fn spawn_reload_tree_diff(&mut self, cx: &mut Context<Self>) {
         if !self.diff_base.is_merge_base() {
             return;

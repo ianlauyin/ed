@@ -130,15 +130,10 @@ pub enum CodeContextMenu {
 }
 
 impl CodeContextMenu {
-    pub fn select_first(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) -> bool {
+    pub fn select_first(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) -> bool {
         if self.visible() {
             match self {
-                CodeContextMenu::Completions(menu) => menu.select_first(provider, window, cx),
+                CodeContextMenu::Completions(menu) => menu.select_first(provider, cx),
                 CodeContextMenu::CodeActions(menu) => menu.select_first(cx),
             }
             true
@@ -147,15 +142,10 @@ impl CodeContextMenu {
         }
     }
 
-    pub fn select_prev(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) -> bool {
+    pub fn select_prev(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) -> bool {
         if self.visible() {
             match self {
-                CodeContextMenu::Completions(menu) => menu.select_prev(provider, window, cx),
+                CodeContextMenu::Completions(menu) => menu.select_prev(provider, cx),
                 CodeContextMenu::CodeActions(menu) => menu.select_prev(cx),
             }
             true
@@ -164,15 +154,10 @@ impl CodeContextMenu {
         }
     }
 
-    pub fn select_next(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) -> bool {
+    pub fn select_next(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) -> bool {
         if self.visible() {
             match self {
-                CodeContextMenu::Completions(menu) => menu.select_next(provider, window, cx),
+                CodeContextMenu::Completions(menu) => menu.select_next(provider, cx),
                 CodeContextMenu::CodeActions(menu) => menu.select_next(cx),
             }
             true
@@ -181,15 +166,10 @@ impl CodeContextMenu {
         }
     }
 
-    pub fn select_last(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) -> bool {
+    pub fn select_last(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) -> bool {
         if self.visible() {
             match self {
-                CodeContextMenu::Completions(menu) => menu.select_last(provider, window, cx),
+                CodeContextMenu::Completions(menu) => menu.select_last(provider, cx),
                 CodeContextMenu::CodeActions(menu) => menu.select_last(cx),
             }
             true
@@ -497,12 +477,7 @@ impl CompletionsMenu {
         }
     }
 
-    fn select_first(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn select_first(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) {
         let entries = self.entries.borrow();
         if entries.is_empty() {
             return;
@@ -511,16 +486,11 @@ impl CompletionsMenu {
         drop(entries);
         let index = self.find_selectable_entry(start, !self.scroll_handle.y_flipped());
         if let Some(index) = index {
-            self.update_selection_index(index, provider, window, cx);
+            self.update_selection_index(index, provider, cx);
         }
     }
 
-    fn select_last(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn select_last(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) {
         let entries = self.entries.borrow();
         if entries.is_empty() {
             return;
@@ -529,40 +499,29 @@ impl CompletionsMenu {
         drop(entries);
         let index = self.find_selectable_entry(start, self.scroll_handle.y_flipped());
         if let Some(index) = index {
-            self.update_selection_index(index, provider, window, cx);
+            self.update_selection_index(index, provider, cx);
         }
     }
 
-    fn select_prev(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn select_prev(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) {
         let index = if self.scroll_handle.y_flipped() { self.next_match_index() } else { self.prev_match_index() };
-        self.update_selection_index(index, provider, window, cx);
+        self.update_selection_index(index, provider, cx);
     }
 
-    fn select_next(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn select_next(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) {
         let index = if self.scroll_handle.y_flipped() { self.prev_match_index() } else { self.next_match_index() };
-        self.update_selection_index(index, provider, window, cx);
+        self.update_selection_index(index, provider, cx);
     }
 
     fn update_selection_index(
         &mut self,
         match_index: usize,
         provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
         if self.selected_item != match_index {
             self.selected_item = match_index;
-            self.handle_selection_changed(provider, window, cx);
+            self.handle_selection_changed(provider, cx);
         }
     }
 
@@ -626,18 +585,8 @@ impl CompletionsMenu {
         }
     }
 
-    fn handle_selection_changed(
-        &mut self,
-        provider: Option<&dyn CompletionProvider>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn handle_selection_changed(&mut self, provider: Option<&dyn CompletionProvider>, cx: &mut Context<Editor>) {
         self.scroll_handle.scroll_to_item(self.selected_item, ScrollStrategy::Nearest);
-        if let Some(provider) = provider {
-            let entries = self.entries.borrow();
-            let entry = if self.selected_item < entries.len() { entries[self.selected_item].as_match() } else { None };
-            provider.selection_changed(entry, window, cx);
-        }
         self.resolve_visible_completions(provider, cx);
         self.start_markdown_parse_for_nearby_entries(cx);
         cx.notify();
@@ -1218,10 +1167,10 @@ impl CompletionsMenu {
         self.filter_task = cx.spawn_in(window, async move |editor, cx| {
             let matches = matches.await;
             editor
-                .update_in(cx, |editor, window, cx| {
+                .update_in(cx, |editor, _, cx| {
                     editor.with_completions_menu_matching_id(id, |this| {
                         if let Some(this) = this {
-                            this.set_filter_results(matches, provider, window, cx);
+                            this.set_filter_results(matches, provider, cx);
                         }
                     });
                 })
@@ -1344,7 +1293,6 @@ impl CompletionsMenu {
         &mut self,
         match_results: CompletionMatchResults,
         provider: Option<Rc<dyn CompletionProvider>>,
-        window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
         let CompletionMatchResults { filter_matches, label_matches } = match_results;
@@ -1370,7 +1318,7 @@ impl CompletionsMenu {
         *self.label_match_state.label_matches.borrow_mut() = label_matches;
         *self.entries.borrow_mut() = entries.into_boxed_slice();
         self.selected_item = self.find_selectable_entry(0, true).unwrap_or(0);
-        self.handle_selection_changed(provider.as_deref(), window, cx);
+        self.handle_selection_changed(provider.as_deref(), cx);
     }
 
     pub fn sort_string_matches(

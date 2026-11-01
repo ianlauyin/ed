@@ -554,10 +554,6 @@ impl SelectionsCollection {
         self.line_mode
     }
 
-    pub const fn set_line_mode(&mut self, line_mode: bool) {
-        self.line_mode = line_mode;
-    }
-
     pub const fn select_mode(&self) -> &SelectMode {
         &self.select_mode
     }
@@ -870,10 +866,6 @@ impl MutableSelectionsCollection<'_, '_> {
         self.select_anchors(selections)
     }
 
-    pub const fn new_selection_id(&mut self) -> usize {
-        self.collection.allocate_selection_id()
-    }
-
     pub fn select_display_ranges<T>(&mut self, ranges: T)
     where
         T: IntoIterator<Item = Range<DisplayPoint>>,
@@ -899,21 +891,6 @@ impl MutableSelectionsCollection<'_, '_> {
             })
             .collect();
         self.select(selections);
-    }
-
-    pub fn reverse_selections(&mut self) {
-        let mut new_selections: Vec<Selection<Point>> = Vec::new();
-        let disjoint = self.disjoint.clone();
-        for selection in disjoint.iter().sorted_by(|first, second| Ord::cmp(&second.id, &first.id)) {
-            new_selections.push(Selection {
-                id: self.new_selection_id(),
-                start: selection.start.to_display_point(self.snapshot).to_point(self.snapshot),
-                end: selection.end.to_display_point(self.snapshot).to_point(self.snapshot),
-                reversed: selection.reversed,
-                goal: selection.goal,
-            });
-        }
-        self.select(new_selections);
     }
 
     pub fn move_with(&mut self, move_selection: &mut dyn FnMut(&DisplaySnapshot, &mut Selection<DisplayPoint>)) {
@@ -998,31 +975,6 @@ impl MutableSelectionsCollection<'_, '_> {
         self.move_cursors_with(&mut |map, point, goal| {
             update_cursor_position(map, point, goal).unwrap_or((point, goal))
         })
-    }
-
-    pub fn replace_cursors_with(
-        &mut self,
-        find_replacement_cursors: impl FnOnce(&DisplaySnapshot) -> Vec<DisplayPoint>,
-    ) {
-        let new_selections = find_replacement_cursors(self.snapshot)
-            .into_iter()
-            .map(|cursor| {
-                let cursor_point = cursor.to_point(self.snapshot);
-                Selection {
-                    id: self.collection.allocate_selection_id(),
-                    start: cursor_point,
-                    end: cursor_point,
-                    reversed: false,
-                    goal: SelectionGoal::None,
-                }
-            })
-            .collect();
-        self.select(new_selections);
-    }
-
-    pub fn pending_anchor_mut(&mut self) -> Option<&mut Selection<Anchor>> {
-        self.selections_changed = true;
-        self.pending.as_mut().map(|pending| &mut pending.selection)
     }
 
     pub(crate) fn select_anchors_unexpanded(&mut self, selections: Vec<Selection<Anchor>>) {

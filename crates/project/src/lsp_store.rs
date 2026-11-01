@@ -502,16 +502,6 @@ enum LanguageServerStartMode {
 }
 
 impl LocalLspStore {
-    /// Returns the running language server for the given ID. Note if the language server is starting, it will not be returned.
-    pub fn running_language_server_for_id(&self, id: LanguageServerId) -> Option<&Arc<LanguageServer>> {
-        let language_server_state = self.language_servers.get(&id)?;
-
-        match language_server_state {
-            LanguageServerState::Running { server, .. } => Some(server),
-            LanguageServerState::Starting { .. } => None,
-        }
-    }
-
     fn can_start_language_server(&self, name: &LanguageServerName) -> bool {
         self.language_server_start_overrides.get(name).copied().unwrap_or(self.auto_start_language_servers)
     }
@@ -7931,11 +7921,6 @@ impl LspStore {
         })
     }
 
-    pub fn language_servers_for_local_buffer(&self, buffer: &Buffer, cx: &mut App) -> Vec<LanguageServerId> {
-        let local = self.as_local();
-        local.map(|local| local.language_server_ids_for_buffer(buffer, cx)).unwrap_or_default()
-    }
-
     pub fn language_server_ids_for_opened_buffer(&self, buffer_id: BufferId) -> Option<&HashSet<LanguageServerId>> {
         self.as_local()?.buffers_opened_in_servers.get(&buffer_id)
     }
@@ -11336,34 +11321,6 @@ impl LspStore {
                 diagnostics.refresh_tx.try_send(None).ok();
             }
         }
-    }
-
-    /// Triggers a workspace diagnostics pull on all running language servers
-    /// and returns a [`Task`] that resolves once the requests have completed.
-    ///
-    /// This reuses the same background refresh loops as
-    /// [`Self::pull_workspace_diagnostics`], but provides a completion signal
-    /// so callers can wait for fresh diagnostics before reading them.
-    pub fn pull_workspace_diagnostics_once(&mut self, cx: &mut Context<Self>) -> Task<bool> {
-        let Some(local) = self.as_local_mut() else {
-            return Task::ready(true);
-        };
-
-        let mut receivers = Vec::new();
-        for state in local.language_servers.values_mut() {
-            let LanguageServerState::Running { workspace_diagnostics_refresh_tasks, .. } = state else {
-                continue;
-            };
-            for task in workspace_diagnostics_refresh_tasks.values_mut() {
-                let (tx, rx) = oneshot::channel();
-                task.refresh_tx.try_send(Some(tx)).ok();
-                receivers.push(rx);
-            }
-        }
-
-        cx.background_spawn(async {
-            FuturesUnordered::from_iter(receivers).all(async |result| result.unwrap_or(false)).await
-        })
     }
 
     /// Refreshes `textDocument/diagnostic` for all open buffers associated with the given server.

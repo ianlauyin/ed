@@ -9,11 +9,7 @@ pub enum ScrollDirection {
     Leftwards,
 }
 
-impl ScrollDirection {
-    pub const fn is_upwards(&self) -> bool {
-        matches!(self, ScrollDirection::Upwards)
-    }
-}
+impl ScrollDirection {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 pub enum ScrollAmount {

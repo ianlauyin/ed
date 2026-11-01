@@ -13,30 +13,6 @@ enum SelectNextOrigin {
 }
 
 impl Editor {
-    pub fn sync_selections(&mut self, other: Entity<Editor>, cx: &mut Context<Self>) -> gpui::Subscription {
-        self.sync_selections_from(other.read(cx).selections.disjoint_anchors().to_vec(), cx);
-
-        let other_subscription = cx.subscribe(&other, |editor, other, event, cx| {
-            if let EditorEvent::SelectionsChanged { local: true } = event {
-                editor.sync_selections_from(other.read(cx).selections.disjoint_anchors().to_vec(), cx);
-            }
-        });
-
-        let editor_subscription = cx.subscribe_self::<EditorEvent>(move |editor, event, cx| {
-            if let EditorEvent::SelectionsChanged { local: true } = event {
-                if editor.selections.disjoint_anchors().is_empty() {
-                    return;
-                }
-                let selections = editor.selections.disjoint_anchors().to_vec();
-                other.update(cx, |other_editor, cx| {
-                    other_editor.sync_selections_from(selections, cx);
-                });
-            }
-        });
-
-        Subscription::join(other_subscription, editor_subscription)
-    }
-
     /// Changes selections using the provided mutation function. Changes to `self.selections` occur
     /// immediately, but when run within `transact` or `with_selection_effects_deferred` other
     /// effects of selection change occur at the end of the transaction.
@@ -48,24 +24,6 @@ impl Editor {
         change: impl FnOnce(&mut MutableSelectionsCollection<'_, '_>) -> R,
     ) -> R {
         self.change_selections_with_history(effects, None, window, cx, change)
-    }
-
-    /// Re-resolves selection anchors so they reference live buffer fragments.
-    ///
-    /// Deleted CRDT fragments remain as tombstones. An anchor associated with a
-    /// tombstone can resolve to the correct visible offset while causing later
-    /// insertions to be ordered on the wrong side of the cursor. Round-tripping
-    /// selections through their offsets creates fresh anchors associated with
-    /// live fragments.
-    ///
-    /// This does not emit selection effects, but it replaces pending selection
-    /// state with the resolved selections.
-    pub fn refresh_selection_anchors(&mut self, cx: &mut Context<Self>) {
-        let snapshot = self.display_snapshot(cx);
-        let selections = self.selections.all::<MultiBufferOffset>(&snapshot);
-        self.change_selections_without_effects(&snapshot, |selection_collection| {
-            selection_collection.select(selections);
-        });
     }
 
     /// Defers the effects of selection change, so that the effects of multiple calls to
@@ -89,26 +47,6 @@ impl Editor {
         self.selections.all_adjusted(snapshot).iter().any(|selection| !selection.is_empty())
     }
 
-    pub fn is_range_selected(&mut self, range: &Range<Anchor>, cx: &mut Context<Self>) -> bool {
-        if self.selections.pending_anchor().is_some_and(|pending_selection| {
-            let snapshot = self.buffer().read(cx).snapshot(cx);
-            pending_selection.range().includes(range, &snapshot)
-        }) {
-            return true;
-        }
-
-        self.selections
-            .disjoint_in_range::<MultiBufferOffset>(range.clone(), &self.display_snapshot(cx))
-            .into_iter()
-            .any(|selection| {
-                // This is needed to cover a corner case, if we just check for an existing
-                // selection in the fold range, having a cursor at the start of the fold
-                // marks it as selected. Non-empty selections don't cause this.
-                let length = selection.end - selection.start;
-                length > 0
-            })
-    }
-
     pub fn has_pending_nonempty_selection(&self) -> bool {
         let pending_nonempty_selection = match self.selections.pending_anchor() {
             Some(Selection { start, end, .. }) => start != end,
@@ -121,25 +59,6 @@ impl Editor {
 
     pub fn has_pending_selection(&self) -> bool {
         self.selections.pending_anchor().is_some() || self.columnar_selection_state.is_some()
-    }
-
-    pub fn set_selections_from_remote(
-        &mut self,
-        selections: Vec<Selection<Anchor>>,
-        pending_selection: Option<Selection<Anchor>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let old_cursor_position = self.selections.newest_anchor().head();
-        self.change_selections_without_effects(&self.display_snapshot(cx), |s| {
-            s.select_anchors(selections);
-            if let Some(pending_selection) = pending_selection {
-                s.set_pending(pending_selection, SelectMode::Character);
-            } else {
-                s.clear_pending();
-            }
-        });
-        self.selections_did_change(false, &old_cursor_position, SelectionEffects::default(), window, cx);
     }
 
     pub fn set_mark(&mut self, _: &actions::SetMark, window: &mut Window, cx: &mut Context<Self>) {
@@ -946,7 +865,7 @@ impl Editor {
     }
 
     pub(super) fn select(&mut self, phase: SelectPhase, window: &mut Window, cx: &mut Context<Self>) {
-        self.hide_context_menu(window, cx);
+        self.hide_context_menu(cx);
 
         match phase {
             SelectPhase::Begin { position, add, click_count } => {
@@ -1344,7 +1263,7 @@ impl Editor {
                 if continue_showing {
                     self.open_or_update_completions_menu(None, None, false, window, cx);
                 } else {
-                    self.hide_context_menu(window, cx);
+                    self.hide_context_menu(cx);
                 }
             }
 
@@ -1616,14 +1535,6 @@ impl Editor {
             if state.groups.is_empty() {
                 self.add_selections_state = None;
             }
-        }
-    }
-
-    fn sync_selections_from(&mut self, selections: Vec<Selection<Anchor>>, cx: &mut Context<Self>) {
-        if !selections.is_empty() {
-            self.change_selections_without_effects(&self.display_snapshot(cx), |collection| {
-                collection.select_anchors(selections);
-            });
         }
     }
 

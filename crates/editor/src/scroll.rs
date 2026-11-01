@@ -3,7 +3,6 @@ pub(crate) mod autoscroll;
 pub(crate) mod scroll_amount;
 
 use core::fmt::Debug;
-use std::cmp::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -261,14 +260,6 @@ impl ScrollManager {
             minimap_thumb_state: None,
             _save_scroll_position_task: Task::ready(()),
         }
-    }
-
-    pub fn set_native_display_map_id(&mut self, display_map_id: EntityId, cx: &mut Context<Editor>) {
-        self.anchor.update(cx, |shared, _| {
-            if shared.display_map_id.is_none() {
-                shared.display_map_id = Some(display_map_id);
-            }
-        });
     }
 
     pub fn clone_state(
@@ -840,41 +831,6 @@ impl Editor {
                 }
             })
         });
-    }
-
-    /// Returns an ordering. The newest selection is:
-    ///     Ordering::Equal => on screen
-    ///     Ordering::Less => above or to the left of the screen
-    ///     Ordering::Greater => below or to the right of the screen
-    pub fn newest_selection_on_screen(&self, window: &mut Window, cx: &mut App) -> Ordering {
-        let snapshot = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-        let newest_head = self.selections.newest_anchor().head().to_display_point(&snapshot);
-        let screen_top = self.scroll_manager.scroll_top_display_point(&snapshot, cx);
-
-        if screen_top > newest_head {
-            return Ordering::Less;
-        }
-
-        if let (Some(visible_lines), Some(visible_columns)) = (self.visible_line_count(), self.visible_column_count())
-            && newest_head.row() <= DisplayRow(screen_top.row().0 + visible_lines as u32)
-        {
-            let text_layout_details = self.text_layout_details(window, cx);
-            let font_id = text_layout_details.text_system.resolve_font(&text_layout_details.editor_style.text.font());
-            let font_size = text_layout_details.editor_style.text.font_size.to_pixels(text_layout_details.rem_size);
-            let on_screen = match text_layout_details.text_system.em_advance(font_id, font_size).log_err() {
-                Some(em_advance) => {
-                    let head_x = snapshot.x_for_display_point(newest_head, &text_layout_details);
-                    let screen_left_x = snapshot.x_for_display_point(screen_top, &text_layout_details);
-                    head_x <= screen_left_x + em_advance * visible_columns as f32
-                }
-                None => newest_head.column() <= screen_top.column() + visible_columns as u32,
-            };
-            if on_screen {
-                return Ordering::Equal;
-            }
-        }
-
-        Ordering::Greater
     }
 
     pub fn read_scroll_position_from_db(

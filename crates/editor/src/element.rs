@@ -7573,10 +7573,6 @@ impl CursorLayout {
         }
     }
 
-    pub fn bounding_rect(&self, origin: gpui::Point<Pixels>) -> Bounds<Pixels> {
-        Bounds { origin: self.origin + origin, size: size(self.block_width, self.line_height) }
-    }
-
     fn bounds(&self, origin: gpui::Point<Pixels>) -> Bounds<Pixels> {
         match self.shape {
             CursorShape::Bar => Bounds { origin: self.origin + origin, size: size(px(2.0), self.line_height) },

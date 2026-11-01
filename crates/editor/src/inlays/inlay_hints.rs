@@ -290,11 +290,6 @@ impl Editor {
         self.apply_inlay_hint_text_edits(targets.into_iter(), None, window, cx);
     }
 
-    pub fn clear_inlay_hints(&mut self, cx: &mut Context<Self>) {
-        let to_remove = Self::visible_inlay_hints(self.display_map.read(cx)).map(|inlay| inlay.id).collect::<Vec<_>>();
-        self.splice_inlays(&to_remove, Vec::new(), cx);
-    }
-
     pub fn update_inlay_link_and_hover_points(
         &mut self,
         snapshot: &EditorSnapshot,

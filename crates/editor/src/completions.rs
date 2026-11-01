@@ -1,14 +1,6 @@
 use super::*;
 
 impl Editor {
-    pub fn set_completion_provider(&mut self, provider: Option<Rc<dyn CompletionProvider>>) {
-        self.completion_provider = provider;
-    }
-
-    pub const fn set_show_completions_on_input(&mut self, show_completions_on_input: Option<bool>) {
-        self.show_completions_on_input_override = show_completions_on_input;
-    }
-
     pub fn text_layout_details(&self, window: &mut Window, cx: &mut App) -> TextLayoutDetails {
         TextLayoutDetails {
             text_system: window.text_system().clone(),
@@ -77,13 +69,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> Option<Task<Result<()>>> {
         self.do_completion(action.item_ix, CompletionIntent::Compose, window, cx)
-    }
-
-    pub fn has_visible_completions_menu(&self) -> bool {
-        self.context_menu
-            .borrow()
-            .as_ref()
-            .is_some_and(|menu| menu.visible() && matches!(menu, CodeContextMenu::Completions(_)))
     }
 
     pub(super) fn trigger_completion_on_input(
@@ -345,7 +330,7 @@ impl Editor {
         // Hide the current completions menu when query is empty. Without this, cached
         // completions from before the trigger char may be reused (#32774).
         if query.is_none() && menu_is_open && !is_showing_snippet_choices {
-            self.hide_context_menu(window, cx);
+            self.hide_context_menu(cx);
         }
 
         let mut ignore_word_threshold = false;
@@ -361,16 +346,12 @@ impl Editor {
             }
         };
 
-        let sort_completions = provider.as_ref().is_some_and(|provider| provider.sort_completions());
-
-        let filter_completions = provider.as_ref().is_none_or(|provider| provider.filter_completions());
+        let sort_completions = provider.is_some();
 
         let was_snippets_only = matches!(completions_source, Some(CompletionsMenuSource::SnippetsOnly));
 
         if let Some(CodeContextMenu::Completions(menu)) = self.context_menu.borrow_mut().as_mut() {
-            if filter_completions {
-                menu.filter(query.clone().unwrap_or_default(), buffer_position, &buffer, provider.clone(), window, cx);
-            }
+            menu.filter(query.clone().unwrap_or_default(), buffer_position, &buffer, provider.clone(), window, cx);
             // When `is_incomplete` is false, no need to re-query completions when the current query
             // is a suffix of the initial query.
             let was_complete = !menu.is_incomplete;
@@ -602,7 +583,6 @@ impl Editor {
                         cx,
                     );
 
-                    let query = if filter_completions { query } else { None };
                     let matches_task = menu.do_async_filtering(query.unwrap_or_default(), buffer_position, &buffer, cx);
                     (menu, matches_task)
                 }) else {
@@ -611,7 +591,7 @@ impl Editor {
 
                 let matches = matches_task.await;
 
-                let Ok(()) = editor.update_in(cx, |editor, window, cx| {
+                let Ok(()) = editor.update_in(cx, |editor, _, cx| {
                     // Newer menu already set, so exit.
                     if let Some(CodeContextMenu::Completions(prev_menu)) = editor.context_menu.borrow().as_ref()
                         && prev_menu.id > id
@@ -636,7 +616,7 @@ impl Editor {
                         }
                     };
 
-                    menu.set_filter_results(matches, provider, window, cx);
+                    menu.set_filter_results(matches, provider, cx);
                 }) else {
                     return;
                 };
@@ -659,7 +639,7 @@ impl Editor {
 
                     if editor.completion_tasks.len() <= 1 {
                         // If there are no more completion tasks and the last menu was empty, we should hide it.
-                        editor.hide_context_menu(window, cx);
+                        editor.hide_context_menu(cx);
                     }
                 })
                 .ok();
@@ -702,7 +682,7 @@ impl Editor {
     ) -> Option<Task<Result<()>>> {
         use language::ToOffset as _;
 
-        let CodeContextMenu::Completions(completions_menu) = self.hide_context_menu(window, cx)? else {
+        let CodeContextMenu::Completions(completions_menu) = self.hide_context_menu(cx)? else {
             return None;
         };
 
@@ -930,16 +910,6 @@ pub trait CompletionProvider {
         trigger_in_words: bool,
         cx: &mut Context<Editor>,
     ) -> bool;
-
-    fn selection_changed(&self, _mat: Option<&StringMatch>, _window: &mut Window, _cx: &mut App) {}
-
-    fn sort_completions(&self) -> bool {
-        true
-    }
-
-    fn filter_completions(&self) -> bool {
-        true
-    }
 
     fn show_snippets(&self) -> bool {
         false

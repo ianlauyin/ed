@@ -43,8 +43,8 @@ use smol::io::BufReader;
 use smol::net::unix::UnixListener;
 use smol::net::unix::UnixStream;
 use util::ResultExt as _;
-use workspace::MultiWorkspace;
 use workspace::Pane;
+use workspace::Workspace;
 use workspace::WorkspaceMode;
 
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
@@ -411,8 +411,7 @@ const fn rect(bounds: Bounds<Pixels>) -> control::Rect {
 
 fn state(window: &Window, cx: &mut App) -> control::State {
     let window_id = window.window_handle().window_id().as_u64();
-    let workspace =
-        window.root::<MultiWorkspace>().flatten().map(|multi_workspace| multi_workspace.read(cx).workspace().clone());
+    let workspace = window.root::<Workspace>().flatten();
     let Some(workspace) = workspace else {
         return control::State { window: window_id, workspace: None };
     };

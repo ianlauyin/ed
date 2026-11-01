@@ -44,7 +44,6 @@ use ui::TintColor;
 use ui::Tooltip;
 use ui::prelude::*;
 use util::ResultExt;
-use workspace::MultiWorkspace;
 use workspace::ToggleWorktreeSecurity;
 use workspace::Workspace;
 use workspace::WorkspaceMode;
@@ -78,8 +77,7 @@ pub fn init(cx: &mut App) {
         let Some(window) = window else {
             return;
         };
-        let multi_workspace = workspace.multi_workspace().cloned();
-        let item = cx.new(|cx| TitleBar::new("title-bar", workspace, multi_workspace, window, cx));
+        let item = cx.new(|cx| TitleBar::new("title-bar", workspace, window, cx));
         workspace.set_titlebar_item(item.into(), window, cx);
     })
     .detach();
@@ -90,22 +88,12 @@ pub struct TitleBar {
     project: Entity<Project>,
 
     workspace: WeakEntity<Workspace>,
-    multi_workspace: Option<WeakEntity<MultiWorkspace>>,
     application_menu: Option<Entity<ApplicationMenu>>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Render for TitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.multi_workspace.is_none()
-            && let Some(mw) = self.workspace.upgrade().and_then(|ws| ws.read(cx).multi_workspace().cloned())
-        {
-            self.multi_workspace = Some(mw.clone());
-            self.platform_titlebar.update(cx, |titlebar, _cx| {
-                titlebar.set_multi_workspace(mw);
-            });
-        }
-
         let title_bar_settings = *TitleBarSettings::get_global(cx);
         let is_git_enabled = ProjectSettings::get_global(cx).git.enabled.status;
 
@@ -216,13 +204,7 @@ impl Render for TitleBar {
 }
 
 impl TitleBar {
-    pub fn new(
-        id: impl Into<ElementId>,
-        workspace: &Workspace,
-        multi_workspace: Option<WeakEntity<MultiWorkspace>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(id: impl Into<ElementId>, workspace: &Workspace, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let project = workspace.project().clone();
         let git_store = project.read(cx).git_store().clone();
 
@@ -255,19 +237,12 @@ impl TitleBar {
             }));
         }
 
-        let platform_titlebar = cx.new(|cx| {
-            let mut titlebar = PlatformTitleBar::new(id, cx);
-            if let Some(mw) = multi_workspace.clone() {
-                titlebar = titlebar.with_multi_workspace(mw);
-            }
-            titlebar
-        });
+        let platform_titlebar = cx.new(|cx| PlatformTitleBar::new(id, cx));
 
         Self {
             platform_titlebar,
             application_menu,
             workspace: workspace.weak_handle(),
-            multi_workspace,
             project,
 
             _subscriptions: subscriptions,
@@ -462,40 +437,13 @@ impl TitleBar {
             "Open Recent Project".to_string()
         };
 
-        let is_sidebar_open = self
-            .multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).sidebar_open())
-            .unwrap_or(false)
-            && PlatformTitleBar::is_multi_workspace_enabled(cx);
-
-        let is_threads_list_view_active = self
-            .multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).is_threads_list_view_active(cx))
-            .unwrap_or(false);
-
-        if is_sidebar_open && is_threads_list_view_active {
-            return self.render_recent_projects_popover(display_name, is_project_selected, cx).into_any_element();
-        }
-
         let focus_handle =
             workspace.upgrade().map(|w| w.read(cx).focus_handle(cx)).unwrap_or_else(|| cx.focus_handle());
-
-        let window_project_groups: Vec<_> = self
-            .multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
 
         PopoverMenu::new("recent-projects-menu")
             .menu(move |window, cx| {
                 Some(recent_projects::RecentProjects::popover(
                     workspace.clone(),
-                    window_project_groups.clone(),
                     None,
                     focus_handle.clone(),
                     window,
@@ -515,49 +463,6 @@ impl TitleBar {
             )
             .anchor(gpui::Anchor::TopLeft)
             .into_any_element()
-    }
-
-    fn render_recent_projects_popover(
-        &self,
-        display_name: String,
-        is_project_selected: bool,
-        cx: &Context<Self>,
-    ) -> impl IntoElement {
-        let workspace = self.workspace.clone();
-
-        let focus_handle =
-            workspace.upgrade().map(|w| w.read(cx).focus_handle(cx)).unwrap_or_else(|| cx.focus_handle());
-
-        let window_project_groups: Vec<_> = self
-            .multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
-
-        PopoverMenu::new("sidebar-title-recent-projects-menu")
-            .menu(move |window, cx| {
-                Some(recent_projects::RecentProjects::popover(
-                    workspace.clone(),
-                    window_project_groups.clone(),
-                    None,
-                    focus_handle.clone(),
-                    window,
-                    cx,
-                ))
-            })
-            .trigger_with_tooltip(
-                Button::new("project_name_trigger", display_name)
-                    .label_size(LabelSize::Small)
-                    .tab_index(0isize)
-                    .when(self.worktree_count(cx) > 1, |this| {
-                        this.end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall).color(Color::Muted))
-                    })
-                    .selected_style(ButtonStyle::Tinted(TintColor::Accent))
-                    .when(!is_project_selected, |s| s.color(Color::Muted)),
-                move |_window, cx| Tooltip::for_action("Recent Projects", &ed_actions::OpenRecent::default(), cx),
-            )
-            .anchor(gpui::Anchor::TopLeft)
     }
 
     /// Round "Workspace" / "Git History" tabs that switch what fills the window. The active one is

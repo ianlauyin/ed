@@ -800,10 +800,6 @@ impl Dock {
         }
     }
 
-    pub const fn panels_len(&self) -> usize {
-        self.panel_entries.len()
-    }
-
     pub fn activate_panel(&mut self, panel_ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         if Some(panel_ix) != self.active_panel_index {
             self.restoration.discard_pending();
@@ -851,17 +847,6 @@ impl Dock {
         self.zoomed_panel(window, cx)
             .map(|panel| panel.panel_focus_handle(cx))
             .unwrap_or_else(|| self.focus_handle.clone())
-    }
-
-    pub fn active_panel_size(&self) -> Option<PanelSizeState> {
-        if self.is_open { self.active_panel_entry().map(|entry| entry.size_state) } else { None }
-    }
-
-    pub fn stored_panel_size(&self, panel: &dyn PanelHandle, window: &Window, cx: &App) -> Option<Pixels> {
-        self.panel_entries
-            .iter()
-            .find(|entry| entry.panel.panel_id() == panel.panel_id())
-            .map(|entry| entry.size_state.size.unwrap_or_else(|| entry.panel.default_size(window, cx)))
     }
 
     pub fn stored_panel_size_state(&self, panel: &dyn PanelHandle) -> Option<PanelSizeState> {

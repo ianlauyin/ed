@@ -18,7 +18,6 @@ use collections::VecDeque;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use gpui::Action;
-use gpui::Anchor;
 use gpui::AnyElement;
 use gpui::App;
 use gpui::AsyncWindowContext;
@@ -49,8 +48,6 @@ use gpui::WeakEntity;
 use gpui::WeakFocusHandle;
 use gpui::Window;
 use gpui::actions;
-use gpui::anchored;
-use gpui::deferred;
 use gpui::prelude::*;
 use itertools::Itertools;
 use language::Capability;
@@ -843,28 +840,10 @@ impl Pane {
         self.can_split_predicate = can_split_predicate;
     }
 
-    pub fn set_can_toggle_zoom(&mut self, can_toggle_zoom: bool, cx: &mut Context<Self>) {
-        self.can_toggle_zoom = can_toggle_zoom;
-        cx.notify();
-    }
-
-    pub fn set_close_pane_if_empty(&mut self, close_pane_if_empty: bool, cx: &mut Context<Self>) {
-        self.close_pane_if_empty = close_pane_if_empty;
-        cx.notify();
-    }
-
     pub fn set_can_navigate(&mut self, can_navigate: bool, cx: &mut Context<Self>) {
         self.toolbar.update(cx, |toolbar, cx| {
             toolbar.set_can_navigate(can_navigate, cx);
         });
-        cx.notify();
-    }
-
-    pub fn set_render_tab_bar<F>(&mut self, cx: &mut Context<Self>, render: F)
-    where
-        F: 'static + Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> AnyElement,
-    {
-        self.render_tab_bar = Rc::new(render);
         cx.notify();
     }
 
@@ -3242,15 +3221,6 @@ impl Pane {
             ))
     }
 
-    pub fn render_menu_overlay(menu: &Entity<ContextMenu>) -> Div {
-        div()
-            .absolute()
-            .bottom_0()
-            .right_0()
-            .size_0()
-            .child(deferred(anchored().anchor(Anchor::TopRight).child(menu.clone())).with_priority(1))
-    }
-
     pub fn set_zoomed(&mut self, zoomed: bool, cx: &mut Context<Self>) {
         self.zoomed = zoomed;
         cx.notify();
@@ -3888,7 +3858,9 @@ impl Render for Pane {
                         .focus_follows_mouse(self.focus_follows_mouse, cx)
                     })
                     // Below the drag target, whose border runs along the card edge.
-                    .when(!pill_tabs, |content| content.child(div().map(Self::card_corner_mask_style(cx.theme().colors()))))
+                    .when(!pill_tabs, |content| {
+                        content.child(div().map(Self::card_corner_mask_style(cx.theme().colors())))
+                    })
                     .child(
                         // drag target
                         div()
@@ -3985,14 +3957,6 @@ impl ItemNavHistory {
         if let (Some(origin_entry), Some(target_entry)) = (origin, target) {
             self.history.push_tag(origin_entry, target_entry);
         }
-    }
-
-    pub fn pop_backward(&mut self, cx: &mut App) -> Option<NavigationEntry> {
-        self.history.pop(NavigationMode::GoingBack, cx)
-    }
-
-    pub fn pop_forward(&mut self, cx: &mut App) -> Option<NavigationEntry> {
-        self.history.pop(NavigationMode::GoingForward, cx)
     }
 }
 

@@ -4938,8 +4938,11 @@ impl GenerationState {
 
 #[cfg(test)]
 mod tests {
+    use gpui::FontStyle;
+    use gpui::FontWeight;
+    use gpui::Hsla;
+
     use super::*;
-    use gpui::{FontStyle, FontWeight, Hsla};
 
     #[test]
     fn test_color_only_highlights_drops_weight_and_style() {

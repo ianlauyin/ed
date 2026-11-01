@@ -57,8 +57,6 @@ use crate::searchable::SearchableItemHandle;
 use crate::workspace_settings::AutosaveSetting;
 use crate::workspace_settings::WorkspaceSettings;
 
-pub const LEADER_UPDATE_THROTTLE: Duration = Duration::from_millis(200);
-
 #[derive(Clone, Copy, Debug)]
 pub struct SaveOptions {
     pub format: bool,
@@ -223,10 +221,8 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(ItemEvent)) {}
 
     fn deactivated(&mut self, _window: &mut Window, _: &mut Context<Self>) {}
-    fn discarded(&self, _project: Entity<Project>, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn on_removed(&self, _cx: &mut Context<Self>) {}
     fn workspace_deactivated(&mut self, _window: &mut Window, _: &mut Context<Self>) {}
-    fn pane_changed(&mut self, _new_pane_id: EntityId, _cx: &mut Context<Self>) {}
     fn navigate(&mut self, _: Arc<dyn Any + Send>, _window: &mut Window, _: &mut Context<Self>) -> bool {
         false
     }
@@ -419,20 +415,12 @@ where
 
 pub trait ItemHandle: 'static + Send {
     fn item_focus_handle(&self, cx: &App) -> FocusHandle;
-    #[allow(clippy::type_complexity)]
-    fn subscribe_to_item_events(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-        handler: Box<dyn Fn(ItemEvent, &mut Window, &mut App)>,
-    ) -> gpui::Subscription;
     fn tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement;
     fn tab_content_text(&self, detail: usize, cx: &App) -> SharedString;
     fn suggested_filename(&self, cx: &App) -> SharedString;
     fn tab_icon(&self, window: &Window, cx: &App) -> Option<Icon>;
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString>;
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent>;
-    fn dragged_tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement;
     fn project_path(&self, cx: &App) -> Option<ProjectPath>;
     fn project_entry_ids(&self, cx: &App) -> SmallVec<[ProjectEntryId; 3]>;
     fn project_paths(&self, cx: &App) -> SmallVec<[ProjectPath; 3]>;
@@ -520,18 +508,6 @@ impl dyn ItemHandle {
 }
 
 impl<T: Item> ItemHandle for Entity<T> {
-    #[allow(clippy::type_complexity)]
-    fn subscribe_to_item_events(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-        handler: Box<dyn Fn(ItemEvent, &mut Window, &mut App)>,
-    ) -> gpui::Subscription {
-        window.subscribe(self, cx, move |_, event, window, cx| {
-            T::to_item_events(event, &mut |item_event| handler(item_event, window, cx));
-        })
-    }
-
     fn item_focus_handle(&self, cx: &App) -> FocusHandle {
         self.read(cx).focus_handle(cx)
     }
@@ -557,10 +533,6 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
         self.read(cx).tab_tooltip_text(cx)
-    }
-
-    fn dragged_tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
-        self.read(cx).tab_content(TabContentParams { selected: true, ..params }, window, cx)
     }
 
     fn project_path(&self, cx: &App) -> Option<ProjectPath> {
@@ -650,17 +622,7 @@ impl<T: Item> ItemHandle for Entity<T> {
             workspace.enqueue_item_serialization(serializable_item).log_err();
         }
 
-        let new_pane_id = pane.entity_id();
         let old_item_pane = workspace.panes_by_item.insert(self.item_id(), pane.downgrade());
-
-        if old_item_pane
-            .as_ref()
-            .is_none_or(|old_pane| old_pane.upgrade().is_some_and(|old_pane| old_pane.entity_id() != new_pane_id))
-        {
-            self.update(cx, |this, cx| {
-                this.pane_changed(new_pane_id, cx);
-            });
-        }
 
         if old_item_pane.is_none() {
             let mut pending_autosave = DelayedDebouncedEditAction::new();

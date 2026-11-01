@@ -580,10 +580,6 @@ impl Editor {
         self.display_map.update(cx, |map, cx| map.update_fold_widths(widths, cx))
     }
 
-    pub fn default_fold_placeholder(&self, cx: &App) -> FoldPlaceholder {
-        self.display_map.read(cx).fold_placeholder.clone()
-    }
-
     pub fn insert_creases(
         &mut self,
         creases: impl IntoIterator<Item = Crease<Anchor>>,

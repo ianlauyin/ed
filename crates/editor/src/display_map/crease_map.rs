@@ -83,48 +83,6 @@ impl CreaseSnapshot {
         }
         None
     }
-
-    pub fn creases_in_range<'a>(
-        &'a self,
-        range: Range<MultiBufferRow>,
-        snapshot: &'a MultiBufferSnapshot,
-    ) -> impl 'a + Iterator<Item = &'a Crease<Anchor>> {
-        let start = snapshot.anchor_before(Point::new(range.start.0, 0));
-        let mut cursor = self.creases.cursor::<ItemSummary>(snapshot);
-        cursor.seek(&start, Bias::Left);
-
-        std::iter::from_fn(move || {
-            while let Some(item) = cursor.item() {
-                cursor.next();
-                let crease_range = item.crease.range();
-                let crease_start = crease_range.start.to_point(snapshot);
-                let crease_end = crease_range.end.to_point(snapshot);
-                if crease_end.row > range.end.0 {
-                    continue;
-                }
-                if crease_start.row >= range.start.0 && crease_end.row < range.end.0 {
-                    return Some(&item.crease);
-                }
-            }
-            None
-        })
-    }
-
-    pub fn crease_items_with_offsets(&self, snapshot: &MultiBufferSnapshot) -> Vec<(CreaseId, Range<Point>)> {
-        let mut cursor = self.creases.cursor::<ItemSummary>(snapshot);
-        let mut results = Vec::new();
-
-        cursor.next();
-        while let Some(item) = cursor.item() {
-            let crease_range = item.crease.range();
-            let start_point = crease_range.start.to_point(snapshot);
-            let end_point = crease_range.end.to_point(snapshot);
-            results.push((item.id, start_point..end_point));
-            cursor.next();
-        }
-
-        results
-    }
 }
 
 type RenderToggleFn = Arc<
@@ -215,15 +173,6 @@ impl<T> Crease<T> {
                 render_trailer(row, folded, window, cx).into_any_element()
             })),
             metadata: None,
-        }
-    }
-
-    pub fn with_metadata(self, metadata: CreaseMetadata) -> Self {
-        match self {
-            Crease::Inline { range, placeholder, render_toggle, render_trailer, .. } => {
-                Crease::Inline { range, placeholder, render_toggle, render_trailer, metadata: Some(metadata) }
-            }
-            Crease::Block { .. } => self,
         }
     }
 

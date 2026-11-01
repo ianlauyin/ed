@@ -485,13 +485,6 @@ impl SplittableEditor {
         self.lhs.as_ref().map(|s| &s.editor)
     }
 
-    pub fn update_editors(&self, cx: &mut Context<Self>, f: impl Fn(&mut Editor, &mut Context<Editor>)) {
-        if let Some(lhs) = &self.lhs {
-            lhs.editor.update(cx, &f);
-        }
-        self.rhs_editor.update(cx, &f);
-    }
-
     pub const fn diff_view_style(&self) -> DiffViewStyle {
         self.diff_view_style
     }

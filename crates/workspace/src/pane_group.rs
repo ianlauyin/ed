@@ -7,23 +7,18 @@ use gpui::AnyWeakView;
 use gpui::Axis;
 use gpui::Bounds;
 use gpui::Entity;
-use gpui::Hsla;
 use gpui::IntoElement;
 use gpui::Pixels;
 use gpui::Point;
 use gpui::StyleRefinement;
 use gpui::WeakEntity;
 use gpui::Window;
-use gpui::point;
 use gpui::px;
-use gpui::size;
 use parking_lot::Mutex;
-use project::Project;
 use serde::Deserialize;
 use settings::Settings;
 use ui::prelude::*;
 
-use crate::AppState;
 use crate::Pane;
 use crate::Workspace;
 use crate::WorkspaceSettings;
@@ -221,7 +216,7 @@ impl PaneGroup {
         &self,
         zoomed: Option<&AnyWeakView>,
         maximized: Option<&WeakEntity<Pane>>,
-        render_cx: &dyn PaneLeaderDecorator,
+        render_cx: &PaneRenderContext,
         window: &mut Window,
         cx: &mut App,
     ) -> impl IntoElement {
@@ -256,11 +251,6 @@ impl PaneGroup {
         };
 
         self.pane_at_pixel_position(neighbor_probe(bounding_box, center, direction))
-    }
-
-    pub fn invert_axies(&mut self, cx: &mut App) {
-        self.root.invert_pane_axies();
-        self.mark_positions(cx);
     }
 }
 
@@ -297,63 +287,11 @@ impl Member {
     }
 }
 
+/// What rendering a pane tree needs from its workspace.
 #[derive(Clone, Copy)]
 pub struct PaneRenderContext<'a> {
-    pub project: &'a Entity<Project>,
-
     pub active_pane: &'a Entity<Pane>,
-    pub app_state: &'a Arc<AppState>,
     pub workspace: &'a WeakEntity<Workspace>,
-}
-
-#[derive(Default)]
-pub struct LeaderDecoration {
-    border: Option<Hsla>,
-    status_box: Option<AnyElement>,
-}
-
-pub trait PaneLeaderDecorator {
-    fn decorate(&self, pane: &Entity<Pane>, cx: &App) -> LeaderDecoration;
-    fn active_pane(&self) -> &Entity<Pane>;
-    fn workspace(&self) -> &WeakEntity<Workspace>;
-}
-
-pub struct ActivePaneDecorator<'a> {
-    active_pane: &'a Entity<Pane>,
-    workspace: &'a WeakEntity<Workspace>,
-}
-
-impl<'a> ActivePaneDecorator<'a> {
-    pub const fn new(active_pane: &'a Entity<Pane>, workspace: &'a WeakEntity<Workspace>) -> Self {
-        Self { active_pane, workspace }
-    }
-}
-
-impl PaneLeaderDecorator for ActivePaneDecorator<'_> {
-    fn decorate(&self, _: &Entity<Pane>, _: &App) -> LeaderDecoration {
-        LeaderDecoration::default()
-    }
-    fn active_pane(&self) -> &Entity<Pane> {
-        self.active_pane
-    }
-
-    fn workspace(&self) -> &WeakEntity<Workspace> {
-        self.workspace
-    }
-}
-
-impl PaneLeaderDecorator for PaneRenderContext<'_> {
-    fn decorate(&self, _: &Entity<Pane>, _: &App) -> LeaderDecoration {
-        LeaderDecoration::default()
-    }
-
-    fn active_pane(&self) -> &Entity<Pane> {
-        self.active_pane
-    }
-
-    fn workspace(&self) -> &WeakEntity<Workspace> {
-        self.workspace
-    }
 }
 
 impl Member {
@@ -397,7 +335,7 @@ impl Member {
         basis: usize,
         zoomed: Option<&AnyWeakView>,
         maximized: Option<&WeakEntity<Pane>>,
-        render_cx: &dyn PaneLeaderDecorator,
+        render_cx: &PaneRenderContext,
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
@@ -416,8 +354,7 @@ impl Member {
                     false
                 };
 
-                let decoration = render_cx.decorate(pane, cx);
-                let is_active = pane == render_cx.active_pane();
+                let is_active = pane == render_cx.active_pane;
 
                 let pane = div()
                     .relative()
@@ -429,11 +366,7 @@ impl Member {
                             .shadow_lg()
                             .overflow_hidden()
                     })
-                    .child(AnyView::from(pane.clone()).cached(StyleRefinement::default().v_flex().size_full()))
-                    .when_some(decoration.border, |this, color| {
-                        this.child(div().absolute().size_full().left_0().top_0().border_2().border_color(color))
-                    })
-                    .children(decoration.status_box);
+                    .child(AnyView::from(pane.clone()).cached(StyleRefinement::default().v_flex().size_full()));
 
                 PaneRenderResult {
                     element: div()
@@ -465,18 +398,6 @@ impl Member {
                 }
             }
             Member::Pane(pane) => panes.push(pane),
-        }
-    }
-
-    fn invert_pane_axies(&mut self) {
-        match self {
-            Self::Axis(axis) => {
-                axis.axis = axis.axis.invert();
-                for member in &mut axis.members {
-                    member.invert_pane_axies();
-                }
-            }
-            Self::Pane(_) => {}
         }
     }
 }
@@ -738,7 +659,7 @@ impl PaneAxis {
         basis: usize,
         zoomed: Option<&AnyWeakView>,
         maximized: Option<&WeakEntity<Pane>>,
-        render_cx: &dyn PaneLeaderDecorator,
+        render_cx: &PaneRenderContext,
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
@@ -765,7 +686,7 @@ impl PaneAxis {
                 match member {
                     Member::Pane(pane) => {
                         leaf_panes[ix] = Some(pane.clone());
-                        if pane == render_cx.active_pane() {
+                        if pane == render_cx.active_pane {
                             active_pane_ix = pane.read(cx).has_focus(window, cx).then_some(ix);
                             contains_active_pane = true;
                         }
@@ -781,17 +702,12 @@ impl PaneAxis {
             })
             .collect::<Vec<_>>();
 
-        let element = pane_axis(
-            self.axis,
-            basis,
-            self.flexes.clone(),
-            self.bounding_boxes.clone(),
-            render_cx.workspace().clone(),
-        )
-        .with_leaf_panes(leaf_panes)
-        .children(rendered_children)
-        .with_active_pane(active_pane_ix)
-        .into_any_element();
+        let element =
+            pane_axis(self.axis, basis, self.flexes.clone(), self.bounding_boxes.clone(), render_cx.workspace.clone())
+                .with_leaf_panes(leaf_panes)
+                .children(rendered_children)
+                .with_active_pane(active_pane_ix)
+                .into_any_element();
 
         PaneRenderResult { element, contains_active_pane }
     }
@@ -842,21 +758,6 @@ impl SplitDirection {
             Self::Down => rect.bottom_left().y,
             Self::Left => rect.bottom_left().x,
             Self::Right => rect.bottom_right().x,
-        }
-    }
-
-    pub fn along_edge(&self, bounds: Bounds<Pixels>, length: Pixels) -> Bounds<Pixels> {
-        match self {
-            Self::Up => Bounds { origin: bounds.origin, size: size(bounds.size.width, length) },
-            Self::Down => Bounds {
-                origin: point(bounds.bottom_left().x, bounds.bottom_left().y - length),
-                size: size(bounds.size.width, length),
-            },
-            Self::Left => Bounds { origin: bounds.origin, size: size(length, bounds.size.height) },
-            Self::Right => Bounds {
-                origin: point(bounds.bottom_right().x - length, bounds.bottom_left().y),
-                size: size(length, bounds.size.height),
-            },
         }
     }
 

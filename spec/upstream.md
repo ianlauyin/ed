@@ -33,7 +33,7 @@ from upstream in layout as well as in behaviour.
   were made without it.
 - Port fixes to crates and behaviour the fork keeps; skip commits that only touch
   removed crates or platforms (agent/ACP, collab, extensions, sidebar,
-  Windows/Linux/iOS, debugger).
+  multi-workspace windows and project groups, Windows/Linux/iOS, debugger).
 - When porting, keep the fork's side: drop changes to deleted files, and
   strip re-added tests, benches, `test-support` features, and removed-platform
   dependencies (see `testing-and-benchmarks.md`).

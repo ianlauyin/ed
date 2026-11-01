@@ -4,7 +4,6 @@ use std::ops::Range;
 
 use language::LanguageAwareStyling;
 use language::Point;
-use multi_buffer::MultiBufferRow;
 use multi_buffer::MultiBufferSnapshot;
 use sum_tree::Bias;
 
@@ -349,10 +348,6 @@ impl TabSnapshot {
         let (collapsed, expanded_char_column, to_next_stop) = self.collapse_tabs(tab_cursor, expanded, bias);
 
         (FoldPoint::new(output.row(), collapsed), expanded_char_column, to_next_stop)
-    }
-
-    pub fn buffer_row_to_tab_row(&self, buffer_row: MultiBufferRow) -> u32 {
-        self.point_to_tab_point(Point::new(buffer_row.0, 0), Bias::Left).row()
     }
 
     pub fn point_to_tab_point(&self, point: Point, bias: Bias) -> TabPoint {

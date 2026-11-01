@@ -60,37 +60,6 @@ impl OpenTarget {
     }
 }
 
-pub fn sanitize_path_text(text: &str) -> &str {
-    let start = first_unbalanced_open_paren(text).unwrap_or(0);
-    let mut sanitized = &text[start..];
-    let (open_parens, mut close_parens) =
-        sanitized.chars().fold((0, 0), |(opens, closes), character| match character {
-            '(' => (opens + 1, closes),
-            ')' => (opens, closes + 1),
-            _ => (opens, closes),
-        });
-
-    while let Some(last_char) = sanitized.chars().last() {
-        let should_remove = match last_char {
-            '.' | ',' | ':' | ';' => true,
-            '(' => true,
-            ')' if close_parens > open_parens => {
-                close_parens -= 1;
-                true
-            }
-            _ => false,
-        };
-
-        if should_remove {
-            sanitized = &sanitized[..sanitized.len() - last_char.len_utf8()];
-        } else {
-            break;
-        }
-    }
-
-    sanitized
-}
-
 /// Returns the byte offset just past the first unbalanced `(` in `text`, or
 /// `None` if all parentheses are balanced.
 pub fn first_unbalanced_open_paren(text: &str) -> Option<usize> {

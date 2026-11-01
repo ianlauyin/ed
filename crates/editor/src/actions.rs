@@ -701,8 +701,6 @@ actions!(
         NextSnippetTabstop,
         /// Opens the context menu at cursor position.
         OpenContextMenu,
-        /// Opens the proposed changes editor.
-        OpenProposedChangesEditor,
         /// Opens documentation for the symbol at cursor.
         OpenDocs,
         /// Opens the file whose name is selected in the editor.

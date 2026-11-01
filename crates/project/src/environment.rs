@@ -33,7 +33,6 @@ pub struct ProjectEnvironment {
     remote_environments: HashMap<(Shell, Arc<Path>), Shared<Task<Option<HashMap<String, String>>>>>,
     environment_error_messages: VecDeque<String>,
     environment_error_messages_tx: mpsc::UnboundedSender<String>,
-    worktree_store: WeakEntity<WorktreeStore>,
     remote_client: Option<WeakEntity<RemoteClient>>,
     is_remote_project: bool,
     _tasks: Vec<Task<()>>,
@@ -47,7 +46,6 @@ impl EventEmitter<ProjectEnvironmentEvent> for ProjectEnvironment {}
 
 impl ProjectEnvironment {
     pub fn new(
-        worktree_store: WeakEntity<WorktreeStore>,
         remote_client: Option<WeakEntity<RemoteClient>>,
         is_remote_project: bool,
         cx: &mut Context<Self>,
@@ -67,7 +65,6 @@ impl ProjectEnvironment {
             remote_environments: HashMap::default(),
             environment_error_messages: VecDeque::default(),
             environment_error_messages_tx: tx,
-            worktree_store,
             remote_client,
             is_remote_project,
             _tasks: vec![task],
@@ -116,44 +113,6 @@ impl ProjectEnvironment {
             None => Some(self.local_directory_environment(&Shell::System, abs_path, cx)),
         }
         .unwrap_or_else(|| Task::ready(None).shared())
-    }
-
-    pub fn directory_environment(
-        &mut self,
-        abs_path: Arc<Path>,
-        cx: &mut App,
-    ) -> Shared<Task<Option<HashMap<String, String>>>> {
-        let remote_client = self.remote_client.as_ref().and_then(|it| it.upgrade());
-        match remote_client {
-            Some(remote_client) => remote_client
-                .clone()
-                .read(cx)
-                .shell()
-                .map(|shell| self.remote_directory_environment(&Shell::Program(shell), abs_path, remote_client, cx)),
-            None if self.is_remote_project => Some(self.local_directory_environment(&Shell::System, abs_path, cx)),
-            None => self
-                .worktree_store
-                .read_with(cx, |worktree_store, cx| worktree_store.find_worktree(&abs_path, cx))
-                .ok()
-                .map(|_| self.local_directory_environment(&Shell::System, abs_path, cx)),
-        }
-        .unwrap_or_else(|| Task::ready(None).shared())
-    }
-
-    /// Returns the project environment using the default worktree path.
-    /// This ensures that project-specific environment variables (e.g. from `.envrc`)
-    /// are loaded from the project directory rather than the home directory.
-    pub fn default_environment(&mut self, cx: &mut App) -> Shared<Task<Option<HashMap<String, String>>>> {
-        let abs_path = self
-            .worktree_store
-            .read_with(cx, |worktree_store, cx| {
-                crate::Project::default_visible_worktree_paths(worktree_store, cx).into_iter().next()
-            })
-            .ok()
-            .flatten()
-            .map(Arc::<Path>::from)
-            .unwrap_or_else(|| paths::home_dir().as_path().into());
-        self.local_directory_environment(&Shell::System, abs_path, cx)
     }
 
     /// Returns the project environment by spawning a shell in `abs_path`, to get environment

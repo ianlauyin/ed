@@ -1,7 +1,6 @@
 use std::mem;
 
 use gpui::AnyElement;
-use gpui::App;
 use gpui::Context;
 use gpui::Hsla;
 use gpui::InteractiveElement;
@@ -9,36 +8,22 @@ use gpui::IntoElement;
 use gpui::ParentElement;
 use gpui::StatefulInteractiveElement;
 use gpui::Styled;
-use gpui::WeakEntity;
 use gpui::Window;
 use gpui::WindowControlArea;
 use smallvec::SmallVec;
 use ui::prelude::*;
 use ui::utils::TRAFFIC_LIGHT_PADDING;
 use ui::utils::platform_title_bar_height;
-use workspace::MultiWorkspace;
-use workspace::SidebarRenderState;
-use workspace::SidebarSide;
 
 pub struct PlatformTitleBar {
     id: ElementId,
     children: SmallVec<[AnyElement; 2]>,
     should_move: bool,
-    multi_workspace: Option<WeakEntity<MultiWorkspace>>,
 }
 
 impl PlatformTitleBar {
     pub fn new(id: impl Into<ElementId>, _cx: &mut Context<Self>) -> Self {
-        Self { id: id.into(), children: SmallVec::new(), should_move: false, multi_workspace: None }
-    }
-
-    pub fn with_multi_workspace(mut self, multi_workspace: WeakEntity<MultiWorkspace>) -> Self {
-        self.multi_workspace = Some(multi_workspace);
-        self
-    }
-
-    pub fn set_multi_workspace(&mut self, multi_workspace: WeakEntity<MultiWorkspace>) {
-        self.multi_workspace = Some(multi_workspace);
+        Self { id: id.into(), children: SmallVec::new(), should_move: false }
     }
 
     pub fn title_bar_color(&self, _window: &mut Window, cx: &mut Context<Self>) -> Hsla {
@@ -51,18 +36,6 @@ impl PlatformTitleBar {
     {
         self.children = children.into_iter().collect();
     }
-
-    fn sidebar_render_state(&self, cx: &App) -> SidebarRenderState {
-        self.multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).sidebar_render_state(cx))
-            .unwrap_or_default()
-    }
-
-    pub const fn is_multi_workspace_enabled(_cx: &App) -> bool {
-        false
-    }
 }
 
 impl Render for PlatformTitleBar {
@@ -70,8 +43,6 @@ impl Render for PlatformTitleBar {
         let height = platform_title_bar_height(window);
         let titlebar_color = self.title_bar_color(window, cx);
         let children = mem::take(&mut self.children);
-        let sidebar = self.sidebar_render_state(cx);
-        let show_left_controls = !(sidebar.open && sidebar.side == SidebarSide::Left);
 
         h_flex()
             .id(self.id.clone())
@@ -93,7 +64,7 @@ impl Render for PlatformTitleBar {
                 }
             })
             .map(|this| {
-                if !window.is_fullscreen() && !window.is_simple_fullscreen() && show_left_controls {
+                if !window.is_fullscreen() && !window.is_simple_fullscreen() {
                     this.pl(px(TRAFFIC_LIGHT_PADDING))
                 } else {
                     this.pl_2()

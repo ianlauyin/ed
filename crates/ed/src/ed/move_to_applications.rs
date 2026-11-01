@@ -38,7 +38,7 @@ use ui::v_flex;
 use util::ResultExt;
 use util::command::new_command;
 use workspace::ModalView;
-use workspace::MultiWorkspace;
+use workspace::Workspace;
 
 const DONT_ASK_AGAIN_KEY: &str = "move_to_applications_dont_ask_again";
 static PROMPTED_THIS_SESSION: AtomicBool = AtomicBool::new(false);
@@ -53,7 +53,7 @@ pub fn init(cx: &App) {
         return;
     };
 
-    cx.observe_new(move |_workspace: &mut MultiWorkspace, window, cx| {
+    cx.observe_new(move |_workspace: &mut Workspace, window, cx| {
         let Some(window) = window else {
             return;
         };
@@ -90,7 +90,7 @@ impl MoveToApplicationsRequest {
         Ok(Some(Self { app_path }))
     }
 
-    async fn prompt(self, workspace: WeakEntity<MultiWorkspace>, cx: &mut AsyncWindowContext) -> Result<()> {
+    async fn prompt(self, workspace: WeakEntity<Workspace>, cx: &mut AsyncWindowContext) -> Result<()> {
         let response = cx
             .prompt(
                 PromptLevel::Info,
@@ -280,7 +280,7 @@ async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
 async fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<()> {
     let workspace_windows = cx
         .update(|_window, cx| {
-            cx.windows().into_iter().filter_map(|window| window.downcast::<MultiWorkspace>()).collect::<Vec<_>>()
+            cx.windows().into_iter().filter_map(|window| window.downcast::<Workspace>()).collect::<Vec<_>>()
         })
         .context("collecting workspace windows before restarting")?;
     if !workspace::prepare_windows_to_quit(&workspace_windows, cx).await {

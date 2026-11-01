@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -30,18 +29,6 @@ pub struct ConflictSetSnapshot {
 }
 
 impl ConflictSetSnapshot {
-    pub fn conflicts_in_range(&self, range: Range<Anchor>, buffer: &text::BufferSnapshot) -> &[ConflictRegion] {
-        let start_ix = self
-            .conflicts
-            .binary_search_by(|conflict| conflict.range.end.cmp(&range.start, buffer).then(Ordering::Greater))
-            .unwrap_err();
-        let end_ix = start_ix
-            + self.conflicts[start_ix..]
-                .binary_search_by(|conflict| conflict.range.start.cmp(&range.end, buffer).then(Ordering::Less))
-                .unwrap_err();
-        &self.conflicts[start_ix..end_ix]
-    }
-
     pub fn compare(&self, other: &Self, buffer: &text::BufferSnapshot) -> ConflictSetUpdate {
         let common_prefix_len =
             self.conflicts.iter().zip(other.conflicts.iter()).take_while(|(old, new)| old == new).count();

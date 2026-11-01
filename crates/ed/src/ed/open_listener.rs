@@ -21,8 +21,8 @@ use settings::Settings;
 use util::ResultExt;
 use util::paths::PathWithPosition;
 use workspace::AppState;
-use workspace::MultiWorkspace;
 use workspace::OpenResult;
+use workspace::Workspace;
 use workspace::item::ItemHandle;
 
 #[derive(Default, Debug)]
@@ -154,10 +154,10 @@ pub async fn open_paths_with_positions(
     app_state: Arc<AppState>,
     open_options: workspace::OpenOptions,
     cx: &mut AsyncApp,
-) -> Result<(WindowHandle<MultiWorkspace>, Vec<Option<Result<Box<dyn ItemHandle>>>>)> {
+) -> Result<(WindowHandle<Workspace>, Vec<Option<Result<Box<dyn ItemHandle>>>>)> {
     let paths = path_positions.iter().map(|path_with_position| path_with_position.path.clone()).collect::<Vec<_>>();
 
-    let OpenResult { window: multi_workspace, opened_items: mut items, .. } =
+    let OpenResult { window, opened_items: mut items, .. } =
         cx.update(|cx| workspace::open_paths(&paths, app_state.clone(), open_options, cx)).await?;
 
     if diff_all && !diff_paths.is_empty() {
@@ -170,17 +170,14 @@ pub async fn open_paths_with_positions(
             diff_pairs
                 .push([old_parsed.path.to_string_lossy().into_owned(), new_parsed.path.to_string_lossy().into_owned()]);
         }
-        if let Ok(diff_view) = multi_workspace.update(cx, |multi_workspace, window, cx| {
-            multi_workspace
-                .workspace()
-                .update(cx, |workspace, cx| MultiDiffView::open(diff_pairs, workspace, window, cx))
-        }) && let Some(diff_view) = diff_view.await.log_err()
+        if let Ok(diff_view) =
+            window.update(cx, |workspace, window, cx| MultiDiffView::open(diff_pairs, workspace, window, cx))
+            && let Some(diff_view) = diff_view.await.log_err()
         {
             items.push(Some(Ok(Box::new(diff_view))));
         }
     } else {
-        let workspace_weak =
-            multi_workspace.read_with(cx, |multi_workspace, _cx| multi_workspace.workspace().downgrade())?;
+        let workspace_weak = window.entity(cx)?.downgrade();
         let canonicalize = async |parsed: &PathWithPosition| {
             app_state
                 .fs
@@ -207,7 +204,7 @@ pub async fn open_paths_with_positions(
             let target_position = new_parsed.row.map(|row| {
                 language::Point::new(row.saturating_sub(1), new_parsed.column.unwrap_or(0).saturating_sub(1))
             });
-            if let Ok(diff_view) = multi_workspace.update(cx, |_multi_workspace, window, cx| {
+            if let Ok(diff_view) = window.update(cx, |_, window, cx| {
                 FileDiffView::open(old_path, new_path, target_position, workspace_weak.clone(), window, cx)
             }) && let Some(diff_view) = diff_view.await.log_err()
             {
@@ -224,9 +221,9 @@ pub async fn open_paths_with_positions(
 
     let items_for_navigation =
         items.iter().map(|item| item.as_ref().and_then(|r| r.as_ref().ok()).cloned()).collect::<Vec<_>>();
-    navigate_to_positions(&multi_workspace, items_for_navigation, path_positions, cx);
+    navigate_to_positions(&window, items_for_navigation, path_positions, cx);
 
-    Ok((multi_workspace, items))
+    Ok((window, items))
 }
 
 /// Open options for an open request (e.g. from Finder or a URL), following the
@@ -236,7 +233,6 @@ pub(crate) fn open_options_for_request(cx: &App) -> workspace::OpenOptions {
         settings::DefaultOpenBehavior::ExistingWindow => workspace::OpenOptions::default(),
         settings::DefaultOpenBehavior::NewWindow => workspace::OpenOptions {
             workspace_matching: workspace::WorkspaceMatching::MatchSubpaths,
-            add_dirs_to_sidebar: false,
             ..Default::default()
         },
     }

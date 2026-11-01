@@ -680,17 +680,6 @@ impl Editor {
         .detach_and_log_err(cx);
     }
 
-    pub fn restore_diff_hunks_in_ranges(
-        &mut self,
-        ranges: Vec<Range<Anchor>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let snapshot = self.buffer.read(cx).snapshot(cx);
-        let hunks = self.diff_hunks_in_ranges(&ranges, &snapshot).collect();
-        self.apply_restore(hunks, window, cx);
-    }
-
     fn toggle_diff_hunks_in_ranges(&self, ranges: Vec<Range<Anchor>>, cx: &mut Context<Editor>) {
         self.buffer.update(cx, |buffer, cx| {
             let expand = !buffer.has_expanded_diff_hunks_in_ranges(&ranges, cx);

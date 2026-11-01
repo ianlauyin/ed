@@ -866,13 +866,19 @@ pub fn show_active_repository_history(workspace: &mut Workspace, window: &mut Wi
 
 /// The repository whose graph must be shown so Git History matches the active
 /// repository, or `None` when the active history tab already shows it.
-fn graph_repo_to_show(active_repo_id: Option<RepositoryId>, shown_repo_id: Option<RepositoryId>) -> Option<RepositoryId> {
+fn graph_repo_to_show(
+    active_repo_id: Option<RepositoryId>,
+    shown_repo_id: Option<RepositoryId>,
+) -> Option<RepositoryId> {
     active_repo_id.filter(|active_repo_id| shown_repo_id != Some(*active_repo_id))
 }
 
 /// The repository whose graph shows a commit: its own when known, otherwise
 /// the active one (e.g. a keybinding with only a sha).
-fn commit_graph_repo(requested_repo_id: Option<RepositoryId>, active_repo_id: Option<RepositoryId>) -> Option<RepositoryId> {
+fn commit_graph_repo(
+    requested_repo_id: Option<RepositoryId>,
+    active_repo_id: Option<RepositoryId>,
+) -> Option<RepositoryId> {
     requested_repo_id.or(active_repo_id)
 }
 

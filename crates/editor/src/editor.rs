@@ -690,9 +690,6 @@ pub enum ConflictsTheirs {}
 pub enum ConflictsOursMarker {}
 pub enum ConflictsTheirsMarker {}
 
-pub struct HunkAddedColor;
-pub struct HunkRemovedColor;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Navigated {
     Yes,
@@ -1028,8 +1025,6 @@ impl BufferSerialization {
 
 /// Addons allow storing per-editor state in other crates (e.g. Vim)
 pub trait Addon: 'static {
-    fn extend_key_context(&self, _: &mut KeyContext, _: &App) {}
-
     fn render_buffer_header_controls(
         &self,
         _: &ExcerptBoundaryInfo,
@@ -1120,18 +1115,6 @@ impl ChangeList {
 
     pub fn last(&self) -> Option<&[Anchor]> {
         self.changes.last().map(|change| change.locations())
-    }
-
-    pub fn last_before_grouping(&self) -> Option<&[Anchor]> {
-        self.changes.last().map(|change| change.original.as_slice())
-    }
-
-    pub fn invert_last_group(&mut self) {
-        if let Some(last) = self.changes.last_mut()
-            && let Some(current) = last.current.as_mut()
-        {
-            mem::swap(&mut last.original, current);
-        }
     }
 }
 
@@ -1836,14 +1819,6 @@ impl Editor {
         Self::new(EditorMode::AutoHeight { min_lines, max_lines: Some(max_lines) }, buffer, None, window, cx)
     }
 
-    /// Creates a new auto-height editor with a minimum number of lines but no maximum.
-    /// The editor grows as tall as needed to fit its content.
-    pub fn auto_height_unbounded(min_lines: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let buffer = cx.new(|cx| Buffer::local("", cx));
-        let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
-        Self::new(EditorMode::AutoHeight { min_lines, max_lines: None }, buffer, None, window, cx)
-    }
-
     pub fn for_buffer(
         buffer: Entity<Buffer>,
         project: Option<Entity<Project>>,
@@ -2415,10 +2390,6 @@ impl Editor {
         ));
     }
 
-    pub fn mouse_menu_is_focused(&self, window: &Window, cx: &App) -> bool {
-        self.mouse_context_menu.as_ref().is_some_and(|menu| menu.context_menu.focus_handle(cx).is_focused(window))
-    }
-
     pub fn key_context(&self, window: &mut Window, cx: &mut App) -> KeyContext {
         self.key_context_internal(window, cx)
     }
@@ -2460,15 +2431,6 @@ impl Editor {
                 key_context.add("showing_code_actions")
             }
             _ => {}
-        }
-
-        // Disable vim contexts when a sub-editor (e.g. rename/inline assistant) is focused.
-        if !self.focus_handle(cx).contains_focused(window, cx)
-            || (self.is_focused(window) || self.mouse_menu_is_focused(window, cx))
-        {
-            for addon in self.addons.values() {
-                addon.extend_key_context(&mut key_context, cx)
-            }
         }
 
         if let Some(singleton_buffer) = self.buffer.read(cx).as_singleton() {
@@ -2809,10 +2771,6 @@ impl Editor {
         self.semantics_provider.clone()
     }
 
-    pub fn set_semantics_provider(&mut self, provider: Option<Rc<dyn SemanticsProvider>>) {
-        self.semantics_provider = provider;
-    }
-
     pub fn placeholder_text(&self, cx: &mut App) -> Option<String> {
         self.placeholder_display_map
             .as_ref()
@@ -2888,10 +2846,6 @@ impl Editor {
         self.current_line_highlight = current_line_highlight;
     }
 
-    pub const fn set_collapse_matches(&mut self, collapse_matches: bool) {
-        self.collapse_matches = collapse_matches;
-    }
-
     pub fn range_for_match<T: std::marker::Copy>(&self, range: &Range<T>) -> Range<T> {
         if self.collapse_matches {
             return range.start..range.start;
@@ -2901,12 +2855,6 @@ impl Editor {
 
     pub fn clip_at_line_ends(&mut self, cx: &mut Context<Self>) -> bool {
         self.display_map.read(cx).clip_at_line_ends
-    }
-
-    pub fn set_clip_at_line_ends(&mut self, clip: bool, cx: &mut Context<Self>) {
-        if self.display_map.read(cx).clip_at_line_ends != clip {
-            self.display_map.update(cx, |map, _| map.clip_at_line_ends = clip);
-        }
     }
 
     pub fn capability(&self, cx: &App) -> Capability {
@@ -2970,37 +2918,6 @@ impl Editor {
         self.buffer.update(cx, |buffer, cx| buffer.edit(edits, self.autoindent_mode.clone(), cx));
     }
 
-    pub fn edit_before_with_autoindent<I, S, T>(&mut self, edits: I, cx: &mut Context<Self>)
-    where
-        I: IntoIterator<Item = (Range<S>, T)>,
-        S: ToOffset,
-        T: Into<Arc<str>>,
-    {
-        if self.read_only(cx) {
-            return;
-        }
-
-        self.buffer.update(cx, |buffer, cx| buffer.edit_before(edits, self.autoindent_mode.clone(), cx));
-    }
-
-    pub fn edit_with_block_indent<I, S, T>(
-        &mut self,
-        edits: I,
-        original_indent_columns: Vec<Option<u32>>,
-        cx: &mut Context<Self>,
-    ) where
-        I: IntoIterator<Item = (Range<S>, T)>,
-        S: ToOffset,
-        T: Into<Arc<str>>,
-    {
-        if self.read_only(cx) {
-            return;
-        }
-
-        self.buffer
-            .update(cx, |buffer, cx| buffer.edit(edits, Some(AutoindentMode::Block { original_indent_columns }), cx));
-    }
-
     pub fn cancel(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<Self>) {
         self.selection_mark_mode = false;
         self.selection_drag_state = SelectionDragState::None;
@@ -3042,7 +2959,7 @@ impl Editor {
 
         dismissed |= self.take_rename(false, window, cx).is_some();
         dismissed |= hide_hover(self, cx);
-        dismissed |= self.hide_context_menu(window, cx).is_some();
+        dismissed |= self.hide_context_menu(cx).is_some();
         dismissed |= self.mouse_context_menu.take().is_some();
         dismissed |= self.snippet_stack.pop().is_some();
 
@@ -3748,10 +3665,6 @@ impl Editor {
         self.context_menu.borrow().as_ref().map(|menu| menu.origin())
     }
 
-    pub const fn set_context_menu_options(&mut self, options: ContextMenuOptions) {
-        self.context_menu_options = Some(options);
-    }
-
     fn current_user_player_color(&self, cx: &App) -> PlayerColor {
         if self.read_only(cx) { cx.theme().player().read_only() } else { self.style.as_ref().unwrap().local_player }
     }
@@ -3782,17 +3695,10 @@ impl Editor {
             .and_then(|menu| if menu.visible() { menu.render_aside(max_size, window, cx) } else { None })
     }
 
-    fn hide_context_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<CodeContextMenu> {
+    fn hide_context_menu(&mut self, cx: &mut Context<Self>) -> Option<CodeContextMenu> {
         cx.notify();
         self.completion_tasks.clear();
-        let context_menu = self.context_menu.borrow_mut().take();
-
-        if let Some(CodeContextMenu::Completions(_)) = &context_menu
-            && let Some(completion_provider) = &self.completion_provider
-        {
-            completion_provider.selection_changed(None, window, cx);
-        }
-        context_menu
+        self.context_menu.borrow_mut().take()
     }
 
     fn show_snippet_choices(&mut self, choices: &[String], selection: Range<Anchor>, cx: &Context<Self>) {
@@ -5525,10 +5431,6 @@ impl Editor {
         });
     }
 
-    pub const fn clear_selection_drag_state(&mut self) {
-        self.selection_drag_state = SelectionDragState::None;
-    }
-
     pub fn duplicate(&mut self, upwards: bool, whole_lines: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
@@ -5939,27 +5841,27 @@ impl Editor {
         self.buffer.update(cx, |buffer, cx| buffer.group_until_transaction(tx_id, cx));
     }
 
-    pub fn context_menu_first(&mut self, _: &ContextMenuFirst, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn context_menu_first(&mut self, _: &ContextMenuFirst, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
-            context_menu.select_first(self.completion_provider.as_deref(), window, cx);
+            context_menu.select_first(self.completion_provider.as_deref(), cx);
         }
     }
 
-    pub fn context_menu_prev(&mut self, _: &ContextMenuPrevious, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn context_menu_prev(&mut self, _: &ContextMenuPrevious, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
-            context_menu.select_prev(self.completion_provider.as_deref(), window, cx);
+            context_menu.select_prev(self.completion_provider.as_deref(), cx);
         }
     }
 
-    pub fn context_menu_next(&mut self, _: &ContextMenuNext, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn context_menu_next(&mut self, _: &ContextMenuNext, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
-            context_menu.select_next(self.completion_provider.as_deref(), window, cx);
+            context_menu.select_next(self.completion_provider.as_deref(), cx);
         }
     }
 
-    pub fn context_menu_last(&mut self, _: &ContextMenuLast, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn context_menu_last(&mut self, _: &ContextMenuLast, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
-            context_menu.select_last(self.completion_provider.as_deref(), window, cx);
+            context_menu.select_last(self.completion_provider.as_deref(), cx);
         }
     }
 
@@ -6510,27 +6412,6 @@ impl Editor {
         }
     }
 
-    pub fn modify_transaction_selection_history(
-        &mut self,
-        transaction_id: TransactionId,
-        modify: impl FnOnce(&mut TransactionSelections),
-    ) -> bool {
-        self.selection_history
-            .transaction_mut(transaction_id)
-            .map(|transaction| {
-                let undo = transaction.undo.clone();
-                let redo = transaction.redo.clone();
-                modify(transaction);
-                if undo != transaction.undo {
-                    transaction.undo_add_selections_state = None;
-                }
-                if redo != transaction.redo {
-                    transaction.redo_add_selections_state = None;
-                }
-            })
-            .is_some()
-    }
-
     pub fn toggle_focus(
         workspace: &mut Workspace,
         _: &actions::ToggleFocus,
@@ -7015,20 +6896,6 @@ impl Editor {
             .map(|highlight| (highlight.range.clone(), (highlight.color)(cx)))
     }
 
-    /// Merges all anchor ranges for all context types ever set, picking the last highlight added in case of a row conflict.
-    /// Returns a map of display rows that are highlighted and their corresponding highlight color.
-    /// Allows to ignore certain kinds of highlights.
-    pub fn highlighted_display_rows(&self, window: &mut Window, cx: &mut App) -> BTreeMap<DisplayRow, LineHighlight> {
-        let snapshot = self.snapshot(window, cx);
-        let max_row = snapshot.max_point().row();
-        self.highlighted_display_rows_in_range(
-            Anchor::Min..Anchor::Max,
-            DisplayRow(0)..max_row.next_row(),
-            &snapshot.display_snapshot,
-            cx,
-        )
-    }
-
     pub fn highlighted_display_rows_in_range(
         &self,
         anchor_range: Range<Anchor>,
@@ -7148,21 +7015,6 @@ impl Editor {
             cx.notify();
         }
         Some(text_highlights)
-    }
-
-    pub fn highlight_gutter<T: 'static>(
-        &mut self,
-        ranges: impl Into<Vec<Range<Anchor>>>,
-        color_fetcher: fn(&App) -> Hsla,
-        cx: &mut Context<Self>,
-    ) {
-        self.gutter_highlights.insert(TypeId::of::<T>(), (color_fetcher, ranges.into()));
-        cx.notify();
-    }
-
-    pub fn clear_gutter_highlights<T: 'static>(&mut self, cx: &mut Context<Self>) -> Option<GutterHighlight> {
-        cx.notify();
-        self.gutter_highlights.remove(&TypeId::of::<T>())
     }
 
     pub fn insert_gutter_highlight<T: 'static>(
@@ -7309,49 +7161,6 @@ impl Editor {
         cx: &'a App,
     ) -> Option<(HighlightStyle, &'a [Range<Anchor>])> {
         self.display_map.read(cx).text_highlights(key)
-    }
-
-    pub fn set_navigation_overlays(
-        &mut self,
-        key: NavigationOverlayKey,
-        overlays: Vec<NavigationTargetOverlay>,
-        cx: &mut Context<Self>,
-    ) {
-        let buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let mut covered_text_ranges =
-            overlays.iter().filter_map(|overlay| overlay.covered_text_range.clone()).collect::<Vec<_>>();
-        covered_text_ranges.sort_by(|left, right| {
-            left.start.cmp(&right.start, &buffer_snapshot).then_with(|| left.end.cmp(&right.end, &buffer_snapshot))
-        });
-
-        self.display_map.update(cx, |map, cx| {
-            map.clear_highlights(HighlightKey::NavigationOverlay(key));
-            if !covered_text_ranges.is_empty() {
-                map.highlight_text(
-                    HighlightKey::NavigationOverlay(key),
-                    covered_text_ranges,
-                    HighlightStyle { fade_out: Some(1.0), ..Default::default() },
-                    false,
-                    cx,
-                );
-            }
-        });
-
-        if overlays.is_empty() {
-            self.navigation_overlays.remove(&key);
-        } else {
-            self.navigation_overlays.insert(key, Arc::from(overlays));
-        }
-
-        cx.notify();
-    }
-
-    pub fn clear_navigation_overlays(&mut self, key: NavigationOverlayKey, cx: &mut Context<Self>) {
-        let removed = self.navigation_overlays.remove(&key).is_some();
-        let cleared = self.display_map.update(cx, |map, _| map.clear_highlights(HighlightKey::NavigationOverlay(key)));
-        if removed || cleared {
-            cx.notify();
-        }
     }
 
     pub(crate) const fn navigation_overlay_sets(
@@ -8076,7 +7885,7 @@ impl Editor {
             hide_hover(self, cx);
         }
         if !self.context_menu.borrow().as_ref().is_some_and(|context_menu| context_menu.focused(window, cx)) {
-            self.hide_context_menu(window, cx);
+            self.hide_context_menu(cx);
         }
 
         cx.emit(EditorEvent::Blurred);
@@ -8196,10 +8005,6 @@ impl Editor {
         self.addons.insert(std::any::TypeId::of::<T>(), Box::new(instance));
     }
 
-    pub fn unregister_addon<T: Addon>(&mut self) {
-        self.addons.remove(&std::any::TypeId::of::<T>());
-    }
-
     pub fn addon<T: Addon>(&self) -> Option<&T> {
         let type_id = std::any::TypeId::of::<T>();
         self.addons.get(&type_id).and_then(|item| item.to_any().downcast_ref::<T>())
@@ -8220,10 +8025,6 @@ impl Editor {
         let em_advance = window.text_system().em_advance(font_id, font_size).unwrap();
 
         CharacterDimensions { em_width, em_advance, line_height }
-    }
-
-    pub fn wait_for_diff_to_load(&self) -> Option<Shared<Task<()>>> {
-        self.load_diff_task.clone()
     }
 
     fn read_metadata_from_db(

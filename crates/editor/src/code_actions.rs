@@ -150,7 +150,7 @@ impl Editor {
             return None;
         }
 
-        let actions_menu = if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(window, cx)? {
+        let actions_menu = if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(cx)? {
             menu
         } else {
             return None;
