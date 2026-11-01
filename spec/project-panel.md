@@ -23,6 +23,11 @@
 
 ## Moving entries
 
+- A drag over the panel looks like a drag over an editor pane: the target
+  folder and its visible descendants share one rounded box (pane card
+  radius) with the faint accent fill and an accent outline, open on whichever
+  side is scrolled off. A folded-path component being targeted only gets the
+  fill. The empty panel shows the same rounded box for external files.
 - When a drag-and-drop move or an undo/redo rename fails because the
   destination already exists, the error names both paths and says that a file
   or folder already exists there. Detection uses the error kind
