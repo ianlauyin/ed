@@ -48,7 +48,6 @@ sum_tree.workspace = true
 task.workspace = true
 text.workspace = true
 theme.workspace = true
-theme_settings.workspace = true
 ui.workspace = true
 ui_input.workspace = true
 unicode-script.workspace = true

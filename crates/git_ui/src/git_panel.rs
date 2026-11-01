@@ -126,7 +126,7 @@ use settings::update_settings_file;
 use smallvec::SmallVec;
 use strum::IntoEnumIterator;
 use strum::VariantNames;
-use theme_settings::ThemeSettings;
+use theme::built_in::BUFFER_LINE_HEIGHT;
 use time::OffsetDateTime;
 use ui::ButtonLike;
 use ui::Checkbox;
@@ -6690,8 +6690,6 @@ pub fn panel_editor_container(_window: &mut Window, cx: &mut App) -> Div {
 }
 
 pub(crate) fn git_commit_editor_style(font_size: gpui::Pixels, cx: &App) -> EditorStyle {
-    let settings = ThemeSettings::get_global(cx);
-
     EditorStyle {
         background: cx.theme().colors().editor_background,
         local_player: cx.theme().player(),
@@ -6702,7 +6700,7 @@ pub(crate) fn git_commit_editor_style(font_size: gpui::Pixels, cx: &App) -> Edit
             font_features: ui::font::buffer_font().features.clone(),
             font_size: AbsoluteLength::from(font_size),
             font_weight: ui::font::buffer_font().weight,
-            line_height: (font_size * settings.buffer_line_height.value()).into(),
+            line_height: (font_size * BUFFER_LINE_HEIGHT).into(),
             ..Default::default()
         },
         syntax: cx.theme().syntax().clone(),

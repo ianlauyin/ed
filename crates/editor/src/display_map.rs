@@ -234,7 +234,6 @@ pub enum HighlightKey {
     SelectedTextHighlight,
     SpellCheck,
     SyntaxTreeView(usize),
-    VimExchange,
 }
 
 pub trait ToDisplayPoint {

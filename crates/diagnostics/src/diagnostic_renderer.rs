@@ -21,9 +21,8 @@ use language::LanguageRegistry;
 use lsp::DiagnosticSeverity;
 use markdown::Markdown;
 use markdown::MarkdownElement;
-use settings::Settings;
 use text::Point;
-use theme_settings::ThemeSettings;
+use theme::built_in::BUFFER_LINE_HEIGHT;
 use ui::CopyButton;
 use ui::prelude::*;
 
@@ -197,8 +196,7 @@ impl DiagnosticBlock {
             DiagnosticSeverity::HINT => (status_colors.hint_background, status_colors.hint),
             _ => (status_colors.ignored_background, status_colors.ignored),
         };
-        let settings = ThemeSettings::get_global(cx);
-        let editor_line_height = (settings.line_height() * ui::font::buffer_font_size(cx)).round();
+        let editor_line_height = (BUFFER_LINE_HEIGHT * ui::font::buffer_font_size(cx)).round();
         let line_height = editor_line_height;
         let diagnostics_editor = self.diagnostics_editor.clone();
 

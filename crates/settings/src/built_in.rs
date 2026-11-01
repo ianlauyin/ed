@@ -7,12 +7,10 @@ use settings_content::AutoIndentMode;
 use settings_content::AutosaveSetting;
 use settings_content::BottomDockLayout;
 use settings_content::BranchPickerSettingsContent;
-use settings_content::BufferLineHeight;
 use settings_content::CenteredLayoutSettings;
 use settings_content::CenteredPaddingSettings;
 use settings_content::ClosePosition;
 use settings_content::CloseWindowWhenNoItems;
-use settings_content::CodeFade;
 use settings_content::CommandPaletteSettingsContent;
 use settings_content::CompletionDetailAlignment;
 use settings_content::CompletionMenuItemKind;
@@ -136,7 +134,6 @@ use settings_content::TerminalDockPosition;
 use settings_content::TerminalLineHeight;
 use settings_content::TerminalSettingsContent;
 use settings_content::TextRenderingMode;
-use settings_content::ThemeSettingsContent;
 use settings_content::TitleBarSettingsContent;
 use settings_content::WhitespaceMapContent;
 use settings_content::WindowDecorations;
@@ -149,7 +146,6 @@ use settings_content::WorktreeSettingsContent;
 pub fn settings() -> SettingsContent {
     SettingsContent {
         project: project_settings(),
-        theme: theme_settings(),
         workspace: workspace_settings(),
         editor: editor_settings(),
         remote: RemoteSettingsContent { ssh_connections: Some(vec![]) },
@@ -456,13 +452,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         window_decorations: Some(WindowDecorations::Client),
         focus_follows_mouse: Some(FocusFollowsMouse { enabled: Some(false), debounce_ms: Some(250) }),
     }
-}
-
-fn theme_settings() -> Box<ThemeSettingsContent> {
-    Box::new(ThemeSettingsContent {
-        buffer_line_height: Some(BufferLineHeight::Comfortable),
-        unnecessary_code_fade: Some(CodeFade(0.3)),
-    })
 }
 
 fn project_settings() -> ProjectSettingsContent {

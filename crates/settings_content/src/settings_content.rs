@@ -2,11 +2,11 @@ pub mod app_metadata;
 
 mod action;
 mod editor;
+mod font;
 mod language;
 mod project;
 mod serde_helper;
 mod terminal;
-mod theme;
 mod title_bar;
 mod workspace;
 
@@ -14,6 +14,7 @@ pub use action::CommandAliasTarget;
 use anyhow::Context;
 use collections::HashMap;
 pub use editor::*;
+pub use font::*;
 pub use language::*;
 pub use project::*;
 use serde::Deserialize;
@@ -21,7 +22,6 @@ use serde::Serialize;
 pub use serde_helper::serialize_f32_with_two_decimal_places;
 pub use serde_helper::serialize_optional_f32_with_two_decimal_places;
 pub use terminal::*;
-pub use theme::*;
 pub use title_bar::*;
 pub use workspace::*;
 
@@ -75,9 +75,6 @@ pub enum HideMouseMode {
 pub struct SettingsContent {
     #[serde(flatten)]
     pub project: ProjectSettingsContent,
-
-    #[serde(flatten)]
-    pub theme: Box<ThemeSettingsContent>,
 
     #[serde(flatten)]
     pub workspace: WorkspaceSettingsContent,

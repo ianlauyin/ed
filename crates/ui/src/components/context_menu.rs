@@ -37,7 +37,7 @@ use menu::SelectLast;
 use menu::SelectNext;
 use menu::SelectParent;
 use menu::SelectPrevious;
-use theme::BufferLineHeight;
+use theme::built_in::BUFFER_LINE_HEIGHT;
 
 use crate::ButtonCommon;
 use crate::ButtonStyle;
@@ -1938,7 +1938,7 @@ impl Render for ContextMenu {
         // Menus can be deferred from inside elements that override the text
         // style (e.g. the editor with a custom `buffer_line_height`), so always
         // apply the default line height to render the same everywhere.
-        let line_height = relative(BufferLineHeight::Comfortable.value());
+        let line_height = relative(BUFFER_LINE_HEIGHT);
         let window_size = window.viewport_size();
         let rem_size = window.rem_size();
         let is_wide_window = window_size.width / rem_size > rems_from_px(800_f32).0;

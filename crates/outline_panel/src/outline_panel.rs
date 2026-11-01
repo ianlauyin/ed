@@ -112,7 +112,6 @@ use serde::Serialize;
 use settings::Settings;
 use settings::SettingsStore;
 use theme::SyntaxTheme;
-use theme_settings::ThemeSettings;
 use ui::ContextMenu;
 use ui::FluentBuilder;
 use ui::HighlightedLabel;
@@ -1076,27 +1075,12 @@ impl OutlinePanel {
             });
 
             let mut outline_panel_settings = *OutlinePanelSettings::get_global(cx);
-            let mut current_theme = ThemeSettings::get_global(cx).clone();
             let mut document_symbols_by_buffer = HashMap::default();
             let settings_subscription =
                 cx.observe_global_in::<SettingsStore>(window, move |outline_panel, window, cx| {
                     let new_settings = OutlinePanelSettings::get_global(cx);
-                    let new_theme = ThemeSettings::get_global(cx);
                     let auto_fold_dirs_changed = outline_panel_settings.auto_fold_dirs != new_settings.auto_fold_dirs;
-                    let mut outlines_invalidated = false;
-                    if &current_theme != new_theme {
-                        outline_panel_settings = *new_settings;
-                        current_theme = new_theme.clone();
-                        outline_panel.outline_fetch_tasks.clear();
-                        for buffer in outline_panel.buffers.values_mut() {
-                            buffer.invalidate_outlines();
-                        }
-                        outlines_invalidated = true;
-                        if matches!(outline_panel.selected_entry(), Some(PanelEntry::Outline(_))) {
-                            outline_panel.selected_entry.invalidate();
-                        }
-                        outline_panel.update_contents(Some(UPDATE_DEBOUNCE), window, cx);
-                    } else if &outline_panel_settings != new_settings {
+                    if &outline_panel_settings != new_settings {
                         let old_expansion_depth = outline_panel_settings.expand_outlines_with_depth;
                         outline_panel_settings = *new_settings;
 
@@ -1153,28 +1137,26 @@ impl OutlinePanel {
                         outline_panel.update_fs_entries(editor, Some(UPDATE_DEBOUNCE), window, cx);
                     }
 
-                    if !outlines_invalidated {
-                        let new_document_symbols = outline_panel
-                            .buffers
-                            .keys()
-                            .filter_map(|buffer_id| {
-                                let buffer = outline_panel.project.read(cx).buffer_for_id(*buffer_id, cx)?;
-                                let buffer = buffer.read(cx);
-                                let doc_symbols = LanguageSettings::for_buffer(buffer, cx).document_symbols;
-                                Some((*buffer_id, doc_symbols))
-                            })
-                            .collect();
-                        if new_document_symbols != document_symbols_by_buffer {
-                            document_symbols_by_buffer = new_document_symbols;
-                            outline_panel.outline_fetch_tasks.clear();
-                            for buffer in outline_panel.buffers.values_mut() {
-                                buffer.invalidate_outlines();
-                            }
-                            if matches!(outline_panel.selected_entry(), Some(PanelEntry::Outline(_))) {
-                                outline_panel.selected_entry.invalidate();
-                            }
-                            outline_panel.update_contents(Some(UPDATE_DEBOUNCE), window, cx);
+                    let new_document_symbols = outline_panel
+                        .buffers
+                        .keys()
+                        .filter_map(|buffer_id| {
+                            let buffer = outline_panel.project.read(cx).buffer_for_id(*buffer_id, cx)?;
+                            let buffer = buffer.read(cx);
+                            let doc_symbols = LanguageSettings::for_buffer(buffer, cx).document_symbols;
+                            Some((*buffer_id, doc_symbols))
+                        })
+                        .collect();
+                    if new_document_symbols != document_symbols_by_buffer {
+                        document_symbols_by_buffer = new_document_symbols;
+                        outline_panel.outline_fetch_tasks.clear();
+                        for buffer in outline_panel.buffers.values_mut() {
+                            buffer.invalidate_outlines();
                         }
+                        if matches!(outline_panel.selected_entry(), Some(PanelEntry::Outline(_))) {
+                            outline_panel.selected_entry.invalidate();
+                        }
+                        outline_panel.update_contents(Some(UPDATE_DEBOUNCE), window, cx);
                     }
                 });
 

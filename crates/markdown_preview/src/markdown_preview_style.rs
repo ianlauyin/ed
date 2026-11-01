@@ -18,10 +18,9 @@ use gpui::rems;
 use markdown::BlockQuoteKindColors;
 use markdown::HeadingLevelStyles;
 use markdown::MarkdownStyle;
-use settings::Settings as _;
 use theme::SyntaxTheme;
 use theme::ThemeColors;
-use theme_settings::ThemeSettings;
+use theme::built_in::BUFFER_LINE_HEIGHT;
 use ui::Rems;
 use ui::prelude::*;
 
@@ -103,7 +102,7 @@ pub(crate) fn preview_markdown_style(
             font_features: Some(ui::font::buffer_font().features.clone()),
             font_size: Some(buffer_font_size.into()),
             font_weight: Some(buffer_font_weight),
-            line_height: Some(relative(ThemeSettings::get_global(cx).buffer_line_height.value())),
+            line_height: Some(relative(BUFFER_LINE_HEIGHT)),
             ..Default::default()
         },
         ..Default::default()

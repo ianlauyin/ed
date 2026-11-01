@@ -57,7 +57,7 @@ use project::image_store;
 use project::search::SearchQuery;
 use settings::SeedQuerySetting;
 use settings::Settings;
-use theme_settings::ThemeSettings;
+use theme::built_in::BUFFER_LINE_HEIGHT;
 use ui::ContextMenu;
 use ui::LinkPreview;
 use ui::ScrollAxes;
@@ -694,7 +694,7 @@ impl MarkdownPreviewView {
     }
 
     fn line_scroll_amount(&self, cx: &App) -> Pixels {
-        preview_font_size(cx) * ThemeSettings::get_global(cx).buffer_line_height.value()
+        preview_font_size(cx) * BUFFER_LINE_HEIGHT
     }
 
     fn increase_font_size(&mut self, _: &IncreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {

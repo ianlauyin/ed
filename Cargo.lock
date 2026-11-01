@@ -807,7 +807,6 @@ dependencies = [
  "settings",
  "text",
  "theme",
- "theme_settings",
  "ui",
  "util",
  "workspace",
@@ -930,7 +929,6 @@ dependencies = [
  "tabular_data_preview",
  "terminal_view",
  "theme",
- "theme_settings",
  "time",
  "title_bar",
  "ui",
@@ -994,7 +992,6 @@ dependencies = [
  "task",
  "text",
  "theme",
- "theme_settings",
  "ui",
  "ui_input",
  "unicode-script",
@@ -1548,7 +1545,6 @@ dependencies = [
  "smallvec",
  "strum",
  "theme",
- "theme_settings",
  "time",
  "time_format",
  "ui",
@@ -2695,7 +2691,6 @@ dependencies = [
  "project",
  "settings",
  "theme",
- "theme_settings",
  "ui",
  "urlencoding",
  "util",
@@ -3165,7 +3160,6 @@ dependencies = [
  "settings",
  "smallvec",
  "theme",
- "theme_settings",
  "ui",
  "util",
  "workspace",
@@ -4755,7 +4749,6 @@ dependencies = [
  "sysinfo",
  "task",
  "theme",
- "theme_settings",
  "thiserror",
  "url",
  "urlencoding",
@@ -4824,27 +4817,10 @@ dependencies = [
 name = "theme"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "gpui",
  "palette",
- "refineable",
- "serde",
  "strum",
  "syntax_theme",
-]
-
-[[package]]
-name = "theme_settings"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gpui",
- "palette",
- "serde",
- "serde_json",
- "settings",
- "theme",
- "uuid",
 ]
 
 [[package]]

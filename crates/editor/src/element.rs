@@ -116,7 +116,7 @@ use text::ToPoint as _;
 use theme::ActiveTheme;
 use theme::Appearance;
 use theme::PlayerColor;
-use theme_settings::BufferLineHeight;
+use theme::built_in::BUFFER_LINE_HEIGHT;
 use ui::POPOVER_Y_PADDING;
 use ui::Tooltip;
 use ui::prelude::*;
@@ -3102,7 +3102,7 @@ impl EditorElement {
         ) -> Vec<(CursorPopoverType, AnyElement, Size<Pixels>)>,
     ) -> Option<(Vec<(CursorPopoverType, Bounds<Pixels>)>, bool)> {
         let text_style = TextStyleRefinement {
-            line_height: Some(DefiniteLength::Fraction(BufferLineHeight::Comfortable.value())),
+            line_height: Some(DefiniteLength::Fraction(BUFFER_LINE_HEIGHT)),
             ..Default::default()
         };
         window.with_text_style(Some(text_style), |window| {

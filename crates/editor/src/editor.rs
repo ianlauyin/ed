@@ -609,7 +609,8 @@ use theme::PlayerColor;
 use theme::StatusColors;
 use theme::SyntaxTheme;
 use theme::Theme;
-use theme_settings::ThemeSettings;
+use theme::built_in::BUFFER_LINE_HEIGHT;
+use theme::built_in::UNNECESSARY_CODE_FADE;
 use ui::ContextMenu;
 use ui::Disclosure;
 use ui::IconButtonShape;
@@ -869,14 +870,11 @@ impl Default for EditorStyle {
         Self {
             background: Hsla::default(),
             border: Hsla::default(),
-            local_player: PlayerColor::default(),
+            local_player: theme::built_in::player_color(),
             text: TextStyle::default(),
             scrollbar_width: Pixels::default(),
             syntax: NONE_SYNTAX.clone(),
-            // HACK: Status colors don't have a real default.
-            // We should look into removing the status colors from the editor
-            // style and retrieve them directly from the theme.
-            status: StatusColors::dark(),
+            status: theme::built_in::status_colors(),
             inlay_hints_style: HighlightStyle::default(),
             unnecessary_code_fade: Default::default(),
             show_underlines: true,
@@ -8201,8 +8199,6 @@ impl Editor {
     }
 
     fn create_style(&self, cx: &App) -> EditorStyle {
-        let settings = ThemeSettings::get_global(cx);
-
         let mut text_style = match self.mode {
             EditorMode::SingleLine | EditorMode::AutoHeight { .. } => TextStyle {
                 color: cx.theme().colors().editor_foreground,
@@ -8211,7 +8207,7 @@ impl Editor {
                 font_fallbacks: ui::font::ui_font().fallbacks.clone(),
                 font_size: rems(0.875).into(),
                 font_weight: ui::font::ui_font().weight,
-                line_height: relative(settings.buffer_line_height.value()),
+                line_height: relative(BUFFER_LINE_HEIGHT),
                 ..Default::default()
             },
             EditorMode::Full { .. } | EditorMode::Minimap { .. } => TextStyle {
@@ -8221,7 +8217,7 @@ impl Editor {
                 font_fallbacks: ui::font::buffer_font().fallbacks.clone(),
                 font_size: ui::font::buffer_font_size(cx).into(),
                 font_weight: ui::font::buffer_font().weight,
-                line_height: relative(settings.buffer_line_height.value()),
+                line_height: relative(BUFFER_LINE_HEIGHT),
                 ..Default::default()
             },
         };
@@ -8245,7 +8241,7 @@ impl Editor {
             syntax: cx.theme().syntax().clone(),
             status: cx.theme().status().clone(),
             inlay_hints_style: make_inlay_hints_style(cx),
-            unnecessary_code_fade: settings.unnecessary_code_fade,
+            unnecessary_code_fade: UNNECESSARY_CODE_FADE,
             show_underlines: !self.mode.is_minimap(),
         }
     }

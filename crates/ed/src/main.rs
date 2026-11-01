@@ -273,7 +273,7 @@ fn main() {
         });
         AppState::set_global(app_state.clone(), cx);
 
-        theme_settings::init(cx);
+        theme::init(cx);
         command_palette::init(cx);
 
         recent_projects::init(cx);
