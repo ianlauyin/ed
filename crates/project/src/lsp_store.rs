@@ -4381,8 +4381,7 @@ impl LspStore {
                     }
                     worktree::Event::UpdatedGitRepositories(_)
                     | worktree::Event::DeletedEntry(_)
-                    | worktree::Event::Deleted
-                    | worktree::Event::UpdatedRootRepoCommonDir { .. } => {}
+                    | worktree::Event::Deleted => {}
                 })
                 .detach()
             }
@@ -4396,8 +4395,7 @@ impl LspStore {
             WorktreeStoreEvent::WorktreeReleased(..)
             | WorktreeStoreEvent::WorktreeOrderChanged
             | WorktreeStoreEvent::WorktreeUpdatedGitRepositories(..)
-            | WorktreeStoreEvent::WorktreeDeletedEntry(..)
-            | WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(..) => {}
+            | WorktreeStoreEvent::WorktreeDeletedEntry(..) => {}
         }
     }
 

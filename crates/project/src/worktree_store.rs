@@ -186,7 +186,6 @@ pub enum WorktreeStoreEvent {
     WorktreeUpdatedEntries(WorktreeId, UpdatedEntriesSet),
     WorktreeUpdatedGitRepositories(WorktreeId, UpdatedGitRepositoriesSet),
     WorktreeDeletedEntry(WorktreeId, ProjectEntryId),
-    WorktreeUpdatedRootRepoCommonDir(WorktreeId),
 }
 
 impl EventEmitter<WorktreeStoreEvent> for WorktreeStore {}
@@ -870,9 +869,6 @@ impl WorktreeStore {
                 worktree::Event::Deleted => {
                     // The worktree root itself has been deleted (for single-file worktrees)
                     // The worktree will be removed via the observe_release callback
-                }
-                worktree::Event::UpdatedRootRepoCommonDir { .. } => {
-                    cx.emit(WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(worktree_id));
                 }
             }
         })
