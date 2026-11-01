@@ -1,7 +1,8 @@
 //! The window has no title bar row. The window header (room for the macOS
 //! traffic lights, the project name, Go Back / Go Forward and the Workspace /
 //! Git History switch) sits above the sidebar when one is shown, otherwise at
-//! the start of the top-left tab bar.
+//! the start of the top-left tab bar. Above a sidebar narrower than the header,
+//! the header overhangs it and the top-left tab bar starts after the header.
 
 use gpui::AnyElement;
 use gpui::App;
@@ -13,6 +14,7 @@ use gpui::Render;
 use gpui::Subscription;
 use gpui::WeakEntity;
 use gpui::Window;
+use gpui::canvas;
 use gpui::div;
 use project::Project;
 use project::git_store::GitStoreEvent;
@@ -46,6 +48,14 @@ fn traffic_light_room(offset: Pixels, fullscreen: bool) -> Pixels {
     if fullscreen { px(0.) } else { (px(TRAFFIC_LIGHT_PADDING) - offset).max(px(0.)) }
 }
 
+/// Room the tab bar after a `sidebar_width` sidebar keeps before its tabs for
+/// a `header_width` window header above that sidebar: the tabs start where
+/// they would after the narrowest sidebar the header fits on.
+fn sidebar_header_overhang(header_width: Pixels, sidebar_width: Pixels) -> Pixels {
+    // The sidebar ends with the card gap before the panes.
+    (header_width + CARD_GAP - sidebar_width).max(px(0.))
+}
+
 /// The window header, drawn above the sidebar or at the start of the header
 /// pane's tab bar. Redraws only when what it shows changes, since redrawing it
 /// in a tab bar redraws the pane holding it.
@@ -53,6 +63,8 @@ pub(crate) struct WindowHeader {
     workspace: WeakEntity<Workspace>,
     project: Entity<Project>,
     shown: WindowHeaderState,
+    /// Width last drawn above a sidebar.
+    sidebar_width: Pixels,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -101,6 +113,7 @@ impl WindowHeader {
             workspace: workspace.downgrade(),
             project: project.clone(),
             shown: WindowHeaderState::default(),
+            sidebar_width: px(0.),
             _subscriptions: subscriptions,
         }
     }
@@ -128,6 +141,7 @@ impl Render for WindowHeader {
         h_flex()
             .h_full()
             .gap_1()
+            .when(!self.shown.in_tab_bar, |this| this.child(self.measure_sidebar_width(cx)))
             .child(window_drag_area(div().id("traffic-lights").h_full()).w(traffic_light_room(offset, fullscreen)))
             .children(workspace.render_titlebar_region())
             .child(
@@ -141,6 +155,29 @@ impl Render for WindowHeader {
                     }),
             )
             .into_any_element()
+    }
+}
+
+impl WindowHeader {
+    /// Records the header's width above a sidebar, redrawing the workspace when
+    /// it changes so the top-left tab bar keeps room for any overhang.
+    fn measure_sidebar_width(&self, cx: &Context<WindowHeader>) -> impl IntoElement {
+        let header = cx.entity().downgrade();
+        canvas(
+            move |bounds, _, cx| {
+                header
+                    .update(cx, |header, cx| {
+                        if header.sidebar_width != bounds.size.width {
+                            header.sidebar_width = bounds.size.width;
+                            header.workspace.update(cx, |_, cx| cx.notify()).ok();
+                        }
+                    })
+                    .ok();
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .size_full()
     }
 }
 
@@ -216,19 +253,43 @@ impl Workspace {
         }
     }
 
-    /// The window header above a sidebar (left dock or Git History sidebar),
-    /// on a strip that moves the window and is as high as a top-row tab bar
-    /// with its gap, so the sidebar content lines up with the cards.
+    /// The strip above a sidebar (left dock or Git History sidebar) that the
+    /// window header sits on: it moves the window and is as high as a top-row
+    /// tab bar with its gap, so the sidebar content lines up with the cards.
     pub(crate) fn render_sidebar_header(&self, cx: &App) -> impl IntoElement {
-        window_drag_area(div().id("sidebar-header"))
-            .flex()
-            .flex_none()
-            .items_center()
-            .w_full()
+        window_drag_area(div().id("sidebar-header")).flex_none().w_full().h(CARD_GAP + Tab::container_height(cx))
+    }
+
+    /// The window header over the sidebar's header strip. It's drawn over the
+    /// mode's content rather than inside the sidebar, so a narrow sidebar
+    /// doesn't clip it and the top-left tab bar beside it doesn't cover it.
+    pub(crate) fn render_sidebar_header_overlay(&self, cx: &App) -> gpui::Div {
+        div()
+            .absolute()
+            .top_0()
+            .left(CARD_GAP)
             .h(CARD_GAP + Tab::container_height(cx))
             .pt(CARD_GAP)
-            .overflow_hidden()
+            .flex()
+            .items_center()
             .child(self.window_header.clone())
+    }
+
+    /// Width of the sidebar holding the window header in `mode`, up to the
+    /// panes, or `None` when the header is in a tab bar.
+    fn header_sidebar_width(&self, mode: WorkspaceMode, window: &Window, cx: &App) -> Option<Pixels> {
+        if self.window_header_in_tab_bar(cx) {
+            return None;
+        }
+        match mode {
+            WorkspaceMode::Editor => {
+                let dock = self.left_dock.read(cx);
+                let size = dock.stored_active_panel_size(window, cx)?;
+                let min_size = dock.visible_panel()?.min_size(window, cx).unwrap_or(px(0.));
+                Some(size.max(min_size))
+            }
+            WorkspaceMode::GitHistory => Some(self.git_history_sidebar_width),
+        }
     }
 
     /// The title bar item (project name and alerts) inside its focus region.
@@ -286,19 +347,30 @@ impl Workspace {
     /// Puts the [`WindowHeader`] on `mode`'s header pane when no sidebar holds it, and marks the panes
     /// whose tab bars form the window's top row, so their empty space moves
     /// the window. Panes only redraw when this changes for them.
-    pub(crate) fn assign_tab_bar_chrome(&self, mode: WorkspaceMode, cx: &mut Context<Self>) {
+    /// The pane after the sidebar keeps room for a header overhanging it.
+    pub(crate) fn assign_tab_bar_chrome(&self, mode: WorkspaceMode, window: &Window, cx: &mut Context<Self>) {
         let group = match mode {
             WorkspaceMode::Editor => &self.center,
             WorkspaceMode::GitHistory => &self.git_history_center,
         };
         let header_pane = self.window_header_in_tab_bar(cx).then(|| self.tab_bar_header_pane(mode, cx)).flatten();
+        let header_width = self.window_header.read(cx).sidebar_width;
+        let overhang = self
+            .header_sidebar_width(mode, window, cx)
+            .map(|sidebar_width| sidebar_header_overhang(header_width, sidebar_width))
+            .filter(|overhang| *overhang > px(0.))
+            .and_then(|overhang| Some((self.tab_bar_header_pane(mode, cx)?, overhang)));
         let top_row: Vec<Entity<Pane>> = group.top_row_panes().into_iter().cloned().collect();
         let panes: Vec<Entity<Pane>> = group.panes().into_iter().cloned().collect();
         for pane in panes {
             let has_header = header_pane.as_ref() == Some(&pane);
             let header = has_header.then(|| self.window_header.clone().into());
             let is_titlebar = has_header || top_row.contains(&pane);
-            pane.update(cx, |pane, cx| pane.set_tab_bar_chrome(header, is_titlebar, cx));
+            let header_room = match &overhang {
+                Some((overhang_pane, overhang)) if *overhang_pane == pane => *overhang,
+                _ => px(0.),
+            };
+            pane.update(cx, |pane, cx| pane.set_tab_bar_chrome(header, is_titlebar, header_room, cx));
         }
     }
 
@@ -321,7 +393,9 @@ mod tests {
     use ui::utils::TRAFFIC_LIGHT_PADDING;
 
     use super::TAB_BAR_START_OFFSET;
+    use super::sidebar_header_overhang;
     use super::traffic_light_room;
+    use crate::CARD_GAP;
 
     #[test]
     fn test_traffic_light_room() {
@@ -329,5 +403,15 @@ mod tests {
         assert_eq!(traffic_light_room(TAB_BAR_START_OFFSET, false), px(TRAFFIC_LIGHT_PADDING) - TAB_BAR_START_OFFSET);
         assert_eq!(traffic_light_room(px(500.), false), px(0.));
         assert_eq!(traffic_light_room(TAB_BAR_START_OFFSET, true), px(0.));
+    }
+
+    #[test]
+    fn test_sidebar_header_overhang() {
+        // A sidebar wide enough for the header and its gap leaves no overhang.
+        assert_eq!(sidebar_header_overhang(px(300.), px(400.)), px(0.));
+        assert_eq!(sidebar_header_overhang(px(300.), px(300.) + CARD_GAP), px(0.));
+        // Narrower, the tabs stop where that sidebar would put them.
+        assert_eq!(sidebar_header_overhang(px(300.), px(200.)), px(100.) + CARD_GAP);
+        assert_eq!(sidebar_header_overhang(px(300.), px(0.)), px(300.) + CARD_GAP);
     }
 }

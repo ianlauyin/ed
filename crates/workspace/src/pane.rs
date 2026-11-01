@@ -492,6 +492,9 @@ pub struct Pane {
     /// Whether the tab bar is part of the window's top row, so its empty space
     /// moves the window like a titlebar.
     tab_bar_is_titlebar: bool,
+    /// Room kept at the start of the tab bar for the part of the window header
+    /// that overhangs a narrow sidebar, so tabs never slide under it.
+    tab_bar_header_room: Pixels,
     max_tabs: Option<NonZeroUsize>,
     use_max_tabs: bool,
     _subscriptions: Vec<Subscription>,
@@ -658,6 +661,7 @@ impl Pane {
             show_tab_bar_buttons: TabBarSettings::get_global(cx).show_tab_bar_buttons,
             tab_bar_header: None,
             tab_bar_is_titlebar: false,
+            tab_bar_header_room: px(0.),
             _subscriptions: subscriptions,
             double_click_dispatch_action,
             save_modals_spawned: HashSet::default(),
@@ -829,16 +833,40 @@ impl Pane {
         &self.activation_history
     }
 
-    /// Sets the window chrome at the start of the tab bar and whether the tab
-    /// bar is part of the window's top row. Redraws only when either changes.
-    pub fn set_tab_bar_chrome(&mut self, header: Option<AnyView>, is_titlebar: bool, cx: &mut Context<Self>) {
+    /// Sets the window chrome at the start of the tab bar, whether the tab bar
+    /// is part of the window's top row, and the room kept before the tabs for
+    /// a window header overhanging the sidebar. Redraws only when one changes.
+    pub fn set_tab_bar_chrome(
+        &mut self,
+        header: Option<AnyView>,
+        is_titlebar: bool,
+        header_room: Pixels,
+        cx: &mut Context<Self>,
+    ) {
         let header_changed =
             self.tab_bar_header.as_ref().map(AnyView::entity_id) != header.as_ref().map(AnyView::entity_id);
-        if header_changed || self.tab_bar_is_titlebar != is_titlebar {
+        if header_changed || self.tab_bar_is_titlebar != is_titlebar || self.tab_bar_header_room != header_room {
             self.tab_bar_header = header;
             self.tab_bar_is_titlebar = is_titlebar;
+            self.tab_bar_header_room = header_room;
             cx.notify();
         }
+    }
+
+    /// Puts the header room before `tab_bar`. The room moves the window like
+    /// the rest of a top-row tab bar's empty space.
+    fn with_tab_bar_header_room(&self, tab_bar: AnyElement) -> AnyElement {
+        if self.tab_bar_header_room <= px(0.) {
+            return tab_bar;
+        }
+        // Stretched to the tab bar's height.
+        div()
+            .flex()
+            .flex_none()
+            .w_full()
+            .child(ui::utils::window_drag_area(div().id("tab-bar-header-room")).flex_none().w(self.tab_bar_header_room))
+            .child(div().flex_1().min_w_0().child(tab_bar))
+            .into_any_element()
     }
 
     pub fn set_should_display_tab_bar<F>(&mut self, should_display_tab_bar: F)
@@ -3896,15 +3924,16 @@ impl Render for Pane {
             })
             .when(display_tab_bar && !pill_tabs, |pane| {
                 if self.active_item().is_some() {
-                    pane.child((self.render_tab_bar.clone())(self, window, cx))
+                    let tab_bar = (self.render_tab_bar.clone())(self, window, cx);
+                    pane.child(self.with_tab_bar_header_room(tab_bar))
                 } else if self.tab_bar_header.is_some() || self.tab_bar_is_titlebar {
                     // Still window chrome: keep the header and the space that moves the window.
-                    pane.child(
-                        TabBar::new("tab_bar")
-                            .style(self.tab_style)
-                            .start_children(self.tab_bar_header.clone())
-                            .child(self.render_tab_bar_drop_target(0, cx)),
-                    )
+                    let tab_bar = TabBar::new("tab_bar")
+                        .style(self.tab_style)
+                        .start_children(self.tab_bar_header.clone())
+                        .child(self.render_tab_bar_drop_target(0, cx))
+                        .into_any_element();
+                    pane.child(self.with_tab_bar_header_room(tab_bar))
                 } else {
                     // Keep the card's top edge where it sits when tabs are open.
                     pane.child(div().flex_none().h(Tab::container_height(cx)))
