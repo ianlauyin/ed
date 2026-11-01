@@ -28,4 +28,3 @@ ui.workspace = true
 util.workspace = true
 workspace.workspace = true
 ed_actions.workspace = true
-arrayvec = "0.7.6"

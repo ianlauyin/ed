@@ -40,11 +40,8 @@ fn clamp_git_history_sidebar_width(width: Pixels, available: Pixels) -> Pixels {
 impl Workspace {
     pub(super) fn render_git_history(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let pane = self.active_git_history_pane.clone();
-        // A zoomed history pane fills the area alone, without the sidebar, as
-        // zooming hides docks and other panes in Workspace mode.
         let zoomed_pane = self.git_history_center.panes().into_iter().find(|pane| pane.read(cx).is_zoomed()).cloned();
-        let side_card =
-            if zoomed_pane.is_some() { None } else { pane.read(cx).active_item().and_then(|item| item.side_card(cx)) };
+        let side_card = self.git_history_side_card(cx);
         let panes = match zoomed_pane {
             Some(zoomed_pane) => zoomed_pane.into_any_element(),
             None => {
@@ -69,9 +66,14 @@ impl Workspace {
                         .h_full()
                         .w(self.git_history_sidebar_width)
                         .pr(CARD_GAP)
+                        .flex()
+                        .flex_col()
+                        .child(self.render_sidebar_header(cx))
                         .child(
                             div()
-                                .size_full()
+                                .flex_1()
+                                .min_h_0()
+                                .w_full()
                                 .overflow_hidden()
                                 .bg(cx.theme().colors().panel_background)
                                 .child(side_card),
@@ -100,6 +102,16 @@ impl Workspace {
             Some(callbacks) => (callbacks.wrap_div_with_search_actions)(content, pane),
             None => content,
         }
+    }
+
+    /// What the history sidebar shows: the active history item's side card.
+    /// A zoomed history pane fills the area alone, without the sidebar, as
+    /// zooming hides docks and other panes in Workspace mode.
+    pub(crate) fn git_history_side_card(&self, cx: &App) -> Option<gpui::AnyView> {
+        if self.git_history_center.panes().iter().any(|pane| pane.read(cx).is_zoomed()) {
+            return None;
+        }
+        self.active_git_history_pane.read(cx).active_item().and_then(|item| item.side_card(cx))
     }
 
     /// The active history pane, where the graph and commit views open.

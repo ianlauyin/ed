@@ -19,6 +19,7 @@ use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use gpui::Action;
 use gpui::AnyElement;
+use gpui::AnyView;
 use gpui::App;
 use gpui::AsyncWindowContext;
 use gpui::ClickEvent;
@@ -41,6 +42,7 @@ use gpui::Point;
 use gpui::PromptLevel;
 use gpui::Render;
 use gpui::ScrollHandle;
+use gpui::Stateful;
 use gpui::Subscription;
 use gpui::Task;
 use gpui::TaskExt;
@@ -482,6 +484,13 @@ pub struct Pane {
     #[allow(clippy::type_complexity)]
     render_tab_bar: Rc<dyn Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> AnyElement>,
     show_tab_bar_buttons: bool,
+    /// Window chrome the workspace puts at the start of this pane's tab bar
+    /// (traffic light room, project name, back/forward), if this is the pane
+    /// whose tab bar starts the window's top row.
+    tab_bar_header: Option<AnyView>,
+    /// Whether the tab bar is part of the window's top row, so its empty space
+    /// moves the window like a titlebar.
+    tab_bar_is_titlebar: bool,
     max_tabs: Option<NonZeroUsize>,
     use_max_tabs: bool,
     _subscriptions: Vec<Subscription>,
@@ -643,6 +652,8 @@ impl Pane {
             render_tab_bar_buttons: Rc::new(default_render_tab_bar_buttons),
             render_tab_bar: Rc::new(Self::render_tab_bar),
             show_tab_bar_buttons: TabBarSettings::get_global(cx).show_tab_bar_buttons,
+            tab_bar_header: None,
+            tab_bar_is_titlebar: false,
             _subscriptions: subscriptions,
             double_click_dispatch_action,
             save_modals_spawned: HashSet::default(),
@@ -813,6 +824,18 @@ impl Pane {
         &self.activation_history
     }
 
+    /// Sets the window chrome at the start of the tab bar and whether the tab
+    /// bar is part of the window's top row. Redraws only when either changes.
+    pub fn set_tab_bar_chrome(&mut self, header: Option<AnyView>, is_titlebar: bool, cx: &mut Context<Self>) {
+        let header_changed =
+            self.tab_bar_header.as_ref().map(AnyView::entity_id) != header.as_ref().map(AnyView::entity_id);
+        if header_changed || self.tab_bar_is_titlebar != is_titlebar {
+            self.tab_bar_header = header;
+            self.tab_bar_is_titlebar = is_titlebar;
+            cx.notify();
+        }
+    }
+
     pub fn set_should_display_tab_bar<F>(&mut self, should_display_tab_bar: F)
     where
         F: 'static + Fn(&Window, &mut Context<Pane>) -> bool,
@@ -822,6 +845,12 @@ impl Pane {
 
     pub const fn tab_bar_displayed(&self) -> bool {
         self.tab_bar_displayed
+    }
+
+    /// Height of everything above the card: the tab bar, plus the gap above it
+    /// that a tab bar in the window's top row keeps from the window edge.
+    pub fn tab_strip_height(&self, cx: &App) -> Pixels {
+        tab_strip_height(self.tab_bar_displayed, self.tab_bar_is_titlebar, Tab::container_height(cx))
     }
 
     /// Pill tabs sit inside the card instead of on the chrome above it.
@@ -3043,6 +3072,7 @@ impl Pane {
     }
 
     fn configure_tab_bar_start(&mut self, tab_bar: TabBar, window: &mut Window, cx: &mut Context<Pane>) -> TabBar {
+        let tab_bar = tab_bar.start_children(self.tab_bar_header.clone());
         if self.show_tab_bar_buttons {
             let render_tab_buttons = self.render_tab_bar_buttons.clone();
             let (left_children, right_children) = render_tab_buttons(self, window, cx);
@@ -3150,11 +3180,7 @@ impl Pane {
                 this.drag_split_direction = None;
                 this.handle_external_paths_drop(paths, window, cx)
             }))
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if event.click_count() == 2 {
-                    window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
-                }
-            }))
+            .map(|this| self.tab_bar_empty_space_behaviour(this, cx))
     }
 
     fn render_pinned_tab_bar_drop_target(&self, cx: &Context<Pane>) -> impl IntoElement {
@@ -3187,11 +3213,20 @@ impl Pane {
                 this.drag_split_direction = None;
                 this.handle_external_paths_drop(paths, window, cx)
             }))
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if event.click_count() == 2 {
-                    window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
-                }
-            }))
+            .map(|this| self.tab_bar_empty_space_behaviour(this, cx))
+    }
+
+    /// Empty tab bar space in the window's top row moves and zooms the window
+    /// like a titlebar; elsewhere a double click runs the pane's double-click action.
+    fn tab_bar_empty_space_behaviour(&self, element: Stateful<Div>, cx: &Context<Pane>) -> Stateful<Div> {
+        if self.tab_bar_is_titlebar {
+            return ui::utils::window_drag_area(element);
+        }
+        element.on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+            if event.click_count() == 2 {
+                window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
+            }
+        }))
     }
 
     /// Keybinding hints shown in an empty pane, styled like the project search landing page.
@@ -3657,7 +3692,8 @@ impl Render for Pane {
         }
 
         let should_display_tab_bar = self.should_display_tab_bar.clone();
-        let display_tab_bar = should_display_tab_bar(window, cx);
+        // The window chrome lives in the tab bar, so a pane holding it always shows one.
+        let display_tab_bar = should_display_tab_bar(window, cx) || self.tab_bar_header.is_some();
         let pill_tabs = self.tab_style == TabStyle::Pill;
         self.tab_bar_displayed = display_tab_bar && !pill_tabs;
         let Some(project) = self.project.upgrade() else {
@@ -3810,9 +3846,23 @@ impl Render for Pane {
                     cx.propagate();
                 }
             }))
+            // A top-row tab bar keeps the card gap from the window edge; the gap moves the window.
+            .when(display_tab_bar && !pill_tabs && self.tab_bar_is_titlebar, |pane| {
+                pane.child(
+                    ui::utils::window_drag_area(div().id("tab-bar-top-gap")).flex_none().w_full().h(crate::CARD_GAP),
+                )
+            })
             .when(display_tab_bar && !pill_tabs, |pane| {
                 if self.active_item().is_some() {
                     pane.child((self.render_tab_bar.clone())(self, window, cx))
+                } else if self.tab_bar_header.is_some() || self.tab_bar_is_titlebar {
+                    // Still window chrome: keep the header and the space that moves the window.
+                    pane.child(
+                        TabBar::new("tab_bar")
+                            .style(self.tab_style)
+                            .start_children(self.tab_bar_header.clone())
+                            .child(self.render_tab_bar_drop_target(0, cx)),
+                    )
                 } else {
                     // Keep the card's top edge where it sits when tabs are open.
                     pane.child(div().flex_none().h(Tab::container_height(cx)))
@@ -4275,6 +4325,14 @@ impl Render for DraggedTab {
     }
 }
 
+fn tab_strip_height(tab_bar_displayed: bool, is_titlebar: bool, tab_bar_height: Pixels) -> Pixels {
+    match (tab_bar_displayed, is_titlebar) {
+        (false, _) => px(0.),
+        (true, false) => tab_bar_height,
+        (true, true) => tab_bar_height + crate::CARD_GAP,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -4291,6 +4349,14 @@ mod tests {
     use super::TabDropSide;
     use super::drags_out_only_tab;
     use super::tab_drop_side;
+    use super::tab_strip_height;
+
+    #[test]
+    fn test_tab_strip_height() {
+        assert_eq!(tab_strip_height(false, true, px(36.)), px(0.));
+        assert_eq!(tab_strip_height(true, false, px(36.)), px(36.));
+        assert_eq!(tab_strip_height(true, true, px(36.)), px(36.) + crate::CARD_GAP);
+    }
 
     #[test]
     fn card_inset_covers_square_content_corners() {

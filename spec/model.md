@@ -104,7 +104,7 @@ Workspace                 window root, one per window; owns Entity<Project>
  ├─ StatusBar             StatusItemViews
  ├─ ModalLayer            at most one ModalView (pickers, prompts)
  ├─ ToastLayer, notifications
- └─ titlebar_item         TitleBar
+ └─ titlebar_item         TitleBar (project name, in the window header)
 ```
 
 - A window holds exactly one `Workspace`. Opening another project in the same

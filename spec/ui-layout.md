@@ -60,7 +60,39 @@ because it hurt readability; an opaque window is also cheaper to composite.
   backgrounds) is trimmed to the card's curve by that one mask, so content
   never does its own corner rounding. The mask sits below the drag-target
   overlay, whose border runs along the card edge.
-- Modes are strictly isolated for rendering. Only the title bar and status bar
+- There is no title bar row; the window's top row is the sidebar and the tab
+  bars, to give the content the most room. The window header is one group:
+  empty room for the macOS traffic lights, the project name and alerts (such as
+  restricted mode), Go Back / Go Forward, then an icon-only, segmented
+  Workspace / Git History switch (shown only for a project in a git
+  repository). It is outlined like the branch picker's Branches / Stashes
+  switch: a thin border, a divider between segments, and the shown mode's icon
+  in the accent colour rather than a filled segment. It sits on a strip above the
+  sidebar (the left dock, or the Git History sidebar), so sidebar content lines
+  up with the cards and tab bars start straight with tabs. With no sidebar
+  shown, or while something is zoomed, the same group moves to the start of the
+  top-left pane's tab bar, at the same x, so nothing jumps when the sidebar is
+  toggled. A zoomed dock covers the panes, so it gets a header row of its own.
+- Tab bars are 36px high. Top-row tab bars, the sidebar header, an open right
+  dock and a zoomed dock's header keep the 8px card gap from the window's top
+  edge (the gap moves the window). Panel header rows one tab high (the outline
+  panel's search bar) thus line up with the tab row, their bottom line level
+  with the tabs' bottom edge, so the tabs
+  sit as far from the edge as the cards do from the sides. macOS doesn't fix
+  the titlebar height for a transparent, full-size-content window: the row is
+  ours. The traffic lights are placed at (16, 19) (`ui::utils::TRAFFIC_LIGHT_POSITION`):
+  centred in the tab row below the gap, and far enough from the left edge to
+  clear the window's rounded corner. At (9, 9) they looked jammed into it.
+- The header strip, the traffic light room and the empty tab bar space of every
+  pane in the top row (columns of side-by-side splits, the first row of
+  stacked ones) act as a titlebar: dragging moves the window and a double click
+  zooms or minimises it as macOS is set up to. The gap above a top-row tab
+  bar does the same. Lower panes' empty tab bar space
+  keeps its double-click action. An empty top-row pane still draws its tab bar
+  for this, instead of the blank strip.
+- The status bar starts, in every mode, with the worktree and branch pickers
+  and a divider; they show only for a project in a git repository.
+- Modes are strictly isolated for rendering. Only the window header and status bar
   (plus notifications, toasts and modals) are shared; everything between them
   belongs to one mode, rendered by that mode's own cached view, and only the
   shown mode's view is drawn. Changes in a hidden mode redraw nothing (it
@@ -92,9 +124,9 @@ because it hurt readability; an opaque window is also cheaper to composite.
   from one pane to another records where the user was in the pane they left,
   so going back returns there. `workspace::GoBack` / `workspace::GoForward`
   are workspace actions, so they work wherever focus is in the window (the
-  terminal still keeps `ctrl-_` for itself). The Go Back / Go Forward buttons sit at the
-  right end of the title bar, before a divider and the Workspace / Git History
-  tabs, not on tab bars. The `tab_bar.show_nav_history_buttons` and `reveal_if_open`
+  terminal still keeps `ctrl-_` for itself). The Go Back / Go Forward buttons sit
+  only in the window header (see above), not on tab bars.
+  The `tab_bar.show_nav_history_buttons` and `reveal_if_open`
   settings are removed. The terminal panel keeps its own panes and history.
 - Split panes are separate cards with an 8px gap between them (the chrome shows
   through) instead of a divider line. The resize handle covers the gap.
@@ -107,13 +139,15 @@ because it hurt readability; an opaque window is also cheaper to composite.
   on the chrome, overlaying the others, so every zoomed view has the same size.
   The `zoomed_padding` setting is removed. The status bar is hidden while
   something is zoomed, so the zoomed view reaches down to the bottom gap. The
-  title bar stays, since it holds the macOS window controls.
+  window header moves into the zoomed view's top row, since the macOS window
+  controls sit there.
 - A zoomed dock (e.g. an expanded terminal) belongs to Workspace mode: Git
   History mode hides it and shows the status bar, and switching back to
   Workspace focuses it again, so it is still open and zoomed rather than
   closed.
 - An 8px gap separates the cards from the window edges and from open docks.
-  There is no gap under the title bar. When the status bar is shown, it replaces
+  There is no gap at the top: tab bars and the sidebar header start at the
+  window's top edge. When the status bar is shown, it replaces
   the bottom gap and pads its content evenly above and below, so the icons sit
   centred between the card and the window edge.
 - Status bar items have no "Hide Button" right-click entry; they are hidden only
@@ -138,8 +172,7 @@ because it hurt readability; an opaque window is also cheaper to composite.
   title.
 - The terminal panel's panes use pill tabs instead: the whole pane, tab bar
   included, is one card, and tabs are rounded buttons inside its top edge.
-  Pills have no fill, the same as the title bar's Workspace / Git History
-  switch: the active pill gets full-contrast text, inactive ones are muted, and
+  Pills have no fill: the active pill gets full-contrast text, inactive ones are muted, and
   any pill shows `ghost_element_hover` on hover. A plain terminal icon is
   accented only on the active pill of the focused pane, and the active label
   goes muted when the pane loses focus, so the terminal draws attention only

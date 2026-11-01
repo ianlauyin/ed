@@ -218,13 +218,36 @@ impl StatusBar {
     ) where
         T: 'static + StatusItemView,
     {
+        let item = self.new_item(item, modes, window, cx);
+        self.left_items.push(item);
+        cx.notify();
+    }
+
+    /// Adds an item before every other left item.
+    pub fn prepend_left_item_in<T>(
+        &mut self,
+        item: Entity<T>,
+        modes: StatusItemModes,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) where
+        T: 'static + StatusItemView,
+    {
+        let item = self.new_item(item, modes, window, cx);
+        self.left_items.insert(0, item);
+        cx.notify();
+    }
+
+    /// Wraps `item`, giving it the active pane item if it is shown now.
+    fn new_item<T>(&self, item: Entity<T>, modes: StatusItemModes, window: &mut Window, cx: &mut App) -> StatusItem
+    where
+        T: 'static + StatusItemView,
+    {
         if modes.includes(self.mode) {
             let active_pane_item = self.active_pane.read(cx).active_item();
             item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
         }
-
-        self.left_items.push(StatusItem { view: Box::new(item), modes });
-        cx.notify();
+        StatusItem { view: Box::new(item), modes }
     }
 
     pub fn item_of_type<T: StatusItemView>(&self) -> Option<Entity<T>> {
@@ -248,12 +271,8 @@ impl StatusBar {
     ) where
         T: 'static + StatusItemView,
     {
-        if modes.includes(self.mode) {
-            let active_pane_item = self.active_pane.read(cx).active_item();
-            item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
-        }
-
-        self.right_items.push(StatusItem { view: Box::new(item), modes });
+        let item = self.new_item(item, modes, window, cx);
+        self.right_items.push(item);
         cx.notify();
     }
 

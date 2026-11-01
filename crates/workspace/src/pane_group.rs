@@ -233,6 +233,13 @@ impl PaneGroup {
         self.root.first_pane()
     }
 
+    /// Panes whose tab bars sit along the top edge of the group.
+    pub fn top_row_panes(&self) -> Vec<&Entity<Pane>> {
+        let mut panes = Vec::new();
+        self.root.collect_top_row_panes(&mut panes);
+        panes
+    }
+
     pub fn last_pane(&self) -> Entity<Pane> {
         self.root.last_pane()
     }
@@ -264,6 +271,12 @@ fn neighbor_probe(bounds: Bounds<Pixels>, center: Point<Pixels>, direction: Spli
         SplitDirection::Up => Point::new(center.x, bounds.top() - distance_to_next),
         SplitDirection::Down => Point::new(center.x, bounds.bottom() + distance_to_next),
     }
+}
+
+/// Whether member `index` of a split along `axis` touches the split's top edge:
+/// every column of a side-by-side split does, only the first row of a stack.
+fn member_reaches_top(axis: Axis, index: usize) -> bool {
+    axis == Axis::Horizontal || index == 0
 }
 
 #[derive(Debug, Clone)]
@@ -387,6 +400,19 @@ impl Member {
         match self {
             Member::Pane(pane) => pane == needle,
             Member::Axis(axis) => axis.members.iter().any(|member| member.contains_pane(needle)),
+        }
+    }
+
+    fn collect_top_row_panes<'a>(&'a self, panes: &mut Vec<&'a Entity<Pane>>) {
+        match self {
+            Member::Axis(axis) => {
+                for (index, member) in axis.members.iter().enumerate() {
+                    if member_reaches_top(axis.axis, index) {
+                        member.collect_top_row_panes(panes);
+                    }
+                }
+            }
+            Member::Pane(pane) => panes.push(pane),
         }
     }
 
@@ -821,7 +847,6 @@ mod element {
     use parking_lot::Mutex;
     use settings::Settings;
     use smallvec::SmallVec;
-    use ui::Tab;
     use ui::prelude::*;
     use util::ResultExt;
 
@@ -1089,11 +1114,9 @@ mod element {
                 // Read after prepaint, so the pane has rendered this frame.
                 let card_bounds = self.leaf_panes.get(ix).and_then(Option::as_ref).map(|pane| {
                     let mut card_bounds = child_bounds;
-                    if pane.read(cx).tab_bar_displayed() {
-                        let tab_bar_height = Tab::container_height(cx);
-                        card_bounds.origin.y += tab_bar_height;
-                        card_bounds.size.height = (card_bounds.size.height - tab_bar_height).max(px(0.));
-                    }
+                    let tab_strip_height = pane.read(cx).tab_strip_height(cx);
+                    card_bounds.origin.y += tab_strip_height;
+                    card_bounds.size.height = (card_bounds.size.height - tab_strip_height).max(px(0.));
                     card_bounds
                 });
 
@@ -1272,5 +1295,20 @@ mod neighbor_probe_tests {
         }
         assert_eq!(neighbor_probe(bounds, center, SplitDirection::Right).y, center.y);
         assert_eq!(neighbor_probe(bounds, center, SplitDirection::Down).x, center.x);
+    }
+}
+
+#[cfg(test)]
+mod top_row_tests {
+    use gpui::Axis;
+
+    use super::member_reaches_top;
+
+    #[test]
+    fn test_member_reaches_top() {
+        assert!(member_reaches_top(Axis::Horizontal, 0));
+        assert!(member_reaches_top(Axis::Horizontal, 2));
+        assert!(member_reaches_top(Axis::Vertical, 0));
+        assert!(!member_reaches_top(Axis::Vertical, 1));
     }
 }

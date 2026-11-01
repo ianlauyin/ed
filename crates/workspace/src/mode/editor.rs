@@ -224,8 +224,9 @@ impl Workspace {
                 };
                 // Whatever is zoomed (editor or any dock) covers exactly the card
                 // area, so every zoomed view gets the same size.
+                // A zoomed dock covers the pane holding the window header, so it gets its own.
                 Some(
-                    div()
+                    v_flex()
                         .occlude()
                         .absolute()
                         .top_0()
@@ -233,7 +234,8 @@ impl Workspace {
                         .right(CARD_GAP)
                         .bottom(if self.status_bar_visible(cx) { px(0.) } else { CARD_GAP })
                         .bg(background)
-                        .child(zoomed_element)
+                        .when(self.zoomed_position.is_some(), |this| this.child(self.render_zoomed_dock_header(cx)))
+                        .child(div().flex_1().min_h_0().child(zoomed_element))
                         .shadow_lg(),
                 )
             }))
@@ -261,7 +263,21 @@ impl Workspace {
             DockPosition::Right => "right-dock",
             DockPosition::Bottom => "bottom-dock",
         };
-        let mut container = div().id(dock_element_id).flex().overflow_hidden().flex_none().child(dock.clone());
+        // The left dock is the sidebar: the window header sits above it.
+        let has_header = position == DockPosition::Left && self.zoomed.is_none() && !self.window_header_in_tab_bar(cx);
+        let mut container = div()
+            .id(dock_element_id)
+            .flex()
+            .overflow_hidden()
+            .flex_none()
+            .when(has_header, |this| this.flex_col().child(self.render_sidebar_header(cx)))
+            // The right dock keeps the card gap from the window's top edge, like top-row tab bars,
+            // so a panel's header row lines up with the tabs.
+            .when(position == DockPosition::Right && dock.read(cx).visible_panel().is_some(), |this| {
+                this.flex_col()
+                    .child(ui::utils::window_drag_area(div().id("right-dock-top-gap")).flex_none().w_full().h(CARD_GAP))
+            })
+            .child(div().flex().flex_1().min_h_0().size_full().child(dock.clone()));
 
         // Apply sizing only when the dock is open. When closed the dock is still
         // included in the element tree so its focus handle remains mounted — without

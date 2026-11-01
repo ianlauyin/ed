@@ -1,5 +1,5 @@
-//! What fills the window between the title bar and the status bar: one view
-//! per [`WorkspaceMode`], with each mode's rendering in its own module.
+//! What fills the window above the status bar: one view per
+//! [`WorkspaceMode`], with each mode's rendering in its own module.
 
 mod editor;
 mod git_history;
@@ -22,8 +22,7 @@ use crate::Workspace;
 use crate::WorkspaceMode;
 use crate::dock::Dock;
 
-/// Renders one mode's content, everything between the title bar and the
-/// status bar. The workspace draws only the shown mode's view, cached, so a
+/// Renders one mode's content, everything above the status bar. The workspace draws only the shown mode's view, cached, so a
 /// mode is laid out only while shown and redraws of the shared chrome reuse it.
 pub(crate) struct ModeView {
     workspace: WeakEntity<Workspace>,
@@ -69,9 +68,10 @@ impl Render for ModeView {
 }
 
 impl Workspace {
-    /// What fills the window below the title bar in `mode`, rendered by that
+    /// What fills the window above the status bar in `mode`, rendered by that
     /// mode's [`ModeView`].
     fn render_mode(&self, mode: WorkspaceMode, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        self.assign_tab_bar_chrome(mode, cx);
         match mode {
             WorkspaceMode::Editor => self.render_editor_mode(window, cx),
             WorkspaceMode::GitHistory => self.mode_container(cx).child(self.render_git_history(window, cx)),

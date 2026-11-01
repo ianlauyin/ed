@@ -61,10 +61,11 @@ mode (docks, editor panes) or in Git History mode, which shows only
 one pane holding the git graph and commit tabs. Commit buffers are read-only
 blobs with no language server, so they are not mixed into editor panes.
 
-- Round "Workspace" / "Git History" tabs at the right end of the title bar,
-  after a divider following the Go Back / Go Forward buttons, switch modes. They are shown whenever the branch is. "Git
+- An icon-only, segmented "Workspace" / "Git History" switch at the end of the
+  window header, after Go Back / Go Forward, switches modes (`ui-layout.md`).
+  It is shown whenever the project is in a git repository. "Git
   History" (`git_graph::Show`) follows the active repository (the folder picked
-  in the title bar): it returns to the active history tab if that tab belongs
+  in the window header): it returns to the active history tab if that tab belongs
   to the active repository, otherwise it opens (or reuses) that repository's
   graph. A tab belongs to its graph's repository, or to the repository of the
   commit in its sidebar. `workspace::ShowEditor` and `git_graph::Open` switch
@@ -90,7 +91,7 @@ blobs with no language server, so they are not mixed into editor panes.
   and the focused pane is always the active one. Preview actions from the keyboard target the
   history tab when Git History is shown.
   Its tab bars have, on the focused pane, Zoom
-  (back/forward is the title bar's, shared with Workspace mode); there is no New… menu, since files and terminals belong
+  (back/forward is the window header's, shared with Workspace mode); there is no New… menu, since files and terminals belong
   to Workspace mode. Zoom shows only that pane, without the commit sidebar (as
   zooming hides docks and other panes in Workspace mode). History tabs and
   splits are not restored after a restart, but survive switching modes.

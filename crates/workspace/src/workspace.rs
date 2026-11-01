@@ -23,6 +23,7 @@ pub mod tasks;
 mod theme_preview;
 mod toast_layer;
 mod toolbar;
+mod window_header;
 pub mod workspace_error;
 mod workspace_settings;
 
@@ -1165,6 +1166,7 @@ pub struct Workspace {
     git_history_sidebar_width: Pixels,
     editor_view: Entity<ModeView>,
     git_history_view: Entity<ModeView>,
+    window_header: Entity<window_header::WindowHeader>,
 
     status_bar: Entity<StatusBar>,
     pub(crate) modal_layer: Entity<ModalLayer>,
@@ -1416,6 +1418,7 @@ impl Workspace {
             )
         });
         let git_history_view = cx.new(|cx| ModeView::new(&workspace, WorkspaceMode::GitHistory, &[], cx));
+        let window_header = cx.new(|cx| window_header::WindowHeader::new(&workspace, &left_dock, &project, cx));
 
         let session_id = app_state.session.read(cx).id().to_owned();
 
@@ -1478,6 +1481,7 @@ impl Workspace {
             git_history_sidebar_width: GIT_HISTORY_SIDEBAR_WIDTH,
             editor_view,
             git_history_view,
+            window_header,
 
             status_bar,
             modal_layer,
@@ -6173,36 +6177,6 @@ impl Render for Workspace {
             .items_start()
             .text_color(colors.text)
             .overflow_hidden()
-            // The title bar is a toolbar so region navigation (FocusNextPart)
-            // can reach its controls. The contained controls form a tab group:
-            // region navigation lands on the first control, Tab steps through
-            // them, and arrow keys move between them once focus is inside.
-            .when_some(self.titlebar_item.clone(), |this, item| {
-                this.child(
-                    div()
-                        .id("titlebar-region")
-                        .track_focus(&self.titlebar_focus_handle)
-                        .tab_group()
-                        .on_key_down(cx.listener(|workspace, event: &gpui::KeyDownEvent, window, cx| {
-                            if event.keystroke.modifiers.modified() {
-                                return;
-                            }
-                            match event.keystroke.key.as_str() {
-                                "right" => {
-                                    workspace.move_titlebar_item_focus(true, window, cx);
-                                    cx.stop_propagation();
-                                }
-                                "left" => {
-                                    workspace.move_titlebar_item_focus(false, window, cx);
-                                    cx.stop_propagation();
-                                }
-                                _ => {}
-                            }
-                        }))
-                        .w_full()
-                        .child(item),
-                )
-            })
             .on_modifiers_changed(move |_, _, cx| {
                 for &id in &notification_entities {
                     cx.notify(id);
