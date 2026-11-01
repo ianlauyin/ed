@@ -260,8 +260,6 @@ fn main() {
 
         ed::init(cx);
 
-        ed::move_to_applications::init(cx);
-
         let session = cx.foreground_executor().block_on(session);
 
         let app_session = cx.new(|cx| AppSession::new(session, cx));

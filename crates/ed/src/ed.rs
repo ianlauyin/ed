@@ -3,7 +3,6 @@ pub(crate) mod control_server;
 
 pub(crate) mod mac_only_instance;
 
-pub(crate) mod move_to_applications;
 mod open_listener;
 
 use std::borrow::Cow;
