@@ -1924,10 +1924,10 @@ impl Workspace {
         &self.status_bar
     }
 
-    /// The status bar is hidden while something is zoomed, so the zoomed view
-    /// extends down to the window edge. Zoomed views only show in Editor mode.
+    /// The status bar is hidden while the shown mode has something zoomed, so
+    /// the zoomed view extends down to the window edge.
     pub fn status_bar_visible(&self, cx: &App) -> bool {
-        StatusBarSettings::get_global(cx).show && (self.zoomed.is_none() || self.mode != WorkspaceMode::Editor)
+        StatusBarSettings::get_global(cx).show && !self.has_zoomed(self.mode, cx)
     }
 
     pub const fn mode(&self) -> WorkspaceMode {
@@ -2372,7 +2372,7 @@ impl Workspace {
     fn reveal_pane(&mut self, pane: &Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
         self.last_content_pane = pane.downgrade();
         if self.git_history_center.root.contains_pane(pane) {
-            if !pane.read(cx).is_zoomed() && self.git_history_center.panes().iter().any(|p| p.read(cx).is_zoomed()) {
+            if !pane.read(cx).is_zoomed() && self.has_zoomed(WorkspaceMode::GitHistory, cx) {
                 self.zoom_git_history_pane(None, cx);
             }
             self.set_active_git_history_pane(pane, window, cx);

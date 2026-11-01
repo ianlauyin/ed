@@ -92,8 +92,10 @@ blobs with no language server, so they are not mixed into editor panes.
   history tab when Git History is shown.
   Its tab bars have, on the focused pane, Zoom
   (back/forward is the window header's, shared with Workspace mode); there is no New… menu, since files and terminals belong
-  to Workspace mode. Zoom shows only that pane, without the commit sidebar (as
-  zooming hides docks and other panes in Workspace mode). History tabs and
+  to Workspace mode. Zoom shows only that pane, without the commit sidebar or
+  the status bar (as zooming hides docks, other panes and the status bar in
+  Workspace mode). Every history tab is read-only, so the tab context menu
+  leaves out "Close Clean", "Close Multibuffers" and "Make Tab Read-Only". History tabs and
   splits are not restored after a restart, but survive switching modes.
 - The graph and commit views open in the active history pane (the last
   focused one); reopening a graph or commit that is already open activates or
@@ -103,6 +105,10 @@ blobs with no language server, so they are not mixed into editor panes.
   from `git_graph::Open` / File History, commits from the graph, blame, commit
   tooltips, the stash picker and the git panel. Opening one switches to Git
   History mode. A new repository-wide graph is always the first tab of its pane.
+  The repository-wide graph tab is permanent (`Item::is_permanent`): it has no
+  close button, no Pin/Unpin entries, and every close path (Close, Close All,
+  middle click, max tabs) skips it, so Git History mode is left through the
+  window header switch. File history graphs close as usual.
 - "Open Revision" (the buffer header button, "Open File" elsewhere) on a
   commit diff excerpt opens that revision as a read-only tab in the active
   history pane, since it can't use workspace features. Buffers that are

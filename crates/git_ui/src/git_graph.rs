@@ -926,7 +926,7 @@ pub fn open_or_reuse_graph(
         let git_graph =
             cx.new(|cx| GitGraph::new(repo_id, git_store, workspace_handle, languages, Some(log_source), window, cx));
         // The repository-wide graph is always the first tab.
-        let destination = (git_graph.read(cx).log_source == LogSource::All).then_some(0);
+        let destination = is_repository_graph(&git_graph.read(cx).log_source).then_some(0);
         let pane = workspace.git_history_pane().clone();
         pane.update(cx, |pane, cx| pane.add_item(Box::new(git_graph.clone()), true, true, destination, window, cx));
         git_graph
@@ -940,6 +940,12 @@ pub fn open_or_reuse_graph(
             });
         });
     }
+}
+
+/// Whether a graph of `log_source` is the repository-wide one, a permanent
+/// first tab in the history pane.
+fn is_repository_graph(log_source: &LogSource) -> bool {
+    matches!(log_source, LogSource::All)
 }
 
 /// The path a file history reveals in each commit's changed files.
@@ -3189,6 +3195,10 @@ impl Item for GitGraph {
         Some(Icon::new(IconName::GitGraph))
     }
 
+    fn is_permanent(&self, _: &App) -> bool {
+        is_repository_graph(&self.log_source)
+    }
+
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent> {
         let repo_name = self.get_repository(cx).and_then(|repo| {
             repo.read(cx).work_directory_abs_path.file_name().map(|name| name.to_string_lossy().to_string())
@@ -3264,6 +3274,13 @@ mod tests {
         assert_eq!(history_reveal_path(&LogSource::Path(path.clone())), Some(path));
         assert_eq!(history_reveal_path(&LogSource::All), None);
         assert_eq!(history_reveal_path(&LogSource::Branch("main".into())), None);
+    }
+
+    #[test]
+    fn test_is_repository_graph() {
+        assert!(is_repository_graph(&LogSource::All));
+        assert!(!is_repository_graph(&LogSource::Branch("main".into())));
+        assert!(!is_repository_graph(&LogSource::Path(RepoPath::new("README.md").unwrap())));
     }
 
     #[test]

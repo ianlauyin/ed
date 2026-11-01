@@ -107,6 +107,11 @@ Workspace                 window root, one per window; owns Entity<Project>
  └─ titlebar_item         TitleBar (project name, in the window header)
 ```
 
+- Zoom is stored per mode as that mode needs it. Workspace mode can zoom a dock
+  panel as well as a pane, so `Workspace::zoomed` (plus `zoomed_position`)
+  records it. Git History mode zooms only panes, so the history panes' own
+  zoom flags are the only record. Code shared by both modes reads zoom through
+  `Workspace::zoomed_pane(mode)` / `has_zoomed(mode)`, never the storage.
 - A window holds exactly one `Workspace`. Opening another project in the same
   window (recent projects, Close Project, switching or creating a git worktree)
   first runs the current workspace's close prompts, then replaces the window's

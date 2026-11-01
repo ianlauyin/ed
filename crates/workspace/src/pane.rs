@@ -501,6 +501,9 @@ pub struct Pane {
     double_click_dispatch_action: Box<dyn Action>,
     save_modals_spawned: HashSet<EntityId>,
     close_pane_if_empty: bool,
+    /// Every tab is read-only, so the tab menu leaves out entries about
+    /// saving or editing.
+    read_only_tabs: bool,
     pinned_tab_count: usize,
     diagnostics: HashMap<ProjectPath, DiagnosticSeverity>,
     zoom_out_on_close: bool,
@@ -658,6 +661,7 @@ impl Pane {
             double_click_dispatch_action,
             save_modals_spawned: HashSet::default(),
             close_pane_if_empty: true,
+            read_only_tabs: false,
             pinned_tab_count: 0,
             diagnostics: HashMap::default(),
             zoom_out_on_close: true,
@@ -980,6 +984,10 @@ impl Pane {
             let old_item_id = mem::replace(&mut self.preview_item_id, item_id);
             self.nav_history.set_preview_item(old_item_id, item_id);
         }
+    }
+
+    pub const fn set_read_only_tabs(&mut self, read_only_tabs: bool) {
+        self.read_only_tabs = read_only_tabs;
     }
 
     /// Should only be used when deserializing a pane.
@@ -1707,7 +1715,7 @@ impl Pane {
                 continue;
             }
 
-            if self.is_tab_pinned(index) {
+            if self.is_tab_pinned(index) || self.items[index].is_permanent(cx) {
                 continue;
             }
 
@@ -1777,7 +1785,7 @@ impl Pane {
         // Find the items to close.
         let mut items_to_close = Vec::new();
         for item in &self.items {
-            if should_close(item.item_id()) {
+            if should_close(item.item_id()) && !item.is_permanent(cx) {
                 items_to_close.push(item.boxed_clone());
             }
         }
@@ -2531,6 +2539,7 @@ impl Pane {
         let is_first_item = ix == 0;
         let is_last_item = ix == self.items.len() - 1;
         let is_pinned = self.is_tab_pinned(ix);
+        let is_permanent = item.is_permanent(cx);
         let position_relative_to_active_item = ix.cmp(&self.active_item_index);
 
         let read_only_toggle = |toggleable: bool| {
@@ -2619,7 +2628,7 @@ impl Pane {
                 this.handle_external_paths_drop(paths, window, cx)
             }))
             .start_slot::<Indicator>(indicator)
-            .map(|this| {
+            .when(!is_permanent, |this| {
                 let end_slot = if is_pinned {
                     IconButton::new("unpin tab", IconName::Pin)
                         .shape(IconButtonShape::Square)
@@ -2707,6 +2716,7 @@ impl Pane {
         let has_items_to_right = ix < total_items - 1;
         let has_clean_items = self.items.iter().any(|item| !item.is_dirty(cx));
         let is_pinned = self.is_tab_pinned(ix);
+        let read_only_tabs = self.read_only_tabs;
 
         let pane = cx.entity().downgrade();
         let menu_context = item.item_focus_handle(cx);
@@ -2728,13 +2738,15 @@ impl Pane {
                 let close_all_items_action = CloseAllItems { save_intent: None, close_pinned: false };
                 if let Some(pane) = pane.upgrade() {
                     menu = menu
-                        .entry(
-                            "Close",
-                            Some(Box::new(close_active_item_action)),
-                            window.handler_for(&pane, move |pane, window, cx| {
-                                pane.close_item_by_id(item_id, SaveIntent::Close, window, cx).detach_and_log_err(cx);
-                            }),
-                        )
+                        .item(ContextMenuItem::Entry(
+                            ContextMenuEntry::new("Close")
+                                .action(Box::new(close_active_item_action))
+                                .disabled(is_permanent)
+                                .handler(window.handler_for(&pane, move |pane, window, cx| {
+                                    pane.close_item_by_id(item_id, SaveIntent::Close, window, cx)
+                                        .detach_and_log_err(cx);
+                                })),
+                        ))
                         .item(ContextMenuItem::Entry(
                             ContextMenuEntry::new("Close Others")
                                 .action(Box::new(close_inactive_items_action.clone()))
@@ -2745,7 +2757,7 @@ impl Pane {
                                 })),
                         ))
                         // We make this optional, instead of using disabled as to not overwhelm the context menu unnecessarily
-                        .extend(has_multibuffer_items.then(|| {
+                        .extend((has_multibuffer_items && !read_only_tabs).then(|| {
                             ContextMenuItem::Entry(
                                 ContextMenuEntry::new("Close Multibuffers")
                                     .action(Box::new(close_multibuffers_action.clone()))
@@ -2785,14 +2797,17 @@ impl Pane {
                                 })),
                         ))
                         .separator()
-                        .item(ContextMenuItem::Entry(
-                            ContextMenuEntry::new("Close Clean")
-                                .action(Box::new(close_clean_items_action.clone()))
-                                .disabled(!has_clean_items)
-                                .handler(window.handler_for(&pane, move |pane, window, cx| {
-                                    pane.close_clean_items(&close_clean_items_action, window, cx).detach_and_log_err(cx)
-                                })),
-                        ))
+                        .extend((!read_only_tabs).then(|| {
+                            ContextMenuItem::Entry(
+                                ContextMenuEntry::new("Close Clean")
+                                    .action(Box::new(close_clean_items_action.clone()))
+                                    .disabled(!has_clean_items)
+                                    .handler(window.handler_for(&pane, move |pane, window, cx| {
+                                        pane.close_clean_items(&close_clean_items_action, window, cx)
+                                            .detach_and_log_err(cx)
+                                    })),
+                            )
+                        }))
                         .entry(
                             "Close All",
                             Some(Box::new(close_all_items_action.clone())),
@@ -2802,6 +2817,9 @@ impl Pane {
                         );
 
                     let pin_tab_entries = |menu: ContextMenu| {
+                        if is_permanent {
+                            return menu;
+                        }
                         menu.separator().map(|this| {
                             if is_pinned {
                                 this.entry(
@@ -2823,7 +2841,7 @@ impl Pane {
                         })
                     };
 
-                    if capability != Capability::ReadOnly {
+                    if capability != Capability::ReadOnly && !read_only_tabs {
                         let read_only_label =
                             if capability.editable() { "Make Tab Read-Only" } else { "Make Tab Editable" };
                         menu = menu.separator().entry(

@@ -209,7 +209,9 @@ impl Workspace {
     /// shown to hold it.
     pub(crate) fn window_header_in_tab_bar(&self, cx: &App) -> bool {
         match self.mode {
-            WorkspaceMode::Editor => self.zoomed.is_some() || self.left_dock.read(cx).visible_panel().is_none(),
+            WorkspaceMode::Editor => {
+                self.has_zoomed(WorkspaceMode::Editor, cx) || self.left_dock.read(cx).visible_panel().is_none()
+            }
             WorkspaceMode::GitHistory => self.git_history_side_card(cx).is_none(),
         }
     }
@@ -271,18 +273,13 @@ impl Workspace {
                 if self.zoomed_position.is_some() {
                     return None;
                 }
-                let zoomed_pane = self.zoomed.as_ref().and_then(|view| view.upgrade()?.downcast::<Pane>().ok());
+                let zoomed_pane = self.zoomed_pane(mode, cx);
                 let maximized_pane = self.maximized_pane.as_ref().and_then(WeakEntity::upgrade);
                 Some(zoomed_pane.or(maximized_pane).unwrap_or_else(|| self.center.first_pane()))
             }
-            WorkspaceMode::GitHistory => Some(
-                self.git_history_center
-                    .panes()
-                    .into_iter()
-                    .find(|pane| pane.read(cx).is_zoomed())
-                    .cloned()
-                    .unwrap_or_else(|| self.git_history_center.first_pane()),
-            ),
+            WorkspaceMode::GitHistory => {
+                Some(self.zoomed_pane(mode, cx).unwrap_or_else(|| self.git_history_center.first_pane()))
+            }
         }
     }
 

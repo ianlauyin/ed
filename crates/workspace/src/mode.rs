@@ -18,6 +18,7 @@ use gpui::div;
 use ui::prelude::*;
 
 use crate::CARD_GAP;
+use crate::Pane;
 use crate::Workspace;
 use crate::WorkspaceMode;
 use crate::dock::Dock;
@@ -88,6 +89,25 @@ impl Workspace {
             .px(CARD_GAP)
             // The status bar pads itself to center between the card and window edge.
             .when(!self.status_bar_visible(cx), |this| this.pb(CARD_GAP))
+    }
+
+    /// The pane zoomed in `mode`. Editor mode can zoom a dock panel instead,
+    /// which [`Workspace::has_zoomed`] also counts.
+    pub(crate) fn zoomed_pane(&self, mode: WorkspaceMode, cx: &App) -> Option<Entity<Pane>> {
+        match mode {
+            WorkspaceMode::Editor => self.zoomed.as_ref().and_then(|view| view.upgrade()?.downcast::<Pane>().ok()),
+            WorkspaceMode::GitHistory => {
+                self.git_history_center.panes().into_iter().find(|pane| pane.read(cx).is_zoomed()).cloned()
+            }
+        }
+    }
+
+    /// Whether `mode` has a pane or dock panel zoomed.
+    pub(crate) fn has_zoomed(&self, mode: WorkspaceMode, cx: &App) -> bool {
+        match mode {
+            WorkspaceMode::Editor => self.zoomed.is_some(),
+            WorkspaceMode::GitHistory => self.zoomed_pane(mode, cx).is_some(),
+        }
     }
 
     pub(crate) const fn mode_view(&self, mode: WorkspaceMode) -> &Entity<ModeView> {

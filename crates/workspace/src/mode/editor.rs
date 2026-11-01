@@ -18,6 +18,7 @@ use crate::CARD_GAP;
 use crate::DraggedDock;
 use crate::PaneRenderContext;
 use crate::Workspace;
+use crate::WorkspaceMode;
 use crate::WorkspaceSettings;
 use crate::dock::Dock;
 use crate::dock::DockPosition;
@@ -186,7 +187,7 @@ impl Workspace {
                 .absolute()
                 .size_full()
             })
-            .when(self.zoomed.is_none(), |this| {
+            .when(!self.has_zoomed(WorkspaceMode::Editor, cx), |this| {
                 this.on_drag_move(cx.listener(move |workspace, e: &DragMoveEvent<DraggedDock>, window, cx| {
                     if workspace.previous_dock_drag_coordinates != Some(e.event.position) {
                         workspace.previous_dock_drag_coordinates = Some(e.event.position);
@@ -264,7 +265,9 @@ impl Workspace {
             DockPosition::Bottom => "bottom-dock",
         };
         // The left dock is the sidebar: the window header sits above it.
-        let has_header = position == DockPosition::Left && self.zoomed.is_none() && !self.window_header_in_tab_bar(cx);
+        let has_header = position == DockPosition::Left
+            && !self.has_zoomed(WorkspaceMode::Editor, cx)
+            && !self.window_header_in_tab_bar(cx);
         let mut container = div()
             .id(dock_element_id)
             .flex()

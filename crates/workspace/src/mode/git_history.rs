@@ -40,7 +40,7 @@ fn clamp_git_history_sidebar_width(width: Pixels, available: Pixels) -> Pixels {
 impl Workspace {
     pub(super) fn render_git_history(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let pane = self.active_git_history_pane.clone();
-        let zoomed_pane = self.git_history_center.panes().into_iter().find(|pane| pane.read(cx).is_zoomed()).cloned();
+        let zoomed_pane = self.zoomed_pane(WorkspaceMode::GitHistory, cx);
         let side_card = self.git_history_side_card(cx);
         let panes = match zoomed_pane {
             Some(zoomed_pane) => zoomed_pane.into_any_element(),
@@ -108,7 +108,7 @@ impl Workspace {
     /// A zoomed history pane fills the area alone, without the sidebar, as
     /// zooming hides docks and other panes in Workspace mode.
     pub(crate) fn git_history_side_card(&self, cx: &App) -> Option<gpui::AnyView> {
-        if self.git_history_center.panes().iter().any(|pane| pane.read(cx).is_zoomed()) {
+        if self.has_zoomed(WorkspaceMode::GitHistory, cx) {
             return None;
         }
         self.active_git_history_pane.read(cx).active_item().and_then(|item| item.side_card(cx))
@@ -149,6 +149,7 @@ impl Workspace {
             );
             pane.set_should_display_tab_bar(|_, _| true);
             pane.set_can_split(Some(Arc::new(|_, _, _, _| true)));
+            pane.set_read_only_tabs(true);
             pane.set_nav_history(nav_history);
             pane
         });

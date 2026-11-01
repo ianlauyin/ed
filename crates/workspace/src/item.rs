@@ -331,6 +331,11 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         None
     }
 
+    /// A permanent tab has no close button and no close action closes it.
+    fn is_permanent(&self, _: &App) -> bool {
+        false
+    }
+
     fn pixel_position_of_cursor(&self, _: &App) -> Option<Point<Pixels>> {
         None
     }
@@ -476,6 +481,7 @@ pub trait ItemHandle: 'static + Send {
     fn to_searchable_item_handle(&self, cx: &App) -> Option<Box<dyn SearchableItemHandle>>;
     fn show_toolbar(&self, cx: &App) -> bool;
     fn side_card(&self, cx: &App) -> Option<AnyView>;
+    fn is_permanent(&self, cx: &App) -> bool;
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>>;
     fn downgrade_item(&self) -> Box<dyn WeakItemHandle>;
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings;
@@ -849,6 +855,10 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn side_card(&self, cx: &App) -> Option<AnyView> {
         self.read(cx).side_card(cx)
+    }
+
+    fn is_permanent(&self, cx: &App) -> bool {
+        self.read(cx).is_permanent(cx)
     }
 
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>> {
