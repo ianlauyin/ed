@@ -357,8 +357,6 @@ actions!(
         SuppressNotification,
         /// Toggles the bottom dock.
         ToggleBottomDock,
-        /// Toggles centered layout mode.
-        ToggleCenteredLayout,
         /// Toggles the left dock.
         ToggleLeftDock,
         /// Toggles the right dock.
@@ -1196,7 +1194,6 @@ pub struct Workspace {
     /// for the history. Docks never take it.
     last_content_pane: WeakEntity<Pane>,
     bounds: Bounds<Pixels>,
-    pub centered_layout: bool,
     bounds_save_task_queued: Option<Task<()>>,
     on_prompt_for_new_path: Option<PromptForNewPath>,
     on_prompt_for_open_path: Option<PromptForOpenPath>,
@@ -1516,7 +1513,6 @@ impl Workspace {
             workspace_actions: Vec::default(),
             // This data will be incorrect, but it will be overwritten by the time it needs to be used.
             bounds: Bounds::default(),
-            centered_layout: false,
             bounds_save_task_queued: None,
             on_prompt_for_new_path: None,
             on_prompt_for_open_path: None,
@@ -1599,14 +1595,10 @@ impl Workspace {
             let (window, workspace): (WindowHandle<Workspace>, Entity<Workspace>) = if let Some(window) =
                 window_to_replace
             {
-                let centered_layout = serialized_workspace.as_ref().map(|w| w.centered_layout).unwrap_or(false);
-
                 let workspace = window.update(cx, |_, window, cx| {
                     replace_window_workspace(window, cx, |window, cx| {
                         let mut workspace =
                             Workspace::new(Some(workspace_id), project_handle.clone(), app_state.clone(), window, cx);
-
-                        workspace.centered_layout = centered_layout;
 
                         // Call init callback to add items before window renders
                         if let Some(init) = init {
@@ -1639,7 +1631,6 @@ impl Workspace {
                 // Use the serialized workspace to construct the new window
                 let mut options = cx.update(|cx| (app_state.build_window_options)(display, cx));
                 options.window_bounds = window_bounds;
-                let centered_layout = serialized_workspace.as_ref().map(|w| w.centered_layout).unwrap_or(false);
                 let window = cx.open_window(options, {
                     let app_state = app_state.clone();
                     let project_handle = project_handle.clone();
@@ -1647,7 +1638,6 @@ impl Workspace {
                         cx.new(|cx| {
                             let mut workspace =
                                 Workspace::new(Some(workspace_id), project_handle, app_state, window, cx);
-                            workspace.centered_layout = centered_layout;
 
                             // Call init callback to add items before window renders
                             if let Some(init) = init {
@@ -4976,7 +4966,6 @@ impl Workspace {
                     window_bounds,
                     display: Option::default(),
                     docks,
-                    centered_layout: self.centered_layout,
                     session_id: self.session_id.clone(),
                     window_id: Some(window.window_handle().window_id().as_u64()),
                     recent_navigation_history,
@@ -5427,7 +5416,6 @@ impl Workspace {
             .on_action(cx.listener(|workspace: &mut Workspace, act: &DecreaseOpenDocksSize, window, cx| {
                 adjust_open_docks_size_by_px(px_with_ui_font_fallback(act.px, cx) * -1., workspace, window, cx);
             }))
-            .on_action(cx.listener(Workspace::toggle_centered_layout))
             .on_action(cx.listener(Workspace::toggle_editor_zoom))
             .on_action(cx.listener(|workspace: &mut Workspace, action: &pane::ActivateNextItem, window, cx| {
                 if let Some(active_dock) = workspace.active_dock(window, cx) {
@@ -5602,17 +5590,6 @@ impl Workspace {
 
     pub fn toggle_status_toast<V: ToastView>(&mut self, entity: Entity<V>, cx: &mut App) {
         self.toast_layer.update(cx, |toast_layer, cx| toast_layer.toggle_toast(cx, entity))
-    }
-
-    pub fn toggle_centered_layout(&mut self, _: &ToggleCenteredLayout, _: &mut Window, cx: &mut Context<Self>) {
-        self.centered_layout = !self.centered_layout;
-        if let Some(database_id) = self.database_id() {
-            let db = WorkspaceDb::global(cx);
-            let centered_layout = self.centered_layout;
-            cx.background_spawn(async move { db.set_centered_layout(database_id, centered_layout).await })
-                .detach_and_log_err(cx);
-        }
-        self.notify_mode(WorkspaceMode::Editor, cx);
     }
 
     pub fn toggle_editor_zoom(&mut self, _: &ToggleEditorZoom, window: &mut Window, cx: &mut Context<Self>) {
@@ -6459,15 +6436,10 @@ pub fn open_workspace_by_id(
         let serialized_workspace =
             db.workspace_for_id(workspace_id).with_context(|| format!("Workspace {workspace_id:?} not found"))?;
 
-        let centered_layout = serialized_workspace.centered_layout;
-
         let window = if let Some(window) = requesting_window {
             window.update(cx, |_, window, cx| {
                 replace_window_workspace(window, cx, |window, cx| {
-                    let mut workspace =
-                        Workspace::new(Some(workspace_id), project_handle.clone(), app_state.clone(), window, cx);
-                    workspace.centered_layout = centered_layout;
-                    workspace
+                    Workspace::new(Some(workspace_id), project_handle.clone(), app_state.clone(), window, cx)
                 })
             })?;
             window
@@ -6495,13 +6467,7 @@ pub fn open_workspace_by_id(
             cx.open_window(options, {
                 let app_state = app_state.clone();
                 let project_handle = project_handle.clone();
-                move |window, cx| {
-                    cx.new(|cx| {
-                        let mut workspace = Workspace::new(Some(workspace_id), project_handle, app_state, window, cx);
-                        workspace.centered_layout = centered_layout;
-                        workspace
-                    })
-                }
+                move |window, cx| cx.new(|cx| Workspace::new(Some(workspace_id), project_handle, app_state, window, cx))
             })?
         };
 
@@ -6715,13 +6681,8 @@ async fn open_remote_project_inner(
 
     let workspace = window.update(cx, |_, window, cx| {
         replace_window_workspace(window, cx, |window, cx| {
-            let mut workspace = Workspace::new(Some(workspace_id), project.clone(), app_state.clone(), window, cx);
+            let workspace = Workspace::new(Some(workspace_id), project.clone(), app_state.clone(), window, cx);
             workspace.update_history(cx);
-
-            if let Some(ref serialized) = serialized_workspace {
-                workspace.centered_layout = serialized.centered_layout;
-            }
-
             workspace
         })
     })?;
@@ -7184,7 +7145,6 @@ pub fn move_active_item(
 pub struct WorkspacePosition {
     pub window_bounds: Option<WindowBounds>,
     pub display: Option<Uuid>,
-    pub centered_layout: bool,
 }
 
 pub fn remote_workspace_position_from_db(
@@ -7216,9 +7176,7 @@ pub fn remote_workspace_position_from_db(
             }
         };
 
-        let centered_layout = serialized_workspace.as_ref().map(|w| w.centered_layout).unwrap_or(false);
-
-        Ok(WorkspacePosition { window_bounds, display, centered_layout })
+        Ok(WorkspacePosition { window_bounds, display })
     })
 }
 

@@ -172,11 +172,7 @@ pub async fn open_remote_project(
                 project::LocalProjectFlags { init_worktree_trust: false },
                 cx,
             );
-            cx.new(|cx| {
-                let mut workspace = Workspace::new(None, project, app_state.clone(), window, cx);
-                workspace.centered_layout = workspace_position.centered_layout;
-                workspace
-            })
+            cx.new(|cx| Workspace::new(None, project, app_state.clone(), window, cx))
         })?;
         let workspace = window.entity(cx)?;
         (window, workspace)

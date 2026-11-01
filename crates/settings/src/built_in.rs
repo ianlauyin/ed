@@ -7,8 +7,6 @@ use settings_content::AutoIndentMode;
 use settings_content::AutosaveSetting;
 use settings_content::BottomDockLayout;
 use settings_content::BranchPickerSettingsContent;
-use settings_content::CenteredLayoutSettings;
-use settings_content::CenteredPaddingSettings;
 use settings_content::ClosePosition;
 use settings_content::CloseWindowWhenNoItems;
 use settings_content::CommandPaletteSettingsContent;
@@ -431,10 +429,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         bottom_dock_layout: Some(BottomDockLayout::Contained),
         pane_split_direction_horizontal: Some(PaneSplitDirectionHorizontal::Down),
         pane_split_direction_vertical: Some(PaneSplitDirectionVertical::Right),
-        centered_layout: Some(CenteredLayoutSettings {
-            left_padding: Some(CenteredPaddingSettings(0.2)),
-            right_padding: Some(CenteredPaddingSettings(0.2)),
-        }),
         confirm_quit: Some(false),
         autosave: Some(AutosaveSetting::OnFocusChange),
         restore_on_startup: Some(RestoreOnStartupBehavior::LastSession),

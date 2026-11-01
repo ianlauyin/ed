@@ -469,7 +469,6 @@ impl WorkspaceDb {
             identity_paths_order,
             window_bounds,
             display,
-            centered_layout,
             docks,
             window_id,
         ): (
@@ -480,7 +479,6 @@ impl WorkspaceDb {
             Option<String>,
             Option<SerializedWindowBounds>,
             Option<Uuid>,
-            Option<bool>,
             DockStructure,
             Option<u64>,
         ) = self
@@ -497,7 +495,6 @@ impl WorkspaceDb {
                     window_width,
                     window_height,
                     display,
-                    centered_layout,
                     left_dock_visible,
                     left_dock_active_panel,
                     left_dock_zoom,
@@ -542,7 +539,6 @@ impl WorkspaceDb {
             identity_paths,
             center_group: self.get_center_pane_group(workspace_id).context("Getting center group").log_err()?,
             window_bounds,
-            centered_layout: centered_layout.unwrap_or(false),
             display,
             docks,
             session_id: None,
@@ -561,7 +557,6 @@ impl WorkspaceDb {
             identity_paths_order,
             window_bounds,
             display,
-            centered_layout,
             docks,
             window_id,
             remote_connection_id,
@@ -572,7 +567,6 @@ impl WorkspaceDb {
             Option<String>,
             Option<SerializedWindowBounds>,
             Option<Uuid>,
-            Option<bool>,
             DockStructure,
             Option<u64>,
             Option<i32>,
@@ -589,7 +583,6 @@ impl WorkspaceDb {
                     window_width,
                     window_height,
                     display,
-                    centered_layout,
                     left_dock_visible,
                     left_dock_active_panel,
                     left_dock_zoom,
@@ -631,7 +624,6 @@ impl WorkspaceDb {
             identity_paths,
             center_group: self.get_center_pane_group(workspace_id).context("Getting center group").log_err()?,
             window_bounds,
-            centered_layout: centered_layout.unwrap_or(false),
             display,
             docks,
             session_id: None,
@@ -1332,14 +1324,6 @@ impl WorkspaceDb {
             SELECT display, native_window_state
             FROM workspaces
             WHERE workspace_id = ?
-        }
-    }
-
-    query! {
-        pub(crate) async fn set_centered_layout(workspace_id: WorkspaceId, centered_layout: bool) -> Result<()> {
-            UPDATE workspaces
-            SET centered_layout = ?2
-            WHERE workspace_id = ?1
         }
     }
 

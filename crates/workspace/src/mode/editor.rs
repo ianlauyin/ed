@@ -7,8 +7,6 @@ use gpui::Entity;
 use gpui::IntoElement;
 use gpui::Stateful;
 use gpui::canvas;
-use gpui::relative;
-use settings::CenteredPaddingSettings;
 use settings::Settings;
 use ui::Window;
 use ui::prelude::*;
@@ -25,22 +23,6 @@ use crate::dock::DockPosition;
 
 impl Workspace {
     pub(super) fn render_editor_mode(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let pad_center_pane = self.centered_layout && self.center.panes().len() == 1 && self.active_item(cx).is_some();
-        let pad_zoomed_pane = self.centered_layout && self.zoomed.is_some() && self.zoomed_position.is_none();
-        let render_padding = |size| (size > 0.0).then(|| div().h_full().w(relative(size)));
-        let render_centered_paddings = |enabled: bool| {
-            if !enabled {
-                return (None, None);
-            }
-
-            let settings = WorkspaceSettings::get_global(cx).centered_layout;
-            (
-                render_padding(Self::adjust_padding(settings.left_padding.map(|padding| padding.0))),
-                render_padding(Self::adjust_padding(settings.right_padding.map(|padding| padding.0))),
-            )
-        };
-        let centered_paddings = render_centered_paddings(pad_center_pane);
-        let zoomed_paddings = render_centered_paddings(pad_zoomed_pane);
         let background = cx.theme().colors().background;
         let bottom_dock_layout = WorkspaceSettings::get_global(cx).bottom_dock_layout;
         let pane_render_context = PaneRenderContext { active_pane: &self.active_pane, workspace: &self.weak_self };
@@ -58,13 +40,12 @@ impl Workspace {
                         .overflow_hidden()
                         .children(self.render_dock(DockPosition::Left, &self.left_dock, window, cx))
                         .child(
-                            div().flex().flex_col().flex_1().overflow_hidden().child(
-                                h_flex()
-                                    .flex_1()
-                                    .when_some(centered_paddings.0, |this, p| this.child(p.border_r_1()))
-                                    .child(self.render_center(&pane_render_context, window, cx))
-                                    .when_some(centered_paddings.1, |this, p| this.child(p.border_l_1())),
-                            ),
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .overflow_hidden()
+                                .child(h_flex().flex_1().child(self.render_center(&pane_render_context, window, cx))),
                         )
                         .children(self.render_dock(DockPosition::Right, &self.right_dock, window, cx)),
                 )
@@ -86,15 +67,9 @@ impl Workspace {
                                 .flex_row()
                                 .flex_1()
                                 .children(self.render_dock(DockPosition::Left, &self.left_dock, window, cx))
-                                .child(
-                                    div().flex().flex_col().flex_1().overflow_hidden().child(
-                                        h_flex()
-                                            .flex_1()
-                                            .when_some(centered_paddings.0, |this, p| this.child(p.border_r_1()))
-                                            .child(self.render_center(&pane_render_context, window, cx))
-                                            .when_some(centered_paddings.1, |this, p| this.child(p.border_l_1())),
-                                    ),
-                                ),
+                                .child(div().flex().flex_col().flex_1().overflow_hidden().child(
+                                    h_flex().flex_1().child(self.render_center(&pane_render_context, window, cx)),
+                                )),
                         )
                         .child(div().w_full().children(self.render_dock(
                             DockPosition::Bottom,
@@ -120,15 +95,9 @@ impl Workspace {
                                 .flex()
                                 .flex_row()
                                 .flex_1()
-                                .child(
-                                    div().flex().flex_col().flex_1().overflow_hidden().child(
-                                        h_flex()
-                                            .flex_1()
-                                            .when_some(centered_paddings.0, |this, p| this.child(p.border_r_1()))
-                                            .child(self.render_center(&pane_render_context, window, cx))
-                                            .when_some(centered_paddings.1, |this, p| this.child(p.border_l_1())),
-                                    ),
-                                )
+                                .child(div().flex().flex_col().flex_1().overflow_hidden().child(
+                                    h_flex().flex_1().child(self.render_center(&pane_render_context, window, cx)),
+                                ))
                                 .children(self.render_dock(DockPosition::Right, &self.right_dock, window, cx)),
                         )
                         .child(div().w_full().children(self.render_dock(
@@ -149,13 +118,7 @@ impl Workspace {
                         .flex_col()
                         .flex_1()
                         .overflow_hidden()
-                        .child(
-                            h_flex()
-                                .flex_1()
-                                .when_some(centered_paddings.0, |this, p| this.child(p.border_r_1()))
-                                .child(self.render_center(&pane_render_context, window, cx))
-                                .when_some(centered_paddings.1, |this, p| this.child(p.border_l_1())),
-                        )
+                        .child(h_flex().flex_1().child(self.render_center(&pane_render_context, window, cx)))
                         .children(self.render_dock(DockPosition::Bottom, &self.bottom_dock, window, cx)),
                 )
                 .children(self.render_dock(DockPosition::Right, &self.right_dock, window, cx)),
@@ -214,15 +177,6 @@ impl Workspace {
             .child(layout)
             .children(self.zoomed.as_ref().and_then(|view| {
                 let zoomed_view = view.upgrade()?;
-                let zoomed_element = match zoomed_paddings {
-                    (None, None) => zoomed_view.into_any_element(),
-                    (left, right) => h_flex()
-                        .size_full()
-                        .when_some(left, |this, padding| this.child(padding.border_r_1()))
-                        .child(div().size_full().child(zoomed_view))
-                        .when_some(right, |this, padding| this.child(padding.border_l_1()))
-                        .into_any_element(),
-                };
                 // Whatever is zoomed (editor or any dock) covers exactly the card
                 // area, so every zoomed view gets the same size.
                 // A zoomed dock covers the pane holding the window header, so it gets its own.
@@ -236,16 +190,10 @@ impl Workspace {
                         .bottom(if self.status_bar_visible(cx) { px(0.) } else { CARD_GAP })
                         .bg(background)
                         .when(self.zoomed_position.is_some(), |this| this.child(self.render_zoomed_dock_header(cx)))
-                        .child(div().flex_1().min_h_0().child(zoomed_element))
+                        .child(div().flex_1().min_h_0().child(zoomed_view))
                         .shadow_lg(),
                 )
             }))
-    }
-
-    fn adjust_padding(padding: Option<f32>) -> f32 {
-        padding
-            .unwrap_or(CenteredPaddingSettings::default().0)
-            .clamp(CenteredPaddingSettings::MIN_PADDING, CenteredPaddingSettings::MAX_PADDING)
     }
 
     fn render_dock(

@@ -1252,11 +1252,7 @@ pub async fn open_remote_worktree(
     options.window_bounds = workspace_position.window_bounds;
 
     let new_window = cx.open_window(options, |window, cx| {
-        cx.new(|cx| {
-            let mut workspace = Workspace::new(None, new_project.clone(), app_state.clone(), window, cx);
-            workspace.centered_layout = workspace_position.centered_layout;
-            workspace
-        })
+        cx.new(|cx| Workspace::new(None, new_project.clone(), app_state.clone(), window, cx))
     })?;
 
     workspace::open_remote_project_with_existing_connection(
