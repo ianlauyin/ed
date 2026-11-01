@@ -3279,27 +3279,12 @@ impl Pane {
     /// Keybinding hints shown in an empty pane, styled like the project search landing page.
     fn render_empty_pane_hints(&self, cx: &App) -> impl IntoElement {
         let focus_handle = self.focus_handle.clone();
-        let hint = |id: &'static str, label: &'static str, icon: IconName, action: Box<dyn Action>| {
+        v_flex().gap_1().children(empty_pane_hints().into_iter().map(|(id, label, icon, action)| {
             Button::new(id, label)
                 .start_icon(Icon::new(icon).size(IconSize::Small))
                 .key_binding(KeyBinding::for_action_in(action.as_ref(), &focus_handle, cx))
                 .on_click(move |_event, window, cx| window.dispatch_action(action.boxed_clone(), cx))
-        };
-        v_flex()
-            .gap_1()
-            .child(hint("empty-pane-open-file", "Open File", IconName::FolderOpen, Open::DEFAULT.boxed_clone()))
-            .child(hint(
-                "empty-pane-go-to-file",
-                "Go to File",
-                IconName::MagnifyingGlass,
-                ToggleFileFinder::default().boxed_clone(),
-            ))
-            .child(hint(
-                "empty-pane-command-palette",
-                "Command Palette",
-                IconName::Command,
-                ed_actions::command_palette::Toggle.boxed_clone(),
-            ))
+        }))
     }
 
     pub fn set_zoomed(&mut self, zoomed: bool, cx: &mut Context<Self>) {
@@ -3703,6 +3688,22 @@ pub fn render_tab_bar_zoom_button(pane: &Pane, cx: &mut Context<Pane>) -> AnyEle
         }))
         .tooltip(move |_window, cx| Tooltip::for_action(if zoomed { "Zoom Out" } else { "Zoom In" }, &ToggleZoom, cx))
         .into_any_element()
+}
+
+/// Rows of the empty pane's hints, top to bottom: id, label, icon, action.
+/// New File leads because a double click on a titlebar tab bar can't create one.
+fn empty_pane_hints() -> [(&'static str, &'static str, IconName, Box<dyn Action>); 4] {
+    [
+        ("empty-pane-new-file", "New File", IconName::Plus, NewFile.boxed_clone()),
+        ("empty-pane-open-file", "Open File", IconName::FolderOpen, Open::DEFAULT.boxed_clone()),
+        ("empty-pane-go-to-file", "Go to File", IconName::MagnifyingGlass, ToggleFileFinder::default().boxed_clone()),
+        (
+            "empty-pane-command-palette",
+            "Command Palette",
+            IconName::Command,
+            ed_actions::command_palette::Toggle.boxed_clone(),
+        ),
+    ]
 }
 
 /// Center (editor) panes get a "+" left of the shared buttons that opens an
@@ -4419,6 +4420,7 @@ mod tests {
     use super::Pane;
     use super::TabDropSide;
     use super::drags_out_only_tab;
+    use super::empty_pane_hints;
     use super::tab_drop_side;
     use super::tab_strip_height;
 
@@ -4456,6 +4458,14 @@ mod tests {
         assert!(!drags_out_only_tab(true, 2));
         assert!(!drags_out_only_tab(false, 1));
         assert!(!drags_out_only_tab(false, 0));
+    }
+
+    #[test]
+    fn test_empty_pane_hints() {
+        let hints = empty_pane_hints();
+        let labels: Vec<_> = hints.iter().map(|(_, label, _, _)| *label).collect();
+        assert_eq!(labels, ["New File", "Open File", "Go to File", "Command Palette"]);
+        assert!(hints[0].3.partial_eq(&crate::NewFile));
     }
 
     #[test]

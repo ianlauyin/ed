@@ -242,8 +242,10 @@ because it hurt readability; an opaque window is also cheaper to composite.
 - An empty pane leaves a blank strip of tab-bar height
   above its card, so the card does not jump when the first tab opens or the
   last one closes.
-- An empty pane keeps its card and shows centred keybinding hints (Open File,
-  Go to File, Command Palette), styled like the project search landing page.
+- An empty pane keeps its card and shows centred keybinding hints (New File,
+  Open File, Go to File, Command Palette), styled like the project search
+  landing page. New File leads because a double click on a tab bar that acts
+  as the titlebar zooms the window instead of creating a file.
   Bindings are read from the keymap. This applies to every empty pane, whether
   or not a project is open (there is no welcome page).
 - GPUI only clips to rectangles, so the card insets its content by 3px on every
