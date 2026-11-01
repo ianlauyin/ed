@@ -158,22 +158,20 @@ impl Render for TitleBar {
             }
         }
 
+        // Hide the project/branch items to make room when the menu bar is expanded.
+        let render_project_items = (title_bar_settings.show_branch_name || title_bar_settings.show_project_items)
+            && !self.application_menu.as_ref().is_some_and(|menu| menu.read(cx).all_menus_shown());
+        let repository = repository.filter(|_| is_git_enabled && render_project_items);
+        let mode_switch = repository.is_some().then(|| self.render_mode_switch(cx)).flatten();
+
         children.push(
             h_flex()
                 .h_full()
                 .gap_0p5()
                 .map(|title_bar| {
-                    let mut render_project_items =
-                        title_bar_settings.show_branch_name || title_bar_settings.show_project_items;
-                    title_bar
-                        .when_some(self.application_menu.clone(), |title_bar, menu| {
-                            // Hide the project/branch items to make room when the
-                            // menu bar is expanded.
-                            render_project_items &= !menu.read(cx).all_menus_shown();
-                            title_bar.child(menu)
-                        })
-                        .children(self.render_restricted_mode(cx))
-                        .when(render_project_items, |title_bar| {
+                    title_bar.children(self.application_menu.clone()).children(self.render_restricted_mode(cx)).when(
+                        render_project_items,
+                        |title_bar| {
                             title_bar
                                 .when(title_bar_settings.show_project_items, |title_bar| {
                                     title_bar.children(self.render_project_host(cx)).child(self.render_project_name(
@@ -182,14 +180,30 @@ impl Render for TitleBar {
                                         cx,
                                     ))
                                 })
-                                .when_some(repository.filter(|_| is_git_enabled), |title_bar, repository| {
-                                    title_bar
-                                        .children(self.render_worktree_and_branch(repository, linked_worktree_name, cx))
-                                        .children(self.render_mode_switch(cx))
+                                .when_some(repository, |title_bar, repository| {
+                                    title_bar.children(self.render_worktree_and_branch(
+                                        repository,
+                                        linked_worktree_name,
+                                        cx,
+                                    ))
                                 })
-                        })
+                        },
+                    )
                 })
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .into_any_element(),
+        );
+
+        // Back / forward, then the mode tabs, sit at the right end of the title bar.
+        children.push(
+            h_flex()
+                .h_full()
+                .pr_2()
+                .gap_0p5()
                 .children(self.render_nav_buttons(cx))
+                .when_some(mode_switch, |this, mode_switch| {
+                    this.child(Divider::vertical().h_4().mx_1()).child(mode_switch)
+                })
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .into_any_element(),
         );
@@ -584,16 +598,7 @@ impl TitleBar {
                 .tooltip(|_window, cx| Tooltip::for_action("Git History", &ed_actions::git_graph::Show, cx))
                 .on_click(|_, window, cx| window.dispatch_action(Box::new(ed_actions::git_graph::Show), cx));
 
-        Some(
-            h_flex()
-                .h_full()
-                .ml_1()
-                .gap_0p5()
-                .child(Divider::vertical().h_4().mr_1())
-                .child(show_editor)
-                .child(show_history)
-                .into_any_element(),
-        )
+        Some(h_flex().h_full().gap_0p5().child(show_editor).child(show_history).into_any_element())
     }
 
     /// Go Back / Go Forward over the workspace's one history, which spans every
@@ -620,16 +625,7 @@ impl TitleBar {
                 workspace.update(cx, |workspace, cx| workspace.go_forward(window, cx).detach_and_log_err(cx)).ok();
             });
 
-        Some(
-            h_flex()
-                .h_full()
-                .ml_1()
-                .gap_0p5()
-                .child(Divider::vertical().h_4().mr_1())
-                .child(go_back)
-                .child(go_forward)
-                .into_any_element(),
-        )
+        Some(h_flex().h_full().gap_0p5().child(go_back).child(go_forward).into_any_element())
     }
 
     fn render_worktree_and_branch(

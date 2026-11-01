@@ -61,8 +61,8 @@ mode (docks, editor panes) or in Git History mode, which shows only
 one pane holding the git graph and commit tabs. Commit buffers are read-only
 blobs with no language server, so they are not mixed into editor panes.
 
-- Round "Workspace" / "Git History" tabs in the title bar, after a divider
-  following the branch picker, switch modes. They are shown whenever the branch is. "Git
+- Round "Workspace" / "Git History" tabs at the right end of the title bar,
+  after a divider following the Go Back / Go Forward buttons, switch modes. They are shown whenever the branch is. "Git
   History" (`git_graph::Show`) follows the active repository (the folder picked
   in the title bar): it returns to the active history tab if that tab belongs
   to the active repository, otherwise it opens (or reuses) that repository's
@@ -83,13 +83,13 @@ blobs with no language server, so they are not mixed into editor panes.
   in. The history area is
   its own pane group, apart from the editor panes: normal panes (folder tabs,
   card, the same toolbar items as editor panes) that split like editor panes:
-  split buttons, dragging a tab to a pane edge, and "open to the side"
+  dragging a tab to a pane edge, `pane::Split*`, and "open to the side"
   (Option-click on a preview button) all split within the history group and
   stay in Git History mode. As in Workspace mode, splitting for "open to the
   side" neither activates nor focuses the new pane: focus stays where it was,
   and the focused pane is always the active one. Preview actions from the keyboard target the
   history tab when Git History is shown.
-  Its tab bars have, on the focused pane, Split Right, Split Down and Zoom
+  Its tab bars have, on the focused pane, Zoom
   (back/forward is the title bar's, shared with Workspace mode); there is no New… menu, since files and terminals belong
   to Workspace mode. Zoom shows only that pane, without the commit sidebar (as
   zooming hides docks and other panes in Workspace mode). History tabs and

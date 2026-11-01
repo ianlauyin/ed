@@ -392,6 +392,11 @@ enum TabDropSide {
     After,
 }
 
+/// Splitting a pane with its own only tab would just move the pane, so it offers no split zones.
+const fn drags_out_only_tab(from_this_pane: bool, items_len: usize) -> bool {
+    from_this_pane && items_len <= 1
+}
+
 /// Which side of the tab at `ix` a drop lands on; `dragged_ix` is the dragged tab's index when it
 /// comes from the same pane. `None` when the tab would stay where it is.
 fn tab_drop_side(dragged_ix: Option<usize>, ix: usize) -> Option<TabDropSide> {
@@ -3252,7 +3257,10 @@ impl Pane {
             None => false,
         };
         self.can_split_predicate = can_split_predicate;
-        if !can_split {
+        let from_this_pane =
+            event.dragged_item().downcast_ref::<DraggedTab>().is_some_and(|tab| tab.pane == cx.entity());
+        if !can_split || drags_out_only_tab(from_this_pane, self.items_len()) {
+            self.drag_split_direction = None;
             return;
         }
 
@@ -3613,47 +3621,11 @@ impl Pane {
     }
 }
 
-/// Items that can't be cloned into a new pane are moved there instead; `None` when
-/// neither is possible.
-pub const fn tab_bar_split_mode(can_clone: bool, can_split_move: bool) -> Option<SplitMode> {
-    if can_clone {
-        Some(SplitMode::ClonePane)
-    } else if can_split_move {
-        Some(SplitMode::MovePane)
-    } else {
-        None
-    }
-}
-
-/// The preview button, Split Right, Split Down and Zoom buttons,
-/// shared by every pane tab bar so they look and behave the same everywhere.
-/// Zoom stays rightmost, so hiding the optional buttons doesn't move it. Content panes never clone
-/// (`clone_items` false): a tab lives in one pane, so splitting moves the active
-/// tab and needs another tab left behind.
-pub fn render_tab_bar_pane_buttons(pane: &Pane, clone_items: bool, cx: &mut Context<Pane>) -> Vec<AnyElement> {
-    let split_mode = match pane.active_item() {
-        Some(active_item) => tab_bar_split_mode(clone_items && active_item.can_split(cx), pane.items_len() > 1),
-        None => None,
-    };
-    let mode = split_mode.unwrap_or_default();
-    let split_button =
-        |id: &'static str, icon: IconName, label: &'static str, direction: SplitDirection, action: &dyn Action| {
-            IconButton::new(id, icon)
-                .icon_size(IconSize::Small)
-                .disabled(split_mode.is_none())
-                .on_click(cx.listener(move |pane, _, window, cx| {
-                    if let Some(mode) = split_mode {
-                        pane.split(direction, mode, window, cx);
-                    }
-                }))
-                .tooltip(Tooltip::for_action_title(label, action))
-                .into_any_element()
-        };
+/// The preview and Zoom buttons, shared by every pane tab bar so they look and
+/// behave the same everywhere. Zoom stays rightmost, so a hidden preview button
+/// doesn't move it. There are no split buttons: panes split by dragging a tab to an edge.
+pub fn render_tab_bar_pane_buttons(pane: &Pane, cx: &mut Context<Pane>) -> Vec<AnyElement> {
     let mut buttons: Vec<AnyElement> = crate::preview::render_tab_bar_preview_button(pane, cx).into_iter().collect();
-    buttons.extend([
-        split_button("split-right", IconName::SplitRight, "Split Right", SplitDirection::Right, &SplitRight { mode }),
-        split_button("split-down", IconName::SplitDown, "Split Down", SplitDirection::Down, &SplitDown { mode }),
-    ]);
     buttons.push(render_tab_bar_zoom_button(pane, cx));
     buttons
 }
@@ -3685,7 +3657,7 @@ fn default_render_tab_bar_buttons(
     let right_children = h_flex()
         // Instead we need to replicate the spacing from the [TabBar]'s `end_slot` here.
         .gap(DynamicSpacing::Base04.rems())
-        .children(render_tab_bar_pane_buttons(pane, false, cx))
+        .children(render_tab_bar_pane_buttons(pane, cx))
         .into_any_element()
         .into();
     (None, right_children)
@@ -4341,10 +4313,17 @@ mod tests {
 
     use super::NavHistory;
     use super::Pane;
-    use super::SplitMode;
     use super::TabDropSide;
-    use super::tab_bar_split_mode;
+    use super::drags_out_only_tab;
     use super::tab_drop_side;
+
+    #[test]
+    fn test_drags_out_only_tab() {
+        assert!(drags_out_only_tab(true, 1));
+        assert!(!drags_out_only_tab(true, 2));
+        assert!(!drags_out_only_tab(false, 1));
+        assert!(!drags_out_only_tab(false, 0));
+    }
 
     #[test]
     fn test_tab_drop_side() {
@@ -4352,14 +4331,6 @@ mod tests {
         assert_eq!(tab_drop_side(Some(4), 2), Some(TabDropSide::Before));
         assert_eq!(tab_drop_side(Some(0), 2), Some(TabDropSide::After));
         assert_eq!(tab_drop_side(Some(2), 2), None);
-    }
-
-    #[test]
-    fn test_tab_bar_split_mode() {
-        assert_eq!(tab_bar_split_mode(true, true), Some(SplitMode::ClonePane));
-        assert_eq!(tab_bar_split_mode(true, false), Some(SplitMode::ClonePane));
-        assert_eq!(tab_bar_split_mode(false, true), Some(SplitMode::MovePane));
-        assert_eq!(tab_bar_split_mode(false, false), None);
     }
 
     #[test]

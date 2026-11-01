@@ -986,7 +986,7 @@ fn set_terminal_tab_bar_buttons(pane: &mut Pane, cx: &mut Context<Pane>) {
                     })
                     .tooltip(Tooltip::for_action_title("New Terminal", &workspace::NewTerminal::default())),
             )
-            .children(workspace::pane::render_tab_bar_pane_buttons(pane, true, cx))
+            .children(workspace::pane::render_tab_bar_pane_buttons(pane, cx))
             .into_any_element()
             .into();
         (None, right_children)
