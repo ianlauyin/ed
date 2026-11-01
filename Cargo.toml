@@ -385,6 +385,5 @@ debug = "line-tables-only"
 split-debuginfo = "packed"
 strip = true
 lto = "thin"
+panic = "abort"  # The panic hook logs and exits anyway, so unwinding buys nothing.
 codegen-units = 1
-# The panic hook logs and exits anyway, so unwinding buys nothing.
-panic = "abort"
