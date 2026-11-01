@@ -60,6 +60,14 @@ because it hurt readability; an opaque window is also cheaper to composite.
   backgrounds) is trimmed to the card's curve by that one mask, so content
   never does its own corner rounding. The mask sits below the drag-target
   overlay, whose border runs along the card edge.
+- Modes are strictly isolated for rendering. Only the title bar and status bar
+  (plus notifications, toasts and modals) are shared; everything between them
+  belongs to one mode, rendered by that mode's own cached view, and only the
+  shown mode's view is drawn. Changes in a hidden mode redraw nothing (it
+  re-renders when shown again), and redraws of the shared chrome reuse the
+  shown mode's layout. Status items hidden in the current mode get no active
+  item, so they don't track it. A new mode (e.g. a terminal-only mode) adds its
+  own view and module rather than branching inside another mode's layout.
 - In Git History mode (`git.md`) the history sidebar and panes fill the area of
   the docks and center panes. The status bar stays, so the card's bottom edge
   doesn't move when switching modes. The sidebar shows the active history

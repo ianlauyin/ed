@@ -57,6 +57,11 @@ impl StatusItemModes {
             StatusItemModes::All => true,
         }
     }
+
+    /// Whether an item shown in `from` is hidden after switching to `to`.
+    fn hidden_by_switch(self, from: WorkspaceMode, to: WorkspaceMode) -> bool {
+        self.includes(from) && !self.includes(to)
+    }
 }
 
 struct StatusItem {
@@ -172,8 +177,22 @@ impl StatusBar {
         this
     }
 
-    pub fn set_mode(&mut self, mode: WorkspaceMode, cx: &mut Context<Self>) {
+    /// Switches the shown items and the pane they follow. Items that become
+    /// hidden drop the active item, so they stop tracking it while hidden.
+    pub fn set_mode(
+        &mut self,
+        mode: WorkspaceMode,
+        active_pane: &Entity<Pane>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for item in self.left_items.iter().chain(&self.right_items) {
+            if item.modes.hidden_by_switch(self.mode, mode) {
+                item.set_active_pane_item(None, window, cx);
+            }
+        }
         self.mode = mode;
+        self.set_active_pane(active_pane, window, cx);
         cx.notify();
     }
 
@@ -199,8 +218,10 @@ impl StatusBar {
     ) where
         T: 'static + StatusItemView,
     {
-        let active_pane_item = self.active_pane.read(cx).active_item();
-        item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
+        if modes.includes(self.mode) {
+            let active_pane_item = self.active_pane.read(cx).active_item();
+            item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
+        }
 
         self.left_items.push(StatusItem { view: Box::new(item), modes });
         cx.notify();
@@ -227,8 +248,10 @@ impl StatusBar {
     ) where
         T: 'static + StatusItemView,
     {
-        let active_pane_item = self.active_pane.read(cx).active_item();
-        item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
+        if modes.includes(self.mode) {
+            let active_pane_item = self.active_pane.read(cx).active_item();
+            item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
+        }
 
         self.right_items.push(StatusItem { view: Box::new(item), modes });
         cx.notify();
@@ -243,7 +266,7 @@ impl StatusBar {
 
     fn update_active_pane_item(&self, window: &mut Window, cx: &mut Context<Self>) {
         let active_pane_item = self.active_pane.read(cx).active_item();
-        for item in self.left_items.iter().chain(&self.right_items) {
+        for item in self.shown_items(&self.left_items).chain(self.shown_items(&self.right_items)) {
             item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
         }
     }
@@ -305,5 +328,16 @@ mod tests {
         assert!(StatusItemModes::GitHistory.includes(WorkspaceMode::GitHistory));
         assert!(StatusItemModes::All.includes(WorkspaceMode::Editor));
         assert!(StatusItemModes::All.includes(WorkspaceMode::GitHistory));
+    }
+
+    #[test]
+    fn test_status_item_modes_hidden_by_switch() {
+        assert!(StatusItemModes::Editor.hidden_by_switch(WorkspaceMode::Editor, WorkspaceMode::GitHistory));
+        assert!(!StatusItemModes::Editor.hidden_by_switch(WorkspaceMode::GitHistory, WorkspaceMode::Editor));
+        assert!(!StatusItemModes::Editor.hidden_by_switch(WorkspaceMode::Editor, WorkspaceMode::Editor));
+        assert!(StatusItemModes::GitHistory.hidden_by_switch(WorkspaceMode::GitHistory, WorkspaceMode::Editor));
+        assert!(!StatusItemModes::GitHistory.hidden_by_switch(WorkspaceMode::Editor, WorkspaceMode::GitHistory));
+        assert!(!StatusItemModes::All.hidden_by_switch(WorkspaceMode::Editor, WorkspaceMode::GitHistory));
+        assert!(!StatusItemModes::All.hidden_by_switch(WorkspaceMode::GitHistory, WorkspaceMode::Editor));
     }
 }

@@ -3,6 +3,7 @@ pub mod history_manager;
 pub mod invalid_item_view;
 pub mod item;
 mod modal_layer;
+mod mode;
 pub mod notifications;
 pub mod pane;
 pub mod pane_group;
@@ -71,12 +72,10 @@ use gpui::App;
 use gpui::AppContext;
 use gpui::AsyncApp;
 use gpui::AsyncWindowContext;
-use gpui::Axis;
 use gpui::Bounds;
 use gpui::Context;
 use gpui::CursorStyle;
 use gpui::Decorations;
-use gpui::DragMoveEvent;
 use gpui::Entity;
 use gpui::EntityId;
 use gpui::EventEmitter;
@@ -96,6 +95,7 @@ use gpui::Render;
 use gpui::ResizeEdge;
 use gpui::Size;
 use gpui::Stateful;
+use gpui::StyleRefinement;
 use gpui::Subscription;
 use gpui::Task;
 use gpui::TaskExt;
@@ -108,7 +108,6 @@ use gpui::WindowOptions;
 use gpui::actions;
 use gpui::canvas;
 use gpui::point;
-use gpui::relative;
 use gpui::size;
 use gpui::transparent_black;
 pub use history_manager::*;
@@ -173,7 +172,6 @@ use rpc::proto::ErrorCode;
 use rpc::proto::{self};
 use serde::Deserialize;
 use session::AppSession;
-use settings::CenteredPaddingSettings;
 use settings::DefaultOpenBehavior;
 use settings::Settings;
 use settings::SettingsLocation;
@@ -217,6 +215,8 @@ pub use workspace_settings::TabBarSettings;
 pub use workspace_settings::WorkspaceSettings;
 
 use crate::item::ItemBufferKind;
+use crate::mode::GIT_HISTORY_SIDEBAR_WIDTH;
+use crate::mode::ModeView;
 use crate::notifications::NotificationId;
 use crate::persistence::SerializedAxis;
 use crate::persistence::model::SerializedItem;
@@ -1048,17 +1048,6 @@ pub enum WorkspaceMode {
     GitHistory,
 }
 
-const GIT_HISTORY_SIDEBAR_WIDTH: Pixels = px(320.);
-const GIT_HISTORY_SIDEBAR_MIN_WIDTH: Pixels = px(240.);
-
-#[derive(Clone)]
-struct DraggedGitHistorySidebar;
-
-/// Keeps the git history sidebar between its minimum and 60% of the window.
-fn clamp_git_history_sidebar_width(width: Pixels, available: Pixels) -> Pixels {
-    width.min(available * 0.6).max(GIT_HISTORY_SIDEBAR_MIN_WIDTH)
-}
-
 impl WorkspaceMode {
     /// Buffers outside the project (commit revisions) stay in the history pane.
     pub fn opens_in_history_pane(self, is_project_file: bool) -> bool {
@@ -1174,6 +1163,8 @@ pub struct Workspace {
     git_history_center: PaneGroup,
     active_git_history_pane: Entity<Pane>,
     git_history_sidebar_width: Pixels,
+    editor_view: Entity<ModeView>,
+    git_history_view: Entity<ModeView>,
 
     status_bar: Entity<StatusBar>,
     pub(crate) modal_layer: Entity<ModalLayer>,
@@ -1415,6 +1406,17 @@ impl Workspace {
             status_bar
         });
 
+        let workspace = cx.entity();
+        let editor_view = cx.new(|cx| {
+            ModeView::new(
+                &workspace,
+                WorkspaceMode::Editor,
+                &[left_dock.clone(), bottom_dock.clone(), right_dock.clone()],
+                cx,
+            )
+        });
+        let git_history_view = cx.new(|cx| ModeView::new(&workspace, WorkspaceMode::GitHistory, &[], cx));
+
         let session_id = app_state.session.read(cx).id().to_owned();
 
         let (serializable_items_tx, serializable_items_rx) = mpsc::unbounded::<Box<dyn SerializableItemHandle>>();
@@ -1474,6 +1476,8 @@ impl Workspace {
             git_history_center: PaneGroup::new(git_history_pane.clone()),
             active_git_history_pane: git_history_pane,
             git_history_sidebar_width: GIT_HISTORY_SIDEBAR_WIDTH,
+            editor_view,
+            git_history_view,
 
             status_bar,
             modal_layer,
@@ -1922,208 +1926,8 @@ impl Workspace {
         StatusBarSettings::get_global(cx).show && (self.zoomed.is_none() || self.mode != WorkspaceMode::Editor)
     }
 
-    fn render_git_history(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let pane = self.active_git_history_pane.clone();
-        // A zoomed history pane fills the area alone, without the sidebar, as
-        // zooming hides docks and other panes in Workspace mode.
-        let zoomed_pane = self.git_history_center.panes().into_iter().find(|pane| pane.read(cx).is_zoomed()).cloned();
-        let side_card =
-            if zoomed_pane.is_some() { None } else { pane.read(cx).active_item().and_then(|item| item.side_card(cx)) };
-        let panes = match zoomed_pane {
-            Some(zoomed_pane) => zoomed_pane.into_any_element(),
-            None => {
-                let weak_handle = self.weak_handle();
-                let render_cx = PaneRenderContext { active_pane: &pane, workspace: &weak_handle };
-                self.git_history_center.render(None, None, &render_cx, window, cx).into_any_element()
-            }
-        };
-        let content = h_flex()
-            .size_full()
-            .on_drag_move(cx.listener(|workspace, e: &DragMoveEvent<DraggedGitHistorySidebar>, _, cx| {
-                workspace.git_history_sidebar_width =
-                    clamp_git_history_sidebar_width(e.event.position.x - e.bounds.left(), e.bounds.size.width);
-                cx.notify();
-            }))
-            .when_some(side_card, |this, side_card| {
-                this.child(
-                    div()
-                        .id("git-history-sidebar")
-                        .relative()
-                        .flex_none()
-                        .h_full()
-                        .w(self.git_history_sidebar_width)
-                        .pr(CARD_GAP)
-                        .child(
-                            div()
-                                .size_full()
-                                .overflow_hidden()
-                                .bg(cx.theme().colors().panel_background)
-                                .child(side_card),
-                        )
-                        .child(
-                            div()
-                                .id("git-history-sidebar-resize-handle")
-                                .absolute()
-                                .top_0()
-                                .right_0()
-                                .h_full()
-                                .w(CARD_GAP)
-                                .cursor_col_resize()
-                                .on_click(cx.listener(|workspace, event: &gpui::ClickEvent, _, cx| {
-                                    if event.click_count() == 2 {
-                                        workspace.git_history_sidebar_width = GIT_HISTORY_SIDEBAR_WIDTH;
-                                        cx.notify();
-                                    }
-                                }))
-                                .on_drag(DraggedGitHistorySidebar, |_, _, _, cx| cx.new(|_| gpui::Empty)),
-                        ),
-                )
-            })
-            .child(div().id("git-history-panes").flex().flex_1().min_w_0().h_full().child(panes));
-        match cx.try_global::<PaneSearchBarCallbacks>() {
-            Some(callbacks) => (callbacks.wrap_div_with_search_actions)(content, pane),
-            None => content,
-        }
-    }
-
     pub const fn mode(&self) -> WorkspaceMode {
         self.mode
-    }
-
-    /// The active history pane, where the graph and commit views open.
-    pub const fn git_history_pane(&self) -> &Entity<Pane> {
-        &self.active_git_history_pane
-    }
-
-    pub fn git_history_panes(&self) -> Vec<&Entity<Pane>> {
-        self.git_history_center.panes()
-    }
-
-    /// Whether no history pane has any tabs.
-    pub fn git_history_is_empty(&self, cx: &App) -> bool {
-        self.git_history_panes().iter().all(|pane| pane.read(cx).items_len() == 0)
-    }
-
-    fn new_git_history_pane(
-        workspace: WeakEntity<Self>,
-        project: Entity<Project>,
-        pane_history_timestamp: Arc<AtomicUsize>,
-        nav_history: NavHistory,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<Pane> {
-        let pane = cx.new(|cx| {
-            let mut pane = Pane::new(
-                workspace,
-                project,
-                pane_history_timestamp,
-                None,
-                Box::new(gpui::NoAction),
-                false,
-                window,
-                cx,
-            );
-            pane.set_should_display_tab_bar(|_, _| true);
-            pane.set_can_split(Some(Arc::new(|_, _, _, _| true)));
-            pane.set_nav_history(nav_history);
-            pane
-        });
-        cx.subscribe_in(&pane, window, Self::handle_git_history_pane_event).detach();
-        cx.emit(Event::PaneAdded(pane.clone()));
-        pane
-    }
-
-    fn add_git_history_pane(&self, window: &mut Window, cx: &mut Context<Self>) -> Entity<Pane> {
-        Self::new_git_history_pane(
-            self.weak_handle(),
-            self.project.clone(),
-            self.pane_history_timestamp.clone(),
-            self.nav_history.clone(),
-            window,
-            cx,
-        )
-    }
-
-    fn split_git_history_pane(
-        &mut self,
-        pane: Entity<Pane>,
-        direction: SplitDirection,
-        mode: SplitMode,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // The new pane would be hidden behind a zoomed one.
-        self.zoom_git_history_pane(None, cx);
-        match mode {
-            SplitMode::EmptyPane => {
-                self.split_git_history_pane_empty(&pane, direction, window, cx);
-            }
-            // A tab lives in one pane, so splitting moves it and needs another tab left behind.
-            SplitMode::MovePane | SplitMode::ClonePane => {
-                if pane.read(cx).items_len() < 2 {
-                    return;
-                }
-                let Some(item) = pane.update(cx, |pane, cx| pane.take_active_item(window, cx)) else {
-                    return;
-                };
-                let new_pane = self.add_git_history_pane(window, cx);
-                new_pane.update(cx, |pane, cx| pane.add_item(item, true, true, None, window, cx));
-                self.git_history_center.split(&pane, &new_pane, direction, cx);
-                self.set_active_git_history_pane(&new_pane, window, cx);
-            }
-        }
-        cx.notify();
-    }
-
-    fn split_git_history_pane_empty(
-        &mut self,
-        pane: &Entity<Pane>,
-        direction: SplitDirection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<Pane> {
-        let new_pane = self.add_git_history_pane(window, cx);
-        self.git_history_center.split(pane, &new_pane, direction, cx);
-        self.set_active_git_history_pane(&new_pane, window, cx);
-        window.focus(&new_pane.focus_handle(cx), cx);
-        new_pane
-    }
-
-    /// Drops an emptied history pane, unless it is the last one.
-    fn remove_git_history_pane(&mut self, pane: &Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.git_history_center.remove(pane, cx).log_err().unwrap_or(false) {
-            return;
-        }
-        if self.active_git_history_pane == *pane {
-            let next_pane = self.git_history_center.first_pane();
-            self.set_active_git_history_pane(&next_pane, window, cx);
-            if self.mode == WorkspaceMode::GitHistory {
-                window.focus(&next_pane.focus_handle(cx), cx);
-            }
-        }
-        cx.notify();
-    }
-
-    pub fn set_active_git_history_pane(&mut self, pane: &Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
-        if self.active_git_history_pane == *pane {
-            return;
-        }
-        self.active_git_history_pane = pane.clone();
-        if self.mode == WorkspaceMode::GitHistory {
-            self.status_bar.update(cx, |status_bar, cx| status_bar.set_active_pane(pane, window, cx));
-        }
-        cx.notify();
-    }
-
-    /// Zooms `pane` (unzooming any other history pane), or unzooms all for `None`.
-    fn zoom_git_history_pane(&self, pane: Option<&Entity<Pane>>, cx: &mut Context<Self>) {
-        for history_pane in self.git_history_center.panes() {
-            let zoomed = pane == Some(history_pane);
-            if history_pane.read(cx).is_zoomed() != zoomed {
-                history_pane.update(cx, |history_pane, cx| history_pane.set_zoomed(zoomed, cx));
-            }
-        }
-        cx.notify();
     }
 
     /// The pane filling the window in the current mode: the active center
@@ -2152,46 +1956,9 @@ impl Workspace {
         }
         self.mode = mode;
         let pane = self.shown_pane().clone();
-        self.status_bar.update(cx, |status_bar, cx| {
-            status_bar.set_active_pane(&pane, window, cx);
-            status_bar.set_mode(mode, cx);
-        });
+        self.status_bar.update(cx, |status_bar, cx| status_bar.set_mode(mode, &pane, window, cx));
         cx.notify();
         true
-    }
-
-    fn handle_git_history_pane_event(
-        &mut self,
-        pane: &Entity<Pane>,
-        event: &pane::Event,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            pane::Event::AddItem { item } => {
-                item.added_to_pane(self, pane.clone(), window, cx);
-                cx.emit(Event::GitHistoryItemAdded { item: item.boxed_clone() });
-            }
-            pane::Event::Split { direction, mode } => {
-                self.split_git_history_pane(pane.clone(), *direction, *mode, window, cx);
-            }
-            pane::Event::Remove { .. } => self.remove_git_history_pane(pane, window, cx),
-            pane::Event::RemovedItem { .. } if self.git_history_is_empty(cx) => {
-                self.zoom_git_history_pane(None, cx);
-                self.set_mode(WorkspaceMode::Editor, window, cx)
-            }
-            pane::Event::ZoomIn => self.zoom_git_history_pane(Some(pane), cx),
-            pane::Event::ZoomOut => self.zoom_git_history_pane(None, cx),
-            pane::Event::Focus => {
-                self.content_pane_focused(pane, window, cx);
-                self.set_active_git_history_pane(pane, window, cx);
-                self.switch_mode(WorkspaceMode::GitHistory, window, cx);
-            }
-            pane::Event::ChangeItemTitle | pane::Event::ActivateItem { .. } | pane::Event::RemovedItem { .. } => {
-                cx.notify()
-            }
-            _ => {}
-        }
     }
 
     pub const fn app_state(&self) -> &Arc<AppState> {
@@ -4464,19 +4231,19 @@ impl Workspace {
     pub fn swap_pane_in_direction(&mut self, direction: SplitDirection, cx: &mut Context<Self>) {
         if let Some(to) = self.find_pane_in_direction(direction, cx) {
             self.center.swap(&self.active_pane, &to, cx);
-            cx.notify();
+            self.notify_mode(WorkspaceMode::Editor, cx);
         }
     }
 
     pub fn move_pane_to_border(&mut self, direction: SplitDirection, cx: &mut Context<Self>) {
         if self.center.move_to_border(&self.active_pane, direction, cx).unwrap() {
-            cx.notify();
+            self.notify_mode(WorkspaceMode::Editor, cx);
         }
     }
 
     pub fn reset_pane_sizes(&mut self, cx: &mut Context<Self>) {
         self.center.reset_pane_sizes(cx);
-        cx.notify();
+        self.notify_mode(WorkspaceMode::Editor, cx);
     }
 
     fn handle_pane_focused(&mut self, pane: Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
@@ -4626,7 +4393,7 @@ impl Workspace {
             pane::Event::ChangeItemTitle => {
                 if *pane == self.active_pane {
                     self.active_item_path_changed(false, window, cx);
-                    cx.notify();
+                    self.notify_mode(WorkspaceMode::Editor, cx);
                 }
                 serialize_workspace = false;
             }
@@ -4656,7 +4423,7 @@ impl Workspace {
                         self.zoomed_position = None;
                         cx.emit(Event::ZoomChanged);
                     }
-                    cx.notify();
+                    self.notify_mode(WorkspaceMode::Editor, cx);
                 }
             }
             pane::Event::ZoomOut => {
@@ -4665,7 +4432,7 @@ impl Workspace {
                     self.zoomed = None;
                     cx.emit(Event::ZoomChanged);
                 }
-                cx.notify();
+                self.notify_mode(WorkspaceMode::Editor, cx);
             }
             pane::Event::ItemPinned | pane::Event::ItemUnpinned => {}
         }
@@ -4690,12 +4457,12 @@ impl Workspace {
             self.zoom_git_history_pane(None, cx);
             let new_pane = self.add_git_history_pane(window, cx);
             self.git_history_center.split(&pane_to_split, &new_pane, split_direction, cx);
-            cx.notify();
+            self.notify_mode(WorkspaceMode::GitHistory, cx);
             return new_pane;
         }
         let new_pane = self.add_pane(window, cx);
         self.center.split(&pane_to_split, &new_pane, split_direction, cx);
-        cx.notify();
+        self.notify_mode(WorkspaceMode::Editor, cx);
         new_pane
     }
 
@@ -4715,7 +4482,7 @@ impl Workspace {
         let new_pane = self.add_pane(window, cx);
         new_pane.update(cx, |pane, cx| pane.add_item(item, true, true, None, window, cx));
         self.center.split(&pane, &new_pane, direction, cx);
-        cx.notify();
+        self.notify_mode(WorkspaceMode::Editor, cx);
     }
 
     pub fn join_all_panes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -4726,7 +4493,7 @@ impl Workspace {
         if let Some(active_item) = active_item {
             self.activate_item(active_item.as_ref(), true, true, window, cx);
         }
-        cx.notify();
+        self.notify_mode(WorkspaceMode::Editor, cx);
     }
 
     pub fn join_pane_into_next(&mut self, pane: Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
@@ -4739,7 +4506,7 @@ impl Workspace {
             return;
         };
         move_all_items(&pane, &next_pane, window, cx);
-        cx.notify();
+        self.notify_mode(WorkspaceMode::Editor, cx);
     }
 
     fn remove_pane(
@@ -5839,7 +5606,7 @@ impl Workspace {
             cx.background_spawn(async move { db.set_centered_layout(database_id, centered_layout).await })
                 .detach_and_log_err(cx);
         }
-        cx.notify();
+        self.notify_mode(WorkspaceMode::Editor, cx);
     }
 
     pub fn toggle_editor_zoom(&mut self, _: &ToggleEditorZoom, window: &mut Window, cx: &mut Context<Self>) {
@@ -5862,64 +5629,6 @@ impl Workspace {
         self.maximized_pane = Some(self.active_pane.downgrade());
         window.focus(&self.active_pane.focus_handle(cx), cx);
         cx.notify();
-    }
-
-    fn adjust_padding(padding: Option<f32>) -> f32 {
-        padding
-            .unwrap_or(CenteredPaddingSettings::default().0)
-            .clamp(CenteredPaddingSettings::MIN_PADDING, CenteredPaddingSettings::MAX_PADDING)
-    }
-
-    fn render_dock(
-        &self,
-        position: DockPosition,
-        dock: &Entity<Dock>,
-        window: &Window,
-        cx: &App,
-    ) -> Option<Stateful<Div>> {
-        if self.zoomed_position == Some(position) {
-            return None;
-        }
-
-        let dock_element_id = match position {
-            DockPosition::Left => "left-dock",
-            DockPosition::Right => "right-dock",
-            DockPosition::Bottom => "bottom-dock",
-        };
-        let mut container = div().id(dock_element_id).flex().overflow_hidden().flex_none().child(dock.clone());
-
-        // Apply sizing only when the dock is open. When closed the dock is still
-        // included in the element tree so its focus handle remains mounted — without
-        // this, toggle_panel_focus cannot focus the panel when the dock is closed.
-        let dock = dock.read(cx);
-        if let Some(panel) = dock.visible_panel() {
-            // Separate the open dock from the center cards.
-            container = match position {
-                DockPosition::Left => container.pr(CARD_GAP),
-                DockPosition::Right => container.pl(CARD_GAP),
-                DockPosition::Bottom => container.pt(CARD_GAP),
-            };
-            let size_state = dock.stored_panel_size_state(panel.as_ref());
-            let min_size = panel.min_size(window, cx);
-            if position.axis() == Axis::Horizontal {
-                let size = size_state.and_then(|state| state.size).unwrap_or_else(|| panel.default_size(window, cx));
-                container = container.w(size);
-                // Allow the dock to shrink when there isn't enough space
-                // (e.g. when the sidebar is open). The stored size is
-                // preserved so the dock expands back when space becomes
-                // available.
-                let style = container.style();
-                style.flex_shrink = Some(1.0);
-                if let Some(min) = min_size {
-                    container = container.min_w(min);
-                }
-            } else {
-                let size = size_state.and_then(|state| state.size).unwrap_or_else(|| panel.default_size(window, cx));
-                container = container.h(size);
-            }
-        }
-
-        Some(container)
     }
 
     /// Returns the currently-visible major window regions ("parts"), in a stable
@@ -6015,17 +5724,6 @@ impl Workspace {
             window.focus(&previous, cx);
         }
         cx.notify();
-    }
-
-    /// Renders the center pane group.
-    fn render_center(&self, render_cx: &PaneRenderContext, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        div().id("editor-region").size_full().child(self.center.render(
-            self.zoomed.as_ref(),
-            self.maximized_pane.as_ref(),
-            render_cx,
-            window,
-            cx,
-        ))
     }
 
     pub fn for_window(window: &Window, _cx: &App) -> Option<Entity<Workspace>> {
@@ -6448,32 +6146,12 @@ impl Render for Workspace {
             log::info!("Rendered first frame");
         }
 
-        let pad_center_pane = self.centered_layout && self.center.panes().len() == 1 && self.active_item(cx).is_some();
-        let pad_zoomed_pane = self.centered_layout && self.zoomed.is_some() && self.zoomed_position.is_none();
-        let render_padding = |size| (size > 0.0).then(|| div().h_full().w(relative(size)));
-        let render_centered_paddings = |enabled: bool| {
-            if !enabled {
-                return (None, None);
-            }
-
-            let settings = WorkspaceSettings::get_global(cx).centered_layout;
-            (
-                render_padding(Self::adjust_padding(settings.left_padding.map(|padding| padding.0))),
-                render_padding(Self::adjust_padding(settings.right_padding.map(|padding| padding.0))),
-            )
-        };
-        let centered_paddings = render_centered_paddings(pad_center_pane);
-        let zoomed_paddings = render_centered_paddings(pad_zoomed_pane);
         let ui_font = ui::font::setup_ui_font(window, cx);
 
         let theme = cx.theme().clone();
         let colors = theme.colors();
         let notification_entities =
             self.notifications.iter().map(|(_, notification)| notification.entity_id()).collect::<Vec<_>>();
-        let bottom_dock_layout = WorkspaceSettings::get_global(cx).bottom_dock_layout;
-
-        let pane_render_context = PaneRenderContext { active_pane: &self.active_pane, workspace: &self.weak_self };
-
         let key_context = self.key_context(cx);
         let root = self
             .actions(h_flex(), window, cx)
@@ -6547,303 +6225,7 @@ impl Render for Workspace {
                             .flex()
                             .flex_col()
                             .overflow_hidden()
-                            .px(CARD_GAP)
-                            // The status bar pads itself to center between the card and window edge.
-                            .when(!self.status_bar_visible(cx), |this| this.pb(CARD_GAP))
-                            .child({
-                                let this = cx.entity();
-                                canvas(
-                                    move |bounds, window, cx| {
-                                        this.update(cx, |this, cx| {
-                                            let bounds_changed = this.bounds != bounds;
-                                            this.bounds = bounds;
-
-                                            if bounds_changed {
-                                                this.left_dock.update(cx, |dock, cx| {
-                                                    dock.clamp_panel_size(bounds.size.width, window, cx)
-                                                });
-
-                                                this.right_dock.update(cx, |dock, cx| {
-                                                    dock.clamp_panel_size(bounds.size.width, window, cx)
-                                                });
-
-                                                this.bottom_dock.update(cx, |dock, cx| {
-                                                    dock.clamp_panel_size(bounds.size.height, window, cx)
-                                                });
-                                            }
-                                        })
-                                    },
-                                    |_, _, _, _| {},
-                                )
-                                .absolute()
-                                .size_full()
-                            })
-                            .when(self.zoomed.is_none(), |this| {
-                                this.on_drag_move(cx.listener(
-                                    move |workspace, e: &DragMoveEvent<DraggedDock>, window, cx| {
-                                        if workspace.previous_dock_drag_coordinates != Some(e.event.position) {
-                                            workspace.previous_dock_drag_coordinates = Some(e.event.position);
-
-                                            match e.drag(cx).0 {
-                                                DockPosition::Left => {
-                                                    workspace.resize_left_dock(
-                                                        e.event.position.x - workspace.bounds.left(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                }
-                                                DockPosition::Right => {
-                                                    workspace.resize_right_dock(
-                                                        workspace.bounds.right() - e.event.position.x,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                }
-                                                DockPosition::Bottom => {
-                                                    workspace.resize_bottom_dock(
-                                                        workspace.bounds.bottom() - e.event.position.y,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                }
-                                            };
-                                            workspace.serialize_workspace(window, cx);
-                                        }
-                                    },
-                                ))
-                            })
-                            .when(self.mode == WorkspaceMode::GitHistory, |this| {
-                                this.child(self.render_git_history(window, cx))
-                            })
-                            .when(self.mode == WorkspaceMode::Editor, |this| {
-                                this.child({
-                                    match bottom_dock_layout {
-                                        BottomDockLayout::Full => div()
-                                            .flex()
-                                            .flex_col()
-                                            .h_full()
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .flex_row()
-                                                    .flex_1()
-                                                    .overflow_hidden()
-                                                    .children(self.render_dock(
-                                                        DockPosition::Left,
-                                                        &self.left_dock,
-                                                        window,
-                                                        cx,
-                                                    ))
-                                                    .child(
-                                                        div().flex().flex_col().flex_1().overflow_hidden().child(
-                                                            h_flex()
-                                                                .flex_1()
-                                                                .when_some(centered_paddings.0, |this, p| {
-                                                                    this.child(p.border_r_1())
-                                                                })
-                                                                .child(self.render_center(
-                                                                    &pane_render_context,
-                                                                    window,
-                                                                    cx,
-                                                                ))
-                                                                .when_some(centered_paddings.1, |this, p| {
-                                                                    this.child(p.border_l_1())
-                                                                }),
-                                                        ),
-                                                    )
-                                                    .children(self.render_dock(
-                                                        DockPosition::Right,
-                                                        &self.right_dock,
-                                                        window,
-                                                        cx,
-                                                    )),
-                                            )
-                                            .child(div().w_full().children(self.render_dock(
-                                                DockPosition::Bottom,
-                                                &self.bottom_dock,
-                                                window,
-                                                cx,
-                                            ))),
-
-                                        BottomDockLayout::LeftAligned => div()
-                                            .flex()
-                                            .flex_row()
-                                            .h_full()
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .flex_1()
-                                                    .h_full()
-                                                    .child(
-                                                        div()
-                                                            .flex()
-                                                            .flex_row()
-                                                            .flex_1()
-                                                            .children(self.render_dock(
-                                                                DockPosition::Left,
-                                                                &self.left_dock,
-                                                                window,
-                                                                cx,
-                                                            ))
-                                                            .child(
-                                                                div()
-                                                                    .flex()
-                                                                    .flex_col()
-                                                                    .flex_1()
-                                                                    .overflow_hidden()
-                                                                    .child(
-                                                                        h_flex()
-                                                                            .flex_1()
-                                                                            .when_some(
-                                                                                centered_paddings.0,
-                                                                                |this, p| this.child(p.border_r_1()),
-                                                                            )
-                                                                            .child(self.render_center(
-                                                                                &pane_render_context,
-                                                                                window,
-                                                                                cx,
-                                                                            ))
-                                                                            .when_some(
-                                                                                centered_paddings.1,
-                                                                                |this, p| this.child(p.border_l_1()),
-                                                                            ),
-                                                                    ),
-                                                            ),
-                                                    )
-                                                    .child(div().w_full().children(self.render_dock(
-                                                        DockPosition::Bottom,
-                                                        &self.bottom_dock,
-                                                        window,
-                                                        cx,
-                                                    ))),
-                                            )
-                                            .children(self.render_dock(
-                                                DockPosition::Right,
-                                                &self.right_dock,
-                                                window,
-                                                cx,
-                                            )),
-                                        BottomDockLayout::RightAligned => div()
-                                            .flex()
-                                            .flex_row()
-                                            .h_full()
-                                            .children(self.render_dock(DockPosition::Left, &self.left_dock, window, cx))
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .flex_1()
-                                                    .h_full()
-                                                    .child(
-                                                        div()
-                                                            .flex()
-                                                            .flex_row()
-                                                            .flex_1()
-                                                            .child(
-                                                                div()
-                                                                    .flex()
-                                                                    .flex_col()
-                                                                    .flex_1()
-                                                                    .overflow_hidden()
-                                                                    .child(
-                                                                        h_flex()
-                                                                            .flex_1()
-                                                                            .when_some(
-                                                                                centered_paddings.0,
-                                                                                |this, p| this.child(p.border_r_1()),
-                                                                            )
-                                                                            .child(self.render_center(
-                                                                                &pane_render_context,
-                                                                                window,
-                                                                                cx,
-                                                                            ))
-                                                                            .when_some(
-                                                                                centered_paddings.1,
-                                                                                |this, p| this.child(p.border_l_1()),
-                                                                            ),
-                                                                    ),
-                                                            )
-                                                            .children(self.render_dock(
-                                                                DockPosition::Right,
-                                                                &self.right_dock,
-                                                                window,
-                                                                cx,
-                                                            )),
-                                                    )
-                                                    .child(div().w_full().children(self.render_dock(
-                                                        DockPosition::Bottom,
-                                                        &self.bottom_dock,
-                                                        window,
-                                                        cx,
-                                                    ))),
-                                            ),
-                                        BottomDockLayout::Contained => div()
-                                            .flex()
-                                            .flex_row()
-                                            .h_full()
-                                            .children(self.render_dock(DockPosition::Left, &self.left_dock, window, cx))
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .flex_1()
-                                                    .overflow_hidden()
-                                                    .child(
-                                                        h_flex()
-                                                            .flex_1()
-                                                            .when_some(centered_paddings.0, |this, p| {
-                                                                this.child(p.border_r_1())
-                                                            })
-                                                            .child(self.render_center(&pane_render_context, window, cx))
-                                                            .when_some(centered_paddings.1, |this, p| {
-                                                                this.child(p.border_l_1())
-                                                            }),
-                                                    )
-                                                    .children(self.render_dock(
-                                                        DockPosition::Bottom,
-                                                        &self.bottom_dock,
-                                                        window,
-                                                        cx,
-                                                    )),
-                                            )
-                                            .children(self.render_dock(
-                                                DockPosition::Right,
-                                                &self.right_dock,
-                                                window,
-                                                cx,
-                                            )),
-                                    }
-                                })
-                            })
-                            .children(self.zoomed.as_ref().filter(|_| self.mode == WorkspaceMode::Editor).and_then(
-                                |view| {
-                                    let zoomed_view = view.upgrade()?;
-                                    let zoomed_element = match zoomed_paddings {
-                                        (None, None) => zoomed_view.into_any_element(),
-                                        (left, right) => h_flex()
-                                            .size_full()
-                                            .when_some(left, |this, padding| this.child(padding.border_r_1()))
-                                            .child(div().size_full().child(zoomed_view))
-                                            .when_some(right, |this, padding| this.child(padding.border_l_1()))
-                                            .into_any_element(),
-                                    };
-                                    // Whatever is zoomed (editor or any dock) covers exactly the card
-                                    // area, so every zoomed view gets the same size.
-                                    Some(
-                                        div()
-                                            .occlude()
-                                            .absolute()
-                                            .top_0()
-                                            .left(CARD_GAP)
-                                            .right(CARD_GAP)
-                                            .bottom(if self.status_bar_visible(cx) { px(0.) } else { CARD_GAP })
-                                            .bg(colors.background)
-                                            .child(zoomed_element)
-                                            .shadow_lg(),
-                                    )
-                                },
-                            ))
+                            .child(self.mode_view(self.mode).clone().cached(StyleRefinement::default().size_full()))
                             .children(self.render_notifications(window, cx)),
                     )
                     .when(self.status_bar_visible(cx), |parent| parent.child(self.status_bar.clone()))
@@ -7937,19 +7319,6 @@ fn load_legacy_panel_size(
 #[cfg(test)]
 mod tests {
     use super::WorkspaceMode;
-
-    #[test]
-    fn test_clamp_git_history_sidebar_width() {
-        use gpui::px;
-
-        use super::GIT_HISTORY_SIDEBAR_MIN_WIDTH;
-        use super::clamp_git_history_sidebar_width;
-
-        assert_eq!(clamp_git_history_sidebar_width(px(400.), px(1000.)), px(400.));
-        assert_eq!(clamp_git_history_sidebar_width(px(900.), px(1000.)), px(600.));
-        assert_eq!(clamp_git_history_sidebar_width(px(100.), px(1000.)), GIT_HISTORY_SIDEBAR_MIN_WIDTH);
-        assert_eq!(clamp_git_history_sidebar_width(px(300.), px(200.)), GIT_HISTORY_SIDEBAR_MIN_WIDTH);
-    }
 
     #[test]
     fn test_window_title() {
