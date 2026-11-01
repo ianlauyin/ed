@@ -135,6 +135,8 @@ blobs with no language server, so they are not mixed into editor panes.
   files, unified/split diff) on the left and the commit's +/- line counts and
   "Show in Git History" on the right. Hunk navigation and
   staging buttons are left out: the diff is read-only.
+- "Show in Git History" opens the graph of the commit's own repository, not
+  the active one, so it works in multi-root projects.
 - Clicking a changed file in the sidebar scrolls the diff to it, bringing the
   commit view's tab and pane to the front and focusing it. In the graph,
   it opens the whole commit view and scrolls to that file; there is no "View

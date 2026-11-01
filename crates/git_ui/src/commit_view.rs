@@ -1365,6 +1365,7 @@ impl Render for CommitViewToolbar {
         let commit_view_ref = commit_view.read(cx);
         let is_stash = commit_view_ref.stash.is_some();
         let sha_for_graph = commit_view_ref.commit.sha.to_string();
+        let repo_id_for_graph = commit_view_ref.repository.read(cx).id.0;
         let multibuffer = commit_view_ref.multibuffer.read(cx);
         let (additions, deletions) = multibuffer.snapshot(cx).total_changed_lines();
         let is_multibuffer_empty = multibuffer.is_empty();
@@ -1382,7 +1383,10 @@ impl Render for CommitViewToolbar {
                         .tooltip(Tooltip::text("Show in Git History"))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
-                                Box::new(crate::git_graph::OpenAtCommit { sha: sha_for_graph.clone() }),
+                                Box::new(crate::git_graph::OpenAtCommit {
+                                    sha: sha_for_graph.clone(),
+                                    repo_id: Some(repo_id_for_graph),
+                                }),
                                 cx,
                             );
                         }),

@@ -322,6 +322,9 @@ actions!(
 #[action(namespace = git_graph)]
 pub struct OpenAtCommit {
     pub sha: String,
+    /// The commit's repository; the active repository when omitted.
+    #[serde(default)]
+    pub repo_id: Option<u64>,
 }
 
 fn timestamp_format() -> &'static [BorrowedFormatItem<'static>] {
@@ -785,12 +788,14 @@ pub fn init(cx: &mut App) {
                 })
                 .on_action(move |action: &OpenAtCommit, window, cx| {
                     let sha = action.sha.clone();
+                    let requested_repo_id = action.repo_id.map(RepositoryId);
                     workspace
                         .update(cx, |workspace, cx| {
-                            let Some(repo) = workspace.project().read(cx).active_repository(cx) else {
+                            let active_repo_id =
+                                workspace.project().read(cx).active_repository(cx).map(|repo| repo.read(cx).id);
+                            let Some(selected_repo_id) = commit_graph_repo(requested_repo_id, active_repo_id) else {
                                 return;
                             };
-                            let selected_repo_id = repo.read(cx).id;
 
                             let git_store = workspace.project().read(cx).git_store().clone();
                             open_or_reuse_graph(
@@ -863,6 +868,12 @@ pub fn show_active_repository_history(workspace: &mut Workspace, window: &mut Wi
 /// repository, or `None` when the active history tab already shows it.
 fn graph_repo_to_show(active_repo_id: Option<RepositoryId>, shown_repo_id: Option<RepositoryId>) -> Option<RepositoryId> {
     active_repo_id.filter(|active_repo_id| shown_repo_id != Some(*active_repo_id))
+}
+
+/// The repository whose graph shows a commit: its own when known, otherwise
+/// the active one (e.g. a keybinding with only a sha).
+fn commit_graph_repo(requested_repo_id: Option<RepositoryId>, active_repo_id: Option<RepositoryId>) -> Option<RepositoryId> {
+    requested_repo_id.or(active_repo_id)
 }
 
 /// The repository a history tab belongs to: a graph's own, otherwise that of
@@ -3247,6 +3258,16 @@ mod tests {
         assert_eq!(history_reveal_path(&LogSource::Path(path.clone())), Some(path));
         assert_eq!(history_reveal_path(&LogSource::All), None);
         assert_eq!(history_reveal_path(&LogSource::Branch("main".into())), None);
+    }
+
+    #[test]
+    fn test_commit_graph_repo() {
+        let a = RepositoryId(1);
+        let b = RepositoryId(2);
+        assert_eq!(commit_graph_repo(Some(b), Some(a)), Some(b));
+        assert_eq!(commit_graph_repo(Some(b), None), Some(b));
+        assert_eq!(commit_graph_repo(None, Some(a)), Some(a));
+        assert_eq!(commit_graph_repo(None, None), None);
     }
 
     #[test]
