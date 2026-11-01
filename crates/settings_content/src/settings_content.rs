@@ -459,9 +459,6 @@ pub struct MarkdownPreviewSettingsContent {
     /// The font size to use for rendering in the markdown preview.
     /// Falls back to the UI font size if unset.
     pub font_size: Option<FontSize>,
-    /// The theme to use for the markdown preview.
-    /// Falls back to the main editor theme if unset.
-    pub theme: Option<ThemeSelection>,
     /// The weight of headings (H1 through H6) in the markdown preview, in CSS
     /// units from 100 to 900.
     ///

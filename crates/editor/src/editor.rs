@@ -605,7 +605,6 @@ use text::Rope;
 use text::ToOffset as _;
 use theme::AccentColors;
 use theme::ActiveTheme;
-use theme::GlobalTheme;
 use theme::PlayerColor;
 use theme::StatusColors;
 use theme::SyntaxTheme;
@@ -1394,7 +1393,6 @@ pub struct Editor {
 #[derive(Debug, PartialEq)]
 struct AccentData {
     colors: AccentColors,
-    overrides: Vec<SharedString>,
 }
 
 const fn debounce_value(debounce_ms: u64) -> Option<Duration> {
@@ -2240,7 +2238,6 @@ impl Editor {
                         cx.observe_in(&display_map, window, Self::on_display_map_changed),
                         cx.observe(&blink_manager, |_, _, cx| cx.notify()),
                         cx.observe_global_in::<SettingsStore>(window, Self::settings_changed),
-                        cx.observe_global_in::<GlobalTheme>(window, Self::theme_changed),
                         observe_buffer_font_size_adjustment(cx, |_, cx| cx.notify()),
                     ]
                 }
@@ -7362,7 +7359,6 @@ impl Editor {
             return None;
         }
 
-        let theme_settings = theme_settings::ThemeSettings::get_global(cx);
         let theme = cx.theme();
         let accent_colors = theme.accents().clone();
         let editor_background = theme.colors().editor_background;
@@ -7372,25 +7368,7 @@ impl Editor {
             editor_background,
         ));
 
-        let accent_overrides = theme_settings
-            .theme_overrides
-            .get(theme.name.as_ref())
-            .map(|theme_style| &theme_style.accents)
-            .into_iter()
-            .flatten()
-            .chain(
-                theme_settings
-                    .experimental_theme_overrides
-                    .as_ref()
-                    .map(|overrides| &overrides.accents)
-                    .into_iter()
-                    .flatten(),
-            )
-            .filter_map(|accent| accent.0.as_ref().map(|c| c.to_string()))
-            .map(SharedString::from)
-            .collect();
-
-        Some(AccentData { colors: auto_accent_colors, overrides: accent_overrides })
+        Some(AccentData { colors: auto_accent_colors })
     }
 
     fn fetch_applicable_language_settings(&self, cx: &App) -> HashMap<Option<LanguageName>, Arc<LanguageSettings>> {
@@ -7502,22 +7480,6 @@ impl Editor {
         }
 
         cx.notify();
-    }
-
-    fn theme_changed(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.mode.is_full() {
-            return;
-        }
-
-        let new_accents = self.fetch_accent_data(cx);
-        if new_accents != self.accent_data {
-            self.accent_data = new_accents;
-            self.colorize_brackets(true, cx);
-        }
-        self.refresh_spell_check(cx);
-
-        self.invalidate_semantic_tokens(None);
-        self.refresh_semantic_tokens(None, false, cx);
     }
 
     pub const fn set_searchable(&mut self, searchable: bool) {

@@ -1,6 +1,6 @@
 [package]
 name = "ed"
-version = "1.53.0"
+version = "1.54.0"
 edition.workspace = true
 description = "A focused single-user code editor."
 default-run = "ed"
@@ -61,7 +61,6 @@ tab_switcher.workspace = true
 tabular_data_preview.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
-theme_selector.workspace = true
 theme_settings.workspace = true
 time.workspace = true
 title_bar.workspace = true

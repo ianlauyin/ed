@@ -141,8 +141,6 @@ use settings_content::TerminalDockPosition;
 use settings_content::TerminalLineHeight;
 use settings_content::TerminalSettingsContent;
 use settings_content::TextRenderingMode;
-use settings_content::ThemeName;
-use settings_content::ThemeSelection;
 use settings_content::ThemeSettingsContent;
 use settings_content::TitleBarSettingsContent;
 use settings_content::WhitespaceMapContent;
@@ -270,7 +268,6 @@ pub fn settings() -> SettingsContent {
             open_markdown_files_in_preview: Some(false),
             limit_content_width: Some(true),
             max_width: Some(PixelSetting(1200.0)),
-            ..Default::default()
         }),
         hide_mouse: Some(HideMouseMode::OnTypingAndAction),
         line_indicator_format: Some(LineIndicatorFormat::Long),
@@ -490,9 +487,7 @@ fn theme_settings() -> Box<ThemeSettingsContent> {
         buffer_font_features: Some(FontFeaturesContent(IndexMap::default())),
         git_commit_buffer_font_size: Some(FontSize(12.0)),
         mermaid_font_family: None,
-        theme: Some(ThemeSelection::Static(ThemeName("Nord".into()))),
         unnecessary_code_fade: Some(CodeFade(0.3)),
-        ..Default::default()
     })
 }
 

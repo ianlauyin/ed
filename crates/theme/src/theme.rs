@@ -2,8 +2,6 @@ mod buffer_line_height;
 mod color_space;
 mod default_colors;
 mod fallback_themes;
-mod font_family_cache;
-mod registry;
 mod scale;
 mod schema;
 mod styles;
@@ -12,33 +10,40 @@ mod theme_settings_provider;
 use std::sync::Arc;
 
 use gpui::App;
-use gpui::AssetSource;
-use gpui::BorrowAppContext;
 use gpui::Global;
 use gpui::Hsla;
 use gpui::Pixels;
 use gpui::SharedString;
 use gpui::Styled;
 use gpui::Tiling;
-use gpui::WindowAppearance;
 use gpui::WindowBackgroundAppearance;
 use gpui::px;
 use serde::Deserialize;
 
 pub use crate::buffer_line_height::*;
 pub use crate::color_space::*;
-pub use crate::default_colors::*;
+pub(crate) use crate::default_colors::amber;
+pub(crate) use crate::default_colors::blue;
+pub(crate) use crate::default_colors::cyan;
+pub(crate) use crate::default_colors::gold;
+pub(crate) use crate::default_colors::grass;
+pub(crate) use crate::default_colors::indigo;
+pub(crate) use crate::default_colors::iris;
+pub(crate) use crate::default_colors::jade;
+pub(crate) use crate::default_colors::lime;
+pub(crate) use crate::default_colors::neutral;
+pub(crate) use crate::default_colors::orange;
+pub(crate) use crate::default_colors::pink;
+pub(crate) use crate::default_colors::purple;
+pub(crate) use crate::default_colors::red;
+pub(crate) use crate::default_colors::tomato;
+pub(crate) use crate::default_colors::yellow;
 pub use crate::fallback_themes::apply_status_color_defaults;
 pub use crate::fallback_themes::apply_theme_color_defaults;
-pub use crate::font_family_cache::*;
-pub use crate::registry::*;
 pub use crate::scale::*;
 pub use crate::schema::*;
 pub use crate::styles::*;
 pub use crate::theme_settings_provider::*;
-
-/// The name of the default dark theme.
-pub const DEFAULT_DARK_THEME: &str = "One Dark";
 
 /// Defines window border radius for platforms that use client side decorations.
 pub const CLIENT_SIDE_DECORATION_ROUNDING: Pixels = px(10.0);
@@ -88,47 +93,6 @@ impl Appearance {
     }
 }
 
-impl From<WindowAppearance> for Appearance {
-    fn from(value: WindowAppearance) -> Self {
-        match value {
-            WindowAppearance::Dark | WindowAppearance::VibrantDark => Self::Dark,
-            WindowAppearance::Light | WindowAppearance::VibrantLight => Self::Light,
-        }
-    }
-}
-
-/// Which themes should be loaded. This is used primarily for testing.
-pub enum LoadThemes {
-    /// Only load the base theme.
-    ///
-    /// No user themes will be loaded.
-    JustBase,
-
-    /// Load all of the built-in themes.
-    All(Box<dyn AssetSource>),
-}
-
-/// Initialize the theme system with default themes.
-///
-/// This sets up the [`ThemeRegistry`], [`FontFamilyCache`], [`SystemAppearance`],
-/// and [`GlobalTheme`] with the default dark theme. It does NOT load bundled
-/// themes from JSON or integrate with settings — use `theme_settings::init` for that.
-pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
-    SystemAppearance::init(cx);
-    let assets = match themes_to_load {
-        LoadThemes::JustBase => Box::new(()) as Box<dyn AssetSource>,
-        LoadThemes::All(assets) => assets,
-    };
-    ThemeRegistry::set_global(assets, cx);
-    FontFamilyCache::init_global(cx);
-
-    let themes = ThemeRegistry::default_global(cx);
-    let theme = themes
-        .get(DEFAULT_DARK_THEME)
-        .unwrap_or_else(|_| themes.list().into_iter().next().map(|m| themes.get(&m.name).unwrap()).unwrap());
-    cx.set_global(GlobalTheme { theme });
-}
-
 /// Implementing this trait allows accessing the active theme.
 pub trait ActiveTheme {
     /// Returns the active theme.
@@ -139,82 +103,6 @@ impl ActiveTheme for App {
     fn theme(&self) -> &Arc<Theme> {
         GlobalTheme::theme(self)
     }
-}
-
-/// The appearance of the system.
-#[derive(Debug, Clone, Copy)]
-pub struct SystemAppearance(pub Appearance);
-
-impl std::ops::Deref for SystemAppearance {
-    type Target = Appearance;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Default for SystemAppearance {
-    fn default() -> Self {
-        Self(Appearance::Dark)
-    }
-}
-
-#[derive(Default)]
-struct GlobalSystemAppearance(SystemAppearance);
-
-impl std::ops::DerefMut for GlobalSystemAppearance {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl std::ops::Deref for GlobalSystemAppearance {
-    type Target = SystemAppearance;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Global for GlobalSystemAppearance {}
-
-impl SystemAppearance {
-    /// Initializes the [`SystemAppearance`] for the application.
-    pub fn init(cx: &mut App) {
-        *cx.default_global::<GlobalSystemAppearance>() =
-            GlobalSystemAppearance(SystemAppearance(cx.window_appearance().into()));
-    }
-
-    /// Returns the global [`SystemAppearance`].
-    pub fn global(cx: &App) -> Self {
-        cx.global::<GlobalSystemAppearance>().0
-    }
-
-    /// Returns a mutable reference to the global [`SystemAppearance`].
-    pub fn global_mut(cx: &mut App) -> &mut Self {
-        cx.global_mut::<GlobalSystemAppearance>()
-    }
-}
-
-/// A theme family is a grouping of themes under a single name.
-///
-/// For example, the "One" theme family contains the "One Light" and "One Dark" themes.
-///
-/// It can also be used to package themes with many variants.
-///
-/// For example, the "Atelier" theme family contains "Cave", "Dune", "Estuary", "Forest", "Heath", etc.
-pub struct ThemeFamily {
-    /// The unique identifier for the theme family.
-    pub id: String,
-    /// The name of the theme family. This will be displayed in the UI, such as when adding or removing a theme family.
-    pub name: SharedString,
-    /// The author of the theme family.
-    pub author: SharedString,
-    /// The [Theme]s in the family.
-    pub themes: Vec<Theme>,
-    /// The color scales used by the themes in the family.
-    /// Note: This will be removed in the future.
-    pub scales: ColorScales,
 }
 
 /// A theme is the primary mechanism for defining the appearance of the UI.
@@ -306,11 +194,6 @@ impl GlobalTheme {
     /// Creates a new [`GlobalTheme`] with the given theme.
     pub const fn new(theme: Arc<Theme>) -> Self {
         Self { theme }
-    }
-
-    /// Updates the active theme.
-    pub fn update_theme(cx: &mut App, theme: Arc<Theme>) {
-        cx.update_global::<Self, _>(|this, _| this.theme = theme);
     }
 
     /// Returns the active theme.

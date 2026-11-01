@@ -16,12 +16,9 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-collections.workspace = true
 gpui.workspace = true
 syntax_theme.workspace = true
 palette.workspace = true
-parking_lot.workspace = true
 refineable.workspace = true
 serde.workspace = true
 strum.workspace = true
-thiserror.workspace = true

@@ -61,9 +61,6 @@ use project::search::SearchQuery;
 use settings::SeedQuerySetting;
 use settings::Settings;
 use settings::update_settings_file;
-use theme::SystemAppearance;
-use theme::Theme;
-use theme::ThemeRegistry;
 use theme_settings::ThemeSettings;
 use ui::ContextMenu;
 use ui::LinkPreview;
@@ -917,21 +914,7 @@ impl MarkdownPreviewView {
         });
     }
 
-    /// Returns the theme chosen in `markdown_preview.theme`, or `None` if the
-    /// user hasn't set one or it can't be resolved.
-    fn resolve_preview_theme(&self, cx: &App) -> Option<Arc<Theme>> {
-        let theme_settings = ThemeSettings::get_global(cx);
-        let theme_selection = theme_settings.markdown_preview_theme.as_ref()?;
-        let theme_name = theme_selection.name(SystemAppearance::global(cx).0);
-        ThemeRegistry::global(cx).get(&theme_name.0).ok()
-    }
-
-    fn render_markdown_element(
-        &self,
-        preview_theme: &Option<Arc<Theme>>,
-        window: &Window,
-        cx: &Context<Self>,
-    ) -> MarkdownElement {
+    fn render_markdown_element(&self, window: &Window, cx: &Context<Self>) -> MarkdownElement {
         let active_editor = self.active_editor.as_ref().map(|state| state.editor.clone());
         let source_project_path =
             active_editor.as_ref().and_then(|editor| Self::project_path_for_active_editor(editor.read(cx), cx));
@@ -946,11 +929,7 @@ impl MarkdownPreviewView {
             project = Some(project_entity);
         }
 
-        let mut markdown_style = if let Some(theme) = preview_theme {
-            preview_markdown_style(theme.colors(), theme.syntax(), window, cx)
-        } else {
-            preview_markdown_style(cx.theme().colors(), cx.theme().syntax(), window, cx)
-        };
+        let mut markdown_style = preview_markdown_style(cx.theme().colors(), cx.theme().syntax(), window, cx);
         markdown_style.minimum_highlight_contrast = EditorSettings::get_global(cx).minimum_contrast_for_highlights;
 
         let mut markdown_element = MarkdownElement::new(self.markdown.clone(), markdown_style)
@@ -1592,11 +1571,7 @@ impl Item for MarkdownPreviewView {
 
 impl Render for MarkdownPreviewView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let preview_theme = self.resolve_preview_theme(cx);
-        let bg_color = preview_theme
-            .as_ref()
-            .map(|theme| theme.colors().editor_background)
-            .unwrap_or_else(|| cx.theme().colors().editor_background);
+        let bg_color = cx.theme().colors().editor_background;
         let preview_font_size = ThemeSettings::get_global(cx).markdown_preview_font_size(cx);
         let hovered_url = self.hovered_url.clone();
         div()
@@ -1630,7 +1605,7 @@ impl Render for MarkdownPreviewView {
                 let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
                 // Styles each block; the vertical padding pads the list.
                 let markdown_element = self
-                    .render_markdown_element(&preview_theme, window, cx)
+                    .render_markdown_element(window, cx)
                     .w_full()
                     .p_4()
                     .when_some(max_width, |this, max_width| this.max_w(max_width).mx_auto());

@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "ed"
-version = "1.53.0"
+version = "1.54.0"
 dependencies = [
  "activity_indicator",
  "anyhow",
@@ -930,7 +930,6 @@ dependencies = [
  "tabular_data_preview",
  "terminal_view",
  "theme",
- "theme_selector",
  "theme_settings",
  "time",
  "title_bar",
@@ -4627,8 +4626,6 @@ name = "syntax_theme"
 version = "0.1.0"
 dependencies = [
  "gpui",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4835,33 +4832,12 @@ name = "theme"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
  "gpui",
  "palette",
- "parking_lot",
  "refineable",
  "serde",
  "strum",
  "syntax_theme",
- "thiserror",
-]
-
-[[package]]
-name = "theme_selector"
-version = "0.1.0"
-dependencies = [
- "ed_actions",
- "fs",
- "fuzzy",
- "gpui",
- "log",
- "picker",
- "settings",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
 ]
 
 [[package]]
@@ -4869,12 +4845,8 @@ name = "theme_settings"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
  "gpui",
- "gpui_util",
- "log",
  "palette",
- "refineable",
  "serde",
  "serde_json",
  "settings",

@@ -6,32 +6,24 @@ use std::sync::Arc;
 use ::settings::IntoGpui;
 use ::settings::Settings;
 use ::settings::SettingsStore;
-use anyhow::Context as _;
 use gpui::App;
 use gpui::Font;
 use gpui::HighlightStyle;
 use gpui::Pixels;
 use gpui::Refineable;
 use gpui::px;
-use gpui_util::ResultExt;
 use theme::AccentColors;
 use theme::Appearance;
 use theme::AppearanceContent;
-use theme::DEFAULT_DARK_THEME;
 use theme::GlobalTheme;
-use theme::LoadThemes;
 use theme::PlayerColor;
 use theme::StatusColors;
 use theme::SyntaxTheme;
-use theme::SystemAppearance;
 use theme::SystemColors;
 use theme::Theme;
 use theme::ThemeColors;
-use theme::ThemeFamily;
-use theme::ThemeRegistry;
 use theme::ThemeSettingsProvider;
 use theme::ThemeStyles;
-use theme::default_color_scales;
 use theme::try_parse_color;
 
 pub use crate::schema::FontStyleContent;
@@ -44,32 +36,25 @@ pub use crate::schema::ThemeFamilyContent;
 pub use crate::schema::ThemeStyleContent;
 pub use crate::schema::WindowBackgroundContent;
 pub use crate::schema::status_colors_refinement;
-pub use crate::schema::syntax_overrides;
 pub use crate::schema::theme_colors_refinement;
 pub use crate::settings::BufferLineHeight;
 pub use crate::settings::FontFamilyName;
 pub use crate::settings::GitCommitBufferFontSize;
 pub use crate::settings::MarkdownPreviewFontSize;
-pub use crate::settings::ThemeAppearanceMode;
-pub use crate::settings::ThemeName;
-pub use crate::settings::ThemeSelection;
 pub use crate::settings::ThemeSettings;
 use crate::settings::adjust_buffer_font_size;
 pub use crate::settings::adjust_git_commit_buffer_font_size;
 pub use crate::settings::adjust_markdown_preview_font_size;
 pub use crate::settings::adjust_ui_font_size;
 pub use crate::settings::adjusted_font_size;
-pub use crate::settings::appearance_to_mode;
+use crate::settings::apply_floating_chrome;
 pub use crate::settings::buffer_line_height_from_settings;
 pub use crate::settings::clamp_font_size;
-pub use crate::settings::default_theme;
 pub use crate::settings::observe_buffer_font_size_adjustment;
 pub use crate::settings::reset_buffer_font_size;
 pub use crate::settings::reset_git_commit_buffer_font_size;
 pub use crate::settings::reset_markdown_preview_font_size;
 pub use crate::settings::reset_ui_font_size;
-pub use crate::settings::set_mode;
-pub use crate::settings::set_theme;
 pub use crate::settings::setup_ui_font;
 
 struct ThemeSettingsProviderImpl;
@@ -92,23 +77,13 @@ impl ThemeSettingsProvider for ThemeSettingsProviderImpl {
     }
 }
 
-/// Initialize the theme system with settings integration.
-///
-/// This is the full initialization for the application. It calls [`theme::init`]
-/// and then wires up settings observation for theme/font changes.
-pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
-    let load_user_themes = matches!(&themes_to_load, LoadThemes::All(_));
+/// The only theme: Nord, embedded in the binary.
+const NORD_THEME_JSON: &[u8] = include_bytes!("../../../assets/themes/nord/nord.json");
 
-    theme::init(themes_to_load, cx);
+/// Initializes the theme system: sets the constant Nord theme and wires up font size settings.
+pub fn init(cx: &mut App) {
     theme::set_theme_settings_provider(Box::new(ThemeSettingsProviderImpl), cx);
-
-    if load_user_themes {
-        let registry = ThemeRegistry::global(cx);
-        load_bundled_themes(&registry);
-    }
-
-    let theme = configured_theme(cx);
-    GlobalTheme::update_theme(cx, theme);
+    cx.set_global(GlobalTheme::new(Arc::new(nord_theme())));
 
     let settings = ThemeSettings::get_global(cx);
 
@@ -116,8 +91,6 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
     let mut prev_git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
     let mut prev_markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
-    let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-    let mut prev_theme_overrides = (settings.experimental_theme_overrides.clone(), settings.theme_overrides.clone());
 
     cx.observe_global::<SettingsStore>(move |cx| {
         let settings = ThemeSettings::get_global(cx);
@@ -126,8 +99,6 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
         let ui_font_size_settings = settings.ui_font_size_settings();
         let git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
         let markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
-        let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-        let theme_overrides = (settings.experimental_theme_overrides.clone(), settings.theme_overrides.clone());
 
         if buffer_font_size_settings != prev_buffer_font_size_settings {
             prev_buffer_font_size_settings = buffer_font_size_settings;
@@ -148,75 +119,16 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
             prev_markdown_preview_font_size_settings = markdown_preview_font_size_settings;
             reset_markdown_preview_font_size(cx);
         }
-
-        if theme_name != prev_theme_name || theme_overrides != prev_theme_overrides {
-            prev_theme_name = theme_name;
-            prev_theme_overrides = theme_overrides;
-            reload_theme(cx);
-        }
     })
     .detach();
 }
 
-fn configured_theme(cx: &mut App) -> Arc<Theme> {
-    let themes = ThemeRegistry::default_global(cx);
-    let theme_settings = ThemeSettings::get_global(cx);
-    let system_appearance = SystemAppearance::global(cx);
-
-    let theme_name = theme_settings.theme.name(*system_appearance);
-
-    let theme = match themes.get(&theme_name.0) {
-        Ok(theme) => theme,
-        Err(err) => {
-            log::error!("{err}");
-            themes.get(default_theme(*system_appearance)).unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
-        }
-    };
-    theme_settings.apply_theme_overrides(theme)
-}
-
-/// Reloads the current theme from settings.
-pub fn reload_theme(cx: &mut App) {
-    let theme = configured_theme(cx);
-    GlobalTheme::update_theme(cx, theme);
-    cx.refresh_windows();
-}
-
-/// Loads the themes bundled with the ed binary into the registry.
-pub fn load_bundled_themes(registry: &ThemeRegistry) {
-    let theme_paths = registry
-        .assets()
-        .list("themes/")
-        .expect("failed to list theme assets")
-        .into_iter()
-        .filter(|path| path.ends_with(".json"));
-
-    for path in theme_paths {
-        let Some(theme) = registry.assets().load(&path).log_err().flatten() else {
-            continue;
-        };
-
-        let Some(theme_family) = serde_json::from_slice(&theme)
-            .with_context(|| format!("failed to parse theme at path \"{path}\""))
-            .log_err()
-        else {
-            continue;
-        };
-
-        let refined = refine_theme_family(theme_family);
-        registry.insert_theme_families([refined]);
-    }
-}
-
-/// Refines a [`ThemeFamilyContent`] and its [`ThemeContent`]s into a [`ThemeFamily`].
-pub fn refine_theme_family(theme_family_content: ThemeFamilyContent) -> ThemeFamily {
-    let id = uuid::Uuid::new_v4().to_string();
-    let name = theme_family_content.name.clone();
-    let author = theme_family_content.author.clone();
-
-    let themes: Vec<Theme> = theme_family_content.themes.iter().map(refine_theme).collect();
-
-    ThemeFamily { id, name: name.into(), author: author.into(), themes, scales: default_color_scales() }
+/// Builds the Nord theme with the floating-card chrome applied.
+pub fn nord_theme() -> Theme {
+    let family: ThemeFamilyContent = serde_json::from_slice(NORD_THEME_JSON).expect("embedded Nord theme is valid");
+    let mut theme = refine_theme(&family.themes[0]);
+    apply_floating_chrome(&mut theme);
+    theme
 }
 
 /// Refines a [`ThemeContent`] into a [`Theme`].
@@ -332,4 +244,25 @@ pub fn increase_buffer_font_size(cx: &mut App) {
 /// This will be effective until the app is restarted.
 pub fn decrease_buffer_font_size(cx: &mut App) {
     adjust_buffer_font_size(cx, |size| size - px(1.0));
+}
+
+#[cfg(test)]
+mod tests {
+    use theme::Appearance;
+
+    use super::nord_theme;
+
+    #[test]
+    fn test_nord_theme_is_dark_with_floating_chrome() {
+        let theme = nord_theme();
+        assert_eq!(theme.name.as_ref(), "Nord");
+        assert_eq!(theme.appearance, Appearance::Dark);
+
+        let colors = theme.colors();
+        assert_eq!(colors.background, colors.panel_background);
+        assert_eq!(colors.title_bar_background, colors.panel_background);
+        assert_eq!(colors.tab_bar_background, colors.panel_background);
+        assert_eq!(colors.tab_active_background, colors.editor_background);
+        assert!(theme.syntax().style_for_name("keyword").is_some());
+    }
 }

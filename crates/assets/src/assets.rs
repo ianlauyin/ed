@@ -15,9 +15,8 @@ util::fs_embed! {
     root_relative = "assets",
     include = [
         "icons/**/*",
-        "themes/**/*",
     ],
-    exclude = ["themes/src/*", "*.DS_Store"],
+    exclude = ["*.DS_Store"],
 }
 
 impl AssetSource for Assets {

@@ -56,7 +56,6 @@ use session::Session;
 use settings::Settings;
 use settings::SettingsStore;
 use theme::ActiveTheme;
-use theme::GlobalTheme;
 use util::ResultExt;
 use uuid::Uuid;
 use workspace::AppState;
@@ -274,7 +273,7 @@ fn main() {
         });
         AppState::set_global(app_state.clone(), cx);
 
-        theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
+        theme_settings::init(cx);
         command_palette::init(cx);
 
         recent_projects::init(cx);
@@ -307,7 +306,6 @@ fn main() {
         encoding_selector::init(cx);
         language_selector::init(cx);
         lsp_command_selector::init(cx);
-        theme_selector::init(cx);
         language_tools::init(cx);
 
         title_bar::init(cx);
@@ -333,13 +331,6 @@ fn main() {
         })
         .detach();
         app_state.languages.set_theme(cx.theme().clone());
-        cx.observe_global::<GlobalTheme>({
-            let languages = app_state.languages.clone();
-            move |cx| {
-                languages.set_theme(cx.theme().clone());
-            }
-        })
-        .detach();
 
         #[cfg(debug_assertions)]
         watch_languages(app_state.fs.clone(), app_state.languages.clone(), cx);

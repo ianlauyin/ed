@@ -111,7 +111,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use settings::Settings;
 use settings::SettingsStore;
-use theme::GlobalTheme;
 use theme::SyntaxTheme;
 use theme_settings::ThemeSettings;
 use ui::ContextMenu;
@@ -1076,12 +1075,6 @@ impl OutlinePanel {
                 cx.notify();
             });
 
-            let theme_subscription = cx.observe_global_in::<GlobalTheme>(window, |panel, window, cx| {
-                let buffers = panel.buffers.keys().copied().collect::<Vec<_>>();
-                panel.invalidate_outlines(&buffers);
-                panel.update_contents(Some(UPDATE_DEBOUNCE), window, cx);
-            });
-
             let mut outline_panel_settings = *OutlinePanelSettings::get_global(cx);
             let mut current_theme = ThemeSettings::get_global(cx).clone();
             let mut document_symbols_by_buffer = HashMap::default();
@@ -1221,7 +1214,6 @@ impl OutlinePanel {
                 buffers: HashMap::default(),
                 cached_entries: Vec::new(),
                 _subscriptions: vec![
-                    theme_subscription,
                     settings_subscription,
                     icons_subscription,
                     focus_subscription,
