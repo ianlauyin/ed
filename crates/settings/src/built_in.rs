@@ -152,8 +152,6 @@ use settings_content::WorkingDirectory;
 use settings_content::WorkspaceSettingsContent;
 use settings_content::WorktreeSettingsContent;
 
-pub const DEFAULT_WINDOW_TITLE_FORMAT: &str = "${projectName}${separator}${fileName}";
-
 /// The complete application settings. Edit this constructor to change persistent preferences.
 pub fn settings() -> SettingsContent {
     SettingsContent {
@@ -472,9 +470,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         resize_all_panels_in_dock: Some(vec![DockPosition::Left]),
         close_on_file_delete: Some(false),
         fullscreen_mode: Some(FullscreenMode::Native),
-        close_panel_on_toggle: Some(false),
-        window_title_format: Some(DEFAULT_WINDOW_TITLE_FORMAT.into()),
-        window_title_separator: Some(" — ".into()),
         window_decorations: Some(WindowDecorations::Client),
         focus_follows_mouse: Some(FocusFollowsMouse { enabled: Some(false), debounce_ms: Some(250) }),
     }

@@ -84,8 +84,6 @@ impl fmt::Display for WorktreeId {
     }
 }
 
-pub use built_in::DEFAULT_WINDOW_TITLE_FORMAT;
-
 pub fn init(cx: &mut App) {
     let settings = SettingsStore::new(cx, built_in::settings());
     cx.set_global(settings);

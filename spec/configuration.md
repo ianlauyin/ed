@@ -45,6 +45,9 @@ migrator, or Vim/Helix mode.
   - git panel: no file icons, no count badge, does not open on startup;
   - project panel: folder labels are not bold;
   - status bar: no active file name item;
+  - workspace: a panel's focus toggle never closes the panel; the window title
+    is fixed to `<project names> — <active file name>` (no title template, so
+    no settings or Git branch subscriptions drive title updates);
   - no accessible mode.
 - Semantic token fallback mappings are constructed in Rust. Personal rules take
   precedence over language/extension rules, which take precedence over fallback

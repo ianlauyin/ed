@@ -102,30 +102,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: native
     pub fullscreen_mode: Option<FullscreenMode>,
-    /// Whether invoking a panel's `ToggleFocus` action while the panel is
-    /// already focused closes the panel, instead of just moving focus back
-    /// to the editor. This only applies to a panel's focus-toggle action, not
-    /// to its regular visibility-toggle action.
-    ///
-    /// Default: false
-    pub close_panel_on_toggle: Option<bool>,
-    /// Window title template.
-    ///
-    /// Available variables are `${projectName}`, `${fileName}`,
-    /// `${filePath}`, `${relativePath}`, `${fileStem}`, `${remoteName}`,
-    /// `${remoteHost}`, `${appName}`, `${branch}`,
-    /// and `${separator}`.
-    /// `${separator}` is omitted when adjacent variables are empty,
-    /// but literal text is preserved.
-    /// If the template renders to nothing, the default template is used instead.
-    ///
-    /// Default: `${projectName}${separator}${fileName}`
-    pub window_title_format: Option<String>,
-    /// String substituted for `${separator}` in the window title format.
-    /// Include any surrounding whitespace in the value.
-    ///
-    /// Default: ` — `
-    pub window_title_separator: Option<String>,
     /// Controls whether ed or the window manager or compositor draws window decorations on Linux.
     ///
     /// Default: client
