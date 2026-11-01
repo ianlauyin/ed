@@ -4900,11 +4900,21 @@ fn render_outline_item<T, M: IntoIterator<Item = Range<usize>>>(
 
     let text_style = ui_text_style(cx);
     let ui_font_size = text_style.font_size;
-    let highlights = gpui::combine_highlights(custom_highlights, outline_item.highlight_ranges.iter().cloned());
+    let highlights = gpui::combine_highlights(custom_highlights, color_only_highlights(&outline_item.highlight_ranges));
 
     div()
         .text_size(ui_font_size)
         .child(StyledText::new(outline_item.text.clone()).with_default_highlights(&text_style, highlights))
+}
+
+/// Drops font weight and style from syntax highlights so every outline entry
+/// renders with the same weight and style, whatever the language or theme.
+fn color_only_highlights(
+    highlight_ranges: &[(Range<usize>, HighlightStyle)],
+) -> impl Iterator<Item = (Range<usize>, HighlightStyle)> + '_ {
+    highlight_ranges
+        .iter()
+        .map(|(range, style)| (range.clone(), HighlightStyle { font_weight: None, font_style: None, ..*style }))
 }
 
 fn empty_icon() -> AnyElement {
@@ -4923,5 +4933,28 @@ impl GenerationState {
         self.entries.clear();
         self.match_candidates.clear();
         self.max_width_estimate_and_index = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::{FontStyle, FontWeight, Hsla};
+
+    #[test]
+    fn test_color_only_highlights_drops_weight_and_style() {
+        let color = Hsla { h: 0.5, s: 0.5, l: 0.5, a: 1. };
+        let styled = HighlightStyle {
+            color: Some(color),
+            font_weight: Some(FontWeight::BOLD),
+            font_style: Some(FontStyle::Italic),
+            ..Default::default()
+        };
+        let plain = HighlightStyle { color: Some(color), ..Default::default() };
+        let highlights = vec![(0..2, styled), (4..6, HighlightStyle::default())];
+
+        let stripped: Vec<_> = color_only_highlights(&highlights).collect();
+
+        assert_eq!(stripped, vec![(0..2, plain), (4..6, HighlightStyle::default())]);
     }
 }

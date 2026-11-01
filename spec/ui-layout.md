@@ -166,7 +166,8 @@ because it hurt readability; an opaque window is also cheaper to composite.
   inset >= radius × (1 − 1/√2).
 - Symbols in the outline panel render in the UI
   font at the project panel's label size, not the buffer font. Syntax highlight
-  colours are kept.
+  colours are kept, but theme font weight and style are dropped, so every entry
+  (e.g. bold markdown headings) uses the same weight and style.
 - In multi-buffer views (search results, diffs) the outline panel always shows
   excerpts, symbols and search matches under each file. The upstream
   `ToggleSymbols` action, its filter-bar button and the
