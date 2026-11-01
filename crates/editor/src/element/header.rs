@@ -60,6 +60,8 @@ use crate::MULTI_BUFFER_EXCERPT_HEADER_HEIGHT;
 use crate::StickyHeaderExcerpt;
 use crate::ToggleFold;
 use crate::ToggleFoldAll;
+use crate::actions::FoldAll;
+use crate::actions::UnfoldAll;
 use crate::scroll::ScrollOffset;
 use crate::scroll::ScrollPixelOffset;
 
@@ -485,10 +487,14 @@ pub(crate) fn render_buffer_header(
             let file = file.clone();
             let buffer_snapshot = buffer_snapshot.clone();
             ContextMenu::build(window, cx, move |mut menu, window, cx| {
+                let shows_project_file_actions =
+                    editor.read(cx).addons.values().all(|addon| addon.shows_project_file_actions());
+                let mut has_file_entries = false;
                 if let Some(file) = file
                     && let Some(project) = editor.read(cx).project()
                     && let Some(worktree) = project.read(cx).worktree_for_id(file.worktree_id(cx), cx)
                 {
+                    has_file_entries = true;
                     let path_style = file.path_style(cx);
                     let worktree = worktree.read(cx);
                     let relative_path = file.path();
@@ -503,9 +509,11 @@ pub(crate) fn render_buffer_header(
                     let parent_abs_path = abs_path.as_ref().and_then(|abs_path| Some(abs_path.parent()?.to_path_buf()));
                     let relative_path = has_relative_path.then_some(relative_path).map(ToOwned::to_owned);
 
-                    let visible_in_project_panel = relative_path.is_some() && worktree.is_visible();
+                    let visible_in_project_panel =
+                        shows_project_file_actions && relative_path.is_some() && worktree.is_visible();
                     let reveal_in_project_panel =
                         entry_for_path.filter(|_| visible_in_project_panel).map(|entry| entry.id);
+                    let parent_abs_path = parent_abs_path.filter(|_| shows_project_file_actions);
                     menu = menu
                         .when_some(abs_path, |menu, abs_path| {
                             menu.entry(
@@ -566,7 +574,10 @@ pub(crate) fn render_buffer_header(
                     menu
                 });
 
-                menu.context(menu_context)
+                menu.when(has_file_entries, |menu| menu.separator())
+                    .action("Fold All", Box::new(FoldAll))
+                    .action("Unfold All", Box::new(UnfoldAll))
+                    .context(menu_context)
             })
         },
     )

@@ -157,7 +157,7 @@ pub(crate) fn worktree_id_for_repo_path(
 
 /// Opens the project file at `repo_path`, or shows a toast when the commit's
 /// file is no longer in the project.
-pub(crate) fn open_project_file(
+pub(crate) fn open_file_in_project(
     workspace: &WeakEntity<Workspace>,
     repository: &Entity<Repository>,
     repo_path: &RepoPath,
@@ -248,6 +248,10 @@ impl Addon for CommitDiffAddon {
         Some("Open Revision")
     }
 
+    fn shows_project_file_actions(&self) -> bool {
+        false
+    }
+
     fn extend_buffer_header_context_menu(
         &self,
         menu: ContextMenu,
@@ -273,7 +277,7 @@ impl Addon for CommitDiffAddon {
 
         menu.when_some(file_to_open, |menu, file| {
             let commit_view = self.commit_view.clone();
-            menu.entry("Open File in Project", Some(Box::new(OpenFileAtHead)), move |window, cx| {
+            menu.separator().entry("Open File in Project", Some(Box::new(OpenFileAtHead)), move |window, cx| {
                 commit_view.update(cx, |view, cx| view.open_file_at_head(&file, window, cx)).log_err();
             })
         })
@@ -492,8 +496,8 @@ impl CommitView {
                 this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
                 this.open_file_revision(repo_path, window, cx);
             }
-            CommitDetailsEvent::OpenProjectFile(repo_path) => {
-                open_project_file(&this.workspace, &this.repository, repo_path, window, cx);
+            CommitDetailsEvent::OpenFileInProject(repo_path) => {
+                open_file_in_project(&this.workspace, &this.repository, repo_path, window, cx);
             }
             CommitDetailsEvent::DeployRefMenu { .. } => {}
         })
@@ -865,20 +869,8 @@ impl CommitView {
     }
 
     fn open_file_at_head(&self, file: &Arc<dyn language::File>, window: &mut Window, cx: &mut Context<Self>) {
-        let rel_path = file.path().clone();
-        let worktree_id = file.worktree_id(cx);
-        let repo_path = RepoPath::from_rel_path(&rel_path);
-        let project_path = self
-            .repository
-            .read(cx)
-            .repo_path_to_project_path(&repo_path, cx)
-            .unwrap_or(project::ProjectPath { worktree_id, path: rel_path });
-
-        self.workspace
-            .update(cx, |workspace, cx| {
-                workspace.open_path_preview(project_path, None, true, false, true, window, cx).detach_and_log_err(cx);
-            })
-            .log_err();
+        let repo_path = RepoPath::from_rel_path(file.path());
+        open_file_in_project(&self.workspace, &self.repository, &repo_path, window, cx);
     }
 
     fn open_file_at_head_action(&mut self, _: &OpenFileAtHead, window: &mut Window, cx: &mut Context<Self>) {
@@ -1485,6 +1477,12 @@ mod tests {
     fn test_commit_diff_addon_open_file_label() {
         let addon = CommitDiffAddon { file_statuses: HashMap::default(), commit_view: WeakEntity::new_invalid() };
         assert_eq!(addon.open_file_label(), Some("Open Revision"));
+    }
+
+    #[test]
+    fn test_commit_diff_addon_hides_project_file_actions() {
+        let addon = CommitDiffAddon { file_statuses: HashMap::default(), commit_view: WeakEntity::new_invalid() };
+        assert!(!addon.shows_project_file_actions());
     }
 
     #[test]

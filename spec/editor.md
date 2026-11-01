@@ -59,6 +59,10 @@
   button/filename, gutter line number, double-click): there is no
   `OpenExcerpts` action, and it always opens one buffer with one cursor at
   the clicked spot, never the multibuffer's selections.
+- A multibuffer header's context menu ends with a "Fold All" / "Unfold All"
+  group (every file in the multibuffer). Addons can drop its project-tree
+  entries (Reveal In Project Panel, Open in Terminal) via
+  `shows_project_file_actions`.
 - Smooth scrolling is always on, with no setting. Jumps (page/half-page
   scrolls and autoscroll to the cursor: search, go-to-definition, `G`) move
   the scroll anchor at once; only drawing trails it, easing out over 120ms.

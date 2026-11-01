@@ -120,7 +120,7 @@ use crate::commit_details_panel::CommitDetailsEvent;
 use crate::commit_details_panel::CommitDetailsPanel;
 use crate::commit_details_panel::render_ref_chip;
 use crate::commit_view::CommitView;
-use crate::commit_view::open_project_file;
+use crate::commit_view::open_file_in_project;
 
 const COMMIT_CIRCLE_RADIUS: Pixels = px(4.5);
 const COMMIT_CIRCLE_STROKE_WIDTH: Pixels = px(1.5);
@@ -1626,9 +1626,9 @@ impl GitGraph {
                     cx,
                 );
             }
-            CommitDetailsEvent::OpenProjectFile(repo_path) => {
+            CommitDetailsEvent::OpenFileInProject(repo_path) => {
                 if let Some(repository) = self.get_repository(cx) {
-                    open_project_file(&self.workspace, &repository, repo_path, window, cx);
+                    open_file_in_project(&self.workspace, &repository, repo_path, window, cx);
                 }
             }
             CommitDetailsEvent::DeployRefMenu { position, name } => {

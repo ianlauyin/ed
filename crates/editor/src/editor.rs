@@ -1052,6 +1052,13 @@ pub trait Addon: 'static {
         None
     }
 
+    /// Whether buffer headers offer actions on the file's place in the
+    /// project tree ("Reveal In Project Panel", "Open in Terminal"). Off for
+    /// excerpts from another revision, such as a commit diff.
+    fn shows_project_file_actions(&self) -> bool {
+        true
+    }
+
     fn to_any(&self) -> &dyn std::any::Any;
 
     fn to_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
@@ -9344,4 +9351,22 @@ struct LineManipulationResult {
 
 pub fn multibuffer_context_lines(cx: &App) -> u32 {
     EditorSettings::try_get(cx).map(|settings| settings.excerpt_context_lines).unwrap_or(2).min(32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Addon;
+
+    struct DefaultAddon;
+
+    impl Addon for DefaultAddon {
+        fn to_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn test_addon_shows_project_file_actions_by_default() {
+        assert!(DefaultAddon.shows_project_file_actions());
+    }
 }

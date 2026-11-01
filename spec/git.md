@@ -161,9 +161,13 @@ view) offers:
 
 - "Open Revision": opens the file's revision tab at that commit. From the
   graph this opens the commit view, then its revision.
-- "Open Project File": opens the file from the project in Workspace mode. If
+- "Open File in Project": opens the file from the project in Workspace mode. If
   the path is no longer a file in the project (moved or deleted since the
-  commit), a toast says so instead.
+  commit), a toast says so instead. The commit diff's buffer header menu has
+  the same entry (same label, same behaviour), shown only while the file is in
+  the project.
+- The commit diff's buffer header menu leaves out "Reveal In Project Panel"
+  and "Open in Terminal": the excerpt is a revision, not the project file.
 - Changed file rows have no hover tooltip, so it doesn't compete with the
   menu.
 

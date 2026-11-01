@@ -72,8 +72,8 @@ pub enum CommitDetailsEvent {
     OpenFile(RepoPath),
     /// "Open Revision" on a changed file's context menu.
     OpenRevision(RepoPath),
-    /// "Open Project File" on a changed file's context menu.
-    OpenProjectFile(RepoPath),
+    /// "Open File in Project" on a changed file's context menu.
+    OpenFileInProject(RepoPath),
     /// A ref chip was right-clicked.
     DeployRefMenu { position: Point<Pixels>, name: SharedString },
 }
@@ -261,8 +261,8 @@ impl CommitDetailsPanel {
                     panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenRevision(repo_path.clone()))).ok();
                 }
             })
-            .entry("Open Project File", None, move |_, cx| {
-                panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenProjectFile(repo_path.clone()))).ok();
+            .entry("Open File in Project", None, move |_, cx| {
+                panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenFileInProject(repo_path.clone()))).ok();
             })
         });
         window.focus(&context_menu.focus_handle(cx), cx);
