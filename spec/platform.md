@@ -160,6 +160,10 @@ macOS builds pass `-C force-unwind-tables=no` (`.cargo/config.toml`): rustc's
 default async unwind tables are not compact-unwind encodable, which bloats
 `__eh_frame` past ld's 16MB compact-unwind limit in dev builds. Panics and
 backtraces still work through sync CFI.
+Release builds use `panic = "abort"`: panic hooks already log and exit, so
+unwinding adds code size and nothing else. Line info lives in
+`target/release/ed.dSYM`, which is not bundled into `ed.app`; panic backtraces
+from the installed app only resolve the panic location itself.
 
 ## Packaging
 

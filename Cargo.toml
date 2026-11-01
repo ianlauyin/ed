@@ -387,6 +387,8 @@ split-debuginfo = "packed"
 strip = true
 lto = "thin"
 codegen-units = 1
+# The panic hook logs and exits anyway, so unwinding buys nothing.
+panic = "abort"
 
 [profile.release.package]
 ed = { codegen-units = 16 }
