@@ -169,10 +169,21 @@ because it hurt readability; an opaque window is also cheaper to composite.
   bottom). There is no proportional "flex width" mode and no
   `terminal.flexible` setting. A side dock may shrink when space is tight but
   springs back to its stored width.
-- Tabs fill the tab bar's full height with rounded top corners and square
-  bottoms. The tab bar has no bottom line and no borders between tabs. It is
-  inset 10px on the left (the card radius), so the first tab meets the card's
-  straight top edge rather than its rounded corner.
+- Tabs fill the tab bar's full height with rounded top corners. The active tab's
+  base flares into the card with concave curves. Tab tops, flares and card
+  corners share one 10px radius, so tab and card read as one shape rather than
+  two stacked rectangles (convex bottom corners would detach the tab like a
+  button). Inactive tabs paint no fill (they are the bar's colour), so a
+  neighbour never covers a flare. The tab bar has no bottom line and no borders
+  between tabs. It is inset 10px on the left (the card radius), and the first
+  tab keeps another 10px before it for its flare, so its left side makes an
+  S-curve with the card's corner: up the card's side, round its corner, flare
+  into the tab. A flare is clipped where a tab strip starts with another tab
+  (the unpinned tabs after pinned ones), leaving that base square. Without end
+  buttons (an unfocused pane shows none), the tab strip also stops 10px short of
+  the right edge, so a tab cut off by a narrow pane ends over the card's
+  straight top edge instead of hanging past its rounded corner. A dragged tab
+  has no flares.
 - A tab's close button (editor and terminal tabs alike) is quiet: no fill on
   hover or press and no tooltip; only the muted × brightens to full contrast
   on hover. A filled hover chip plus a "Close" tooltip outweighed the tab

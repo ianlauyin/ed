@@ -4393,7 +4393,13 @@ impl Render for DraggedTab {
             cx,
         );
         let icon = self.pane.read(cx).tab_icon_element(self.item.as_ref(), self.is_active, window, cx);
-        Tab::new("").toggle_state(self.is_active).children(icon).child(label).render(window, cx).font(ui_font)
+        Tab::new("")
+            .floating()
+            .toggle_state(self.is_active)
+            .children(icon)
+            .child(label)
+            .render(window, cx)
+            .font(ui_font)
     }
 }
 
