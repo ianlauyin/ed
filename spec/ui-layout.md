@@ -25,6 +25,13 @@ because it hurt readability; an opaque window is also cheaper to composite.
   tab stands out: it takes the card colour and joins the card below it, like a
   browser tab. This replaced cards that wrapped the tab bar, where inactive tabs
   shared the card colour and looked continuous with the active one.
+- GPUI clips to rectangles only, so the card's content sits inside a 3px inset
+  and the card paints a card-coloured ring over its content that fills the
+  inset with an inner edge concentric with the card (10px − 3px). Anything
+  painted into a content corner (active line, minimap thumb and markers, diff
+  backgrounds) is trimmed to the card's curve by that one mask, so content
+  never does its own corner rounding. The mask sits below the drag-target
+  overlay, whose border runs along the card edge.
 - In Git History mode (`git.md`) the history sidebar and panes fill the area of
   the docks and center panes. The status bar stays, so the card's bottom edge
   doesn't move when switching modes. The sidebar shows the active history

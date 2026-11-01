@@ -3014,6 +3014,16 @@ impl Pane {
         move |el| el.rounded(crate::CARD_RADIUS).bg(bg).p(crate::CARD_INSET)
     }
 
+    /// Painted over the card's content: a card-coloured ring filling the
+    /// `CARD_INSET` padding whose inner edge is rounded concentric with the
+    /// card, so content painted into a corner (active line, minimap thumb, diff
+    /// backgrounds) is trimmed to the card's curve. The ring's outer radius
+    /// covers the content corners because `CARD_INSET >= radius * (1 - 1/sqrt 2)`.
+    fn card_corner_mask_style<E: Styled>(colors: &ThemeColors) -> impl FnOnce(E) -> E + use<E> {
+        let bg = colors.editor_background;
+        move |el| el.absolute().inset_0().rounded(crate::CARD_RADIUS).border(crate::CARD_INSET).border_color(bg)
+    }
+
     fn render_tab_bar(&mut self, window: &mut Window, cx: &mut Context<Pane>) -> AnyElement {
         if self.workspace.upgrade().is_none() {
             return gpui::Empty.into_any();
@@ -3877,6 +3887,8 @@ impl Render for Pane {
                         }
                         .focus_follows_mouse(self.focus_follows_mouse, cx)
                     })
+                    // Below the drag target, whose border runs along the card edge.
+                    .when(!pill_tabs, |content| content.child(div().map(Self::card_corner_mask_style(cx.theme().colors()))))
                     .child(
                         // drag target
                         div()
@@ -3923,6 +3935,7 @@ impl Render for Pane {
                             card.child((self.render_tab_bar.clone())(self, window, cx))
                         })
                         .child(content)
+                        .child(div().map(Self::card_corner_mask_style(cx.theme().colors())))
                         .into_any_element()
                 } else {
                     content.into_any_element()
@@ -4316,6 +4329,27 @@ mod tests {
     use super::TabDropSide;
     use super::drags_out_only_tab;
     use super::tab_drop_side;
+
+    #[test]
+    fn card_inset_covers_square_content_corners() {
+        // The corner mask's ring (outer radius CARD_RADIUS) must reach the
+        // content's square corner, which is (CARD_RADIUS - CARD_INSET) * sqrt 2
+        // from the shared curve centre.
+        let inner = f32::from(crate::CARD_RADIUS - crate::CARD_INSET);
+        assert!(inner * std::f32::consts::SQRT_2 <= f32::from(crate::CARD_RADIUS));
+    }
+
+    #[test]
+    fn test_card_corner_mask_style() {
+        let colors = ThemeColors::dark();
+        let style = Pane::card_corner_mask_style(&colors)(StyleRefinement::default());
+
+        assert_eq!(style.border_color, Some(colors.editor_background));
+        assert_eq!(style.background, None);
+        assert_eq!(style.border_widths.top, Some(crate::CARD_INSET.into()));
+        assert_eq!(style.border_widths.left, Some(crate::CARD_INSET.into()));
+        assert_eq!(style.corner_radii.top_left, Some(crate::CARD_RADIUS.into()));
+    }
 
     #[test]
     fn test_drags_out_only_tab() {
