@@ -14,6 +14,8 @@ const LANGUAGES: &[&str] = &["CSS", "GraphQL", "JavaScript", "JSON", "JSONC", "T
 
 const NPX_PACKAGE: &str = "@biomejs/biome";
 
+const CONFIG_FILES: &[&str] = &["biome.json", "biome.jsonc"];
+
 pub(crate) fn supports(language: Option<&Language>) -> bool {
     language.is_some_and(|language| LANGUAGES.contains(&language.name().as_ref()))
 }
@@ -46,6 +48,17 @@ pub(crate) fn resolve_command(start_dir: Option<&Path>, path_env: Option<&str>) 
     }
 }
 
+/// The working directory to run Biome in: the nearest ancestor of `start_dir` holding a
+/// Biome config, else `start_dir` itself. Biome 1.x only looks for its config in the
+/// working directory, so running from the file's own directory misses a root config.
+pub(crate) fn working_dir(start_dir: &Path) -> PathBuf {
+    start_dir
+        .ancestors()
+        .find(|dir| CONFIG_FILES.iter().any(|name| dir.join(name).is_file()))
+        .unwrap_or(start_dir)
+        .to_path_buf()
+}
+
 /// The path passed as `--stdin-file-path`; Biome picks the language and config from it.
 /// Unsaved buffers get a synthetic name from the language's first path suffix.
 pub(crate) fn stdin_file_path(abs_path: Option<&Path>, language: Option<&Language>) -> PathBuf {
@@ -69,6 +82,20 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn working_dir_is_nearest_config_ancestor() {
+        let root = temp_dir("config");
+        let nested = root.join("src/deep");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert_eq!(working_dir(&nested), nested);
+
+        std::fs::write(root.join("biome.jsonc"), "{}").unwrap();
+        assert_eq!(working_dir(&nested), root);
+
+        std::fs::write(root.join("src/biome.json"), "{}").unwrap();
+        assert_eq!(working_dir(&nested), root.join("src"));
     }
 
     #[test]

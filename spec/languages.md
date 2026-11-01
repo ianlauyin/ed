@@ -179,8 +179,10 @@
     under `"auto"` use the primary language server.
   - Biome resolves in order: nearest `node_modules/.bin/biome` above the file,
     `biome` on the shell `PATH`, then `npx --yes @biomejs/biome`.
-  - Each format runs `biome format --stdin-file-path <path>` once, from the file's
-    directory, so the project's `biome.json` applies. Unsaved buffers use
+  - Each format runs `biome format --stdin-file-path <path>` once, from the
+    nearest ancestor directory holding `biome.json`/`biome.jsonc` (else the file's
+    directory), so the project's config applies even to Biome 1.x, which only
+    looks in the working directory. Unsaved buffers use
     `untitled.<ext>`. Editor settings such as `tab_size` are not passed to Biome.
   - Format Selections formats the whole buffer and keeps only edits that overlap
     the selections.

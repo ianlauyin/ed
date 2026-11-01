@@ -2401,9 +2401,10 @@ impl LocalLspStore {
         if let Some(buffer_env) = buffer.env.as_ref() {
             child.envs(buffer_env);
         }
-        // Biome discovers `biome.json` by walking up from its working directory.
+        // Biome discovers its config from the working directory, so run it from the
+        // directory that holds `biome.json(c)`.
         if let Some(start_dir) = start_dir {
-            child.current_dir(start_dir);
+            child.current_dir(biome::working_dir(&start_dir));
         }
         child.args(biome.args).arg("format").arg("--stdin-file-path").arg(stdin_file_path);
         Self::run_formatter_command(buffer, child, "biome", cx).await
