@@ -440,12 +440,9 @@ impl EditorElement {
         self.split_side = Some(side);
     }
 
-    /// The editor corners that sit on the pane card's rounded corners: the
-    /// sides of a split diff meet at the divider, not at the card edge.
-    const fn card_corners(&self) -> Corners<bool> {
-        let left = !matches!(self.split_side, Some(SplitSide::Right));
-        let right = !matches!(self.split_side, Some(SplitSide::Left));
-        Corners { top_left: left, top_right: right, bottom_right: right, bottom_left: left }
+    /// The editor corners that sit on the pane card's rounded corners.
+    const fn card_corners(&self, mode: &EditorMode) -> Corners<bool> {
+        card_corners(mode, self.split_side)
     }
 
     fn register_actions(&self, window: &mut Window, cx: &mut App) {
@@ -3709,11 +3706,8 @@ impl EditorElement {
                             // A partly scrolled-out row is clipped to the editor, so round
                             // the visible part where it meets the card's corners.
                             let bounds = bounds.intersect(&layout.hitbox.bounds);
-                            let corners = if matches!(layout.mode, EditorMode::Full { .. }) {
-                                card_corner_radii(layout.hitbox.bounds, bounds, self.card_corners())
-                            } else {
-                                Corners::default()
-                            };
+                            let (bounds, corners) =
+                                fit_to_card(layout.hitbox.bounds, bounds, self.card_corners(&layout.mode));
                             window.paint_quad(fill(bounds, active_line_bg).corner_radii(corners));
                         }
                     }
@@ -4882,12 +4876,67 @@ impl Gutter<'_> {
     }
 }
 
+/// The corners of an editor in `mode` that sit on the pane card's rounded
+/// corners: the sides of a split diff meet at the divider, not at the card
+/// edge; the minimap only touches the card on its right; other modes aren't
+/// card-sized.
+const fn card_corners(mode: &EditorMode, split_side: Option<SplitSide>) -> Corners<bool> {
+    let (left, right) = match mode {
+        EditorMode::Full { .. } => {
+            (!matches!(split_side, Some(SplitSide::Right)), !matches!(split_side, Some(SplitSide::Left)))
+        }
+        EditorMode::Minimap { .. } => (false, true),
+        _ => (false, false),
+    };
+    Corners { top_left: left, top_right: right, bottom_right: right, bottom_left: left }
+}
+
 /// Corner radii for a quad painted inside the editor so it follows the pane
 /// card's rounded corners: concentric with the card (card radius − card
 /// inset) where the quad touches a card corner, curving in as it moves away
 /// from the edges and square once it's a full radius away. Only `round`
 /// corners can curve.
 pub(super) fn card_corner_radii(editor: Bounds<Pixels>, quad: Bounds<Pixels>, round: Corners<bool>) -> Corners<Pixels> {
+    unclamped_card_corner_radii(editor, quad, round).clamp_radii_for_quad_size(quad.size)
+}
+
+/// `quad` fitted inside the pane card's rounded corners, with the radii from
+/// [`card_corner_radii`]. A quad too short to carry its corner radius (a thin
+/// minimap row, a partly scrolled-out line) is pulled in from the card edge to
+/// where the corner's curve crosses it, so it doesn't poke out of the card.
+pub(super) fn fit_to_card(
+    editor: Bounds<Pixels>,
+    quad: Bounds<Pixels>,
+    round: Corners<bool>,
+) -> (Bounds<Pixels>, Corners<Pixels>) {
+    let radius = workspace::CARD_RADIUS - workspace::CARD_INSET;
+    let wanted = unclamped_card_corner_radii(editor, quad, round);
+    let got = wanted.clamp_radii_for_quad_size(quad.size);
+    // How far the card's corner curve sits in from the card edge, `gap_y`
+    // from the top/bottom.
+    let curve_inset = |gap_y: Pixels| {
+        let dy = f32::from((radius - gap_y).max(Pixels::ZERO));
+        radius - px((f32::from(radius).powi(2) - dy * dy).sqrt())
+    };
+    let inset = |want: Pixels, got: Pixels, gap_x: Pixels, gap_y: Pixels| {
+        if got < want { (curve_inset(gap_y) - gap_x).max(Pixels::ZERO) } else { Pixels::ZERO }
+    };
+    let gap_top = quad.top() - editor.top();
+    let gap_bottom = editor.bottom() - quad.bottom();
+    let gap_left = quad.left() - editor.left();
+    let gap_right = editor.right() - quad.right();
+    let left = inset(wanted.top_left, got.top_left, gap_left, gap_top)
+        .max(inset(wanted.bottom_left, got.bottom_left, gap_left, gap_bottom));
+    let right = inset(wanted.top_right, got.top_right, gap_right, gap_top)
+        .max(inset(wanted.bottom_right, got.bottom_right, gap_right, gap_bottom));
+    let fitted = Bounds::from_corners(
+        point(quad.left() + left, quad.top()),
+        point((quad.right() - right).max(quad.left() + left), quad.bottom()),
+    );
+    (fitted, card_corner_radii(editor, fitted, round))
+}
+
+fn unclamped_card_corner_radii(editor: Bounds<Pixels>, quad: Bounds<Pixels>, round: Corners<bool>) -> Corners<Pixels> {
     let radius = workspace::CARD_RADIUS - workspace::CARD_INSET;
     let gap_top = quad.top() - editor.top();
     let gap_bottom = editor.bottom() - quad.bottom();
@@ -4902,7 +4951,6 @@ pub(super) fn card_corner_radii(editor: Bounds<Pixels>, quad: Bounds<Pixels>, ro
         bottom_right: corner(round.bottom_right, gap_right, gap_bottom),
         bottom_left: corner(round.bottom_left, gap_left, gap_bottom),
     }
-    .clamp_radii_for_quad_size(quad.size)
 }
 
 /// Marks `rows` as holding a selection head. Block rows (buffer headers,
@@ -7987,6 +8035,68 @@ mod tests {
         let left_side = Corners { top_right: false, bottom_right: false, ..ALL };
         let corners = card_corner_radii(editor_bounds(), line, left_side);
         assert_eq!((corners.top_left, corners.top_right), (radius(), Pixels::ZERO));
+    }
+
+    #[test]
+    fn tall_line_fits_by_rounding_alone() {
+        let line = Bounds::new(point(px(0.), px(0.)), size(px(400.), px(20.)));
+        let (fitted, corners) = fit_to_card(editor_bounds(), line, ALL);
+        assert_eq!(fitted, line);
+        assert_eq!(corners.top_right, radius());
+    }
+
+    #[test]
+    fn short_line_on_first_row_is_pulled_in_from_the_corner() {
+        let line = Bounds::new(point(px(0.), px(0.)), size(px(400.), px(4.)));
+        let (fitted, corners) = fit_to_card(editor_bounds(), line, ALL);
+        // At the very top the curve is a full radius in from each edge.
+        assert_eq!((fitted.left(), fitted.right()), (radius(), px(400.) - radius()));
+        assert_eq!((fitted.top(), fitted.bottom()), (line.top(), line.bottom()));
+        assert_eq!(corners.top_right, Pixels::ZERO);
+    }
+
+    #[test]
+    fn short_line_below_the_corner_is_untouched() {
+        let line = Bounds::new(point(px(0.), px(100.)), size(px(400.), px(4.)));
+        let (fitted, corners) = fit_to_card(editor_bounds(), line, ALL);
+        assert_eq!(fitted, line);
+        assert_eq!(corners, Corners::default());
+    }
+
+    #[test]
+    fn short_line_only_moves_rounded_sides() {
+        let line = Bounds::new(point(px(0.), px(0.)), size(px(400.), px(4.)));
+        let right_only = Corners { top_left: false, bottom_left: false, ..ALL };
+        let (fitted, _) = fit_to_card(editor_bounds(), line, right_only);
+        assert_eq!((fitted.left(), fitted.right()), (px(0.), px(400.) - radius()));
+    }
+
+    #[test]
+    fn full_editor_rounds_card_side_corners() {
+        let full = EditorMode::full();
+        assert_eq!(card_corners(&full, None), ALL);
+        let left = card_corners(&full, Some(SplitSide::Left));
+        assert_eq!((left.top_left, left.top_right, left.bottom_right, left.bottom_left), (true, false, false, true));
+        let right = card_corners(&full, Some(SplitSide::Right));
+        assert_eq!((right.top_left, right.top_right, right.bottom_right, right.bottom_left), (false, true, true, false));
+    }
+
+    #[test]
+    fn minimap_rounds_right_corners_only() {
+        let corners = card_corners(&EditorMode::Minimap { parent: gpui::WeakEntity::new_invalid() }, None);
+        assert_eq!(
+            (corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left),
+            (false, true, true, false)
+        );
+    }
+
+    #[test]
+    fn other_modes_stay_square() {
+        let corners = card_corners(&EditorMode::SingleLine, None);
+        assert_eq!(
+            (corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left),
+            (false, false, false, false)
+        );
     }
 
     #[test]

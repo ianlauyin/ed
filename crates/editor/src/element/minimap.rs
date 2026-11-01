@@ -51,6 +51,7 @@ use super::EditorScrollbars;
 use super::ScrollbarLayout;
 use super::ScrollbarLayoutInformation;
 use super::card_corner_radii;
+use super::fit_to_card;
 use crate::DisplayRow;
 use crate::Editor;
 use crate::EditorSettings;
@@ -243,11 +244,7 @@ impl EditorElement {
         slow_markers
             .iter()
             .chain(&fast_markers)
-            .filter_map(|marker| {
-                let mut marker = marker.clone();
-                marker.bounds.origin += origin;
-                marker.bounds.intersects(&bounds).then_some(marker)
-            })
+            .filter_map(|marker| place_minimap_marker(marker, origin, bounds))
             .collect()
     }
 
@@ -421,7 +418,7 @@ impl EditorElement {
                             MinimapThumbBorder::None => Edges::default(),
                         };
 
-                        let thumb_corners = minimap_thumb_corners(minimap_hitbox.bounds, thumb_bounds);
+                        let thumb_corners = minimap_card_corners(minimap_hitbox.bounds, thumb_bounds);
 
                         window.paint_layer(minimap_hitbox.bounds, |window| {
                             window.paint_quad(quad(
@@ -660,13 +657,27 @@ pub(super) struct MinimapLayout {
 }
 
 /// The minimap's top and bottom edges sit against the pane card's rounded
-/// corners, so the thumb's right corners follow them.
-fn minimap_thumb_corners(minimap_bounds: Bounds<Pixels>, thumb_bounds: Bounds<Pixels>) -> Corners<Pixels> {
-    card_corner_radii(
-        minimap_bounds,
-        thumb_bounds,
-        Corners { top_right: true, bottom_right: true, ..Default::default() },
-    )
+/// corners, so the right corners of what's painted on it (thumb, markers)
+/// follow them.
+fn minimap_card_corners(minimap_bounds: Bounds<Pixels>, thumb_bounds: Bounds<Pixels>) -> Corners<Pixels> {
+    card_corner_radii(minimap_bounds, thumb_bounds, MINIMAP_CARD_CORNERS)
+}
+
+const MINIMAP_CARD_CORNERS: Corners<bool> =
+    Corners { top_left: false, top_right: true, bottom_right: true, bottom_left: false };
+
+/// Moves a marker laid out for the unscrolled minimap to `origin`, clipped to
+/// the minimap `bounds` and rounded where it meets the card's corners.
+/// Returns `None` when it's scrolled out of view.
+fn place_minimap_marker(marker: &PaintQuad, origin: gpui::Point<Pixels>, bounds: Bounds<Pixels>) -> Option<PaintQuad> {
+    let mut marker = marker.clone();
+    marker.bounds.origin += origin;
+    if !marker.bounds.intersects(&bounds) {
+        return None;
+    }
+    // A partly scrolled-out marker is clipped, so fit its visible part.
+    (marker.bounds, marker.corner_radii) = fit_to_card(bounds, marker.bounds.intersect(&bounds), MINIMAP_CARD_CORNERS);
+    Some(marker)
 }
 
 impl MinimapLayout {
@@ -733,7 +744,7 @@ mod tests {
 
     #[test]
     fn thumb_at_top_rounds_top_right_only() {
-        let corners = minimap_thumb_corners(minimap(), Bounds::new(point(px(0.), px(0.)), size(px(100.), px(50.))));
+        let corners = minimap_card_corners(minimap(), Bounds::new(point(px(0.), px(0.)), size(px(100.), px(50.))));
         assert_eq!(corners.top_right, radius());
         assert_eq!(corners.bottom_right, Pixels::ZERO);
         assert_eq!(corners.top_left, Pixels::ZERO);
@@ -741,20 +752,51 @@ mod tests {
 
     #[test]
     fn thumb_at_bottom_rounds_bottom_right_only() {
-        let corners = minimap_thumb_corners(minimap(), Bounds::new(point(px(0.), px(450.)), size(px(100.), px(50.))));
+        let corners = minimap_card_corners(minimap(), Bounds::new(point(px(0.), px(450.)), size(px(100.), px(50.))));
         assert_eq!(corners.top_right, Pixels::ZERO);
         assert_eq!(corners.bottom_right, radius());
     }
 
     #[test]
     fn thumb_near_top_curves_in_partially() {
-        let corners = minimap_thumb_corners(minimap(), Bounds::new(point(px(0.), px(2.)), size(px(100.), px(50.))));
+        let corners = minimap_card_corners(minimap(), Bounds::new(point(px(0.), px(2.)), size(px(100.), px(50.))));
         assert_eq!(corners.top_right, (radius() - px(2.)).max(Pixels::ZERO));
+    }
+
+    fn marker(bounds: Bounds<Pixels>) -> PaintQuad {
+        quad(bounds, Corners::default(), Hsla::default(), Edges::default(), Hsla::default(), BorderStyle::default())
+    }
+
+    #[test]
+    fn cursor_band_on_first_row_stays_inside_the_corner() {
+        let band = marker(Bounds::new(point(px(0.), px(0.)), size(px(100.), px(3.))));
+        let placed = place_minimap_marker(&band, point(px(0.), px(0.)), minimap()).unwrap();
+        assert_eq!((placed.bounds.left(), placed.bounds.right()), (px(0.), px(100.) - radius()));
+    }
+
+    #[test]
+    fn marker_in_middle_is_square() {
+        let band = marker(Bounds::new(point(px(0.), px(200.)), size(px(100.), px(3.))));
+        let placed = place_minimap_marker(&band, point(px(0.), px(0.)), minimap()).unwrap();
+        assert_eq!(placed.corner_radii, Corners::default());
+    }
+
+    #[test]
+    fn marker_is_shifted_and_clipped() {
+        let band = marker(Bounds::new(point(px(0.), px(10.)), size(px(100.), px(3.))));
+        let placed = place_minimap_marker(&band, point(px(0.), px(-11.)), minimap()).unwrap();
+        assert_eq!((placed.bounds.top(), placed.bounds.bottom()), (px(0.), px(2.)));
+    }
+
+    #[test]
+    fn marker_scrolled_out_is_dropped() {
+        let band = marker(Bounds::new(point(px(0.), px(10.)), size(px(100.), px(3.))));
+        assert!(place_minimap_marker(&band, point(px(0.), px(-20.)), minimap()).is_none());
     }
 
     #[test]
     fn thumb_in_middle_is_square() {
-        let corners = minimap_thumb_corners(minimap(), Bounds::new(point(px(0.), px(200.)), size(px(100.), px(50.))));
+        let corners = minimap_card_corners(minimap(), Bounds::new(point(px(0.), px(200.)), size(px(100.), px(50.))));
         assert_eq!(corners.top_right, Pixels::ZERO);
         assert_eq!(corners.bottom_right, Pixels::ZERO);
     }

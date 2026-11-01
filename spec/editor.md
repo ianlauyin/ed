@@ -48,7 +48,12 @@
   shared `card_corner_radii` rule): square in the middle of the editor,
   concentric with the card on the first/last visible row, curving in as it
   moves away. A partly scrolled-out row is rounded on its visible part. In a
-  split diff, the sides that meet at the divider stay square.
+  split diff, the sides that meet at the divider stay square. The minimap's
+  current-line band and markers follow the same rule on their right corners
+  only (the minimap's left edge is inside the card). A quad too short to carry
+  the corner radius (minimap rows, a partly scrolled-out line) is pulled in
+  from the card edge to where the corner's curve crosses it, so nothing pokes
+  out of the card.
 - The horizontal scrollbar matches the `ui` scrollbars (project panel): no
   track, a thin rounded thumb inset in a 14px hitbox.
   It auto-shows while scrolling or when the buffer has markers (git hunks,
