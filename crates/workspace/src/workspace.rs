@@ -1363,6 +1363,7 @@ impl Workspace {
                 cx,
             );
             center_pane.set_can_split(Some(Arc::new(|_, _, _, _| true)));
+            pane::set_editor_tab_bar_buttons(&mut center_pane, cx);
             center_pane.set_nav_history(nav_history.clone());
             center_pane
         });
@@ -3548,6 +3549,7 @@ impl Workspace {
                 cx,
             );
             pane.set_can_split(Some(Arc::new(|_, _, _, _| true)));
+            pane::set_editor_tab_bar_buttons(&mut pane, cx);
             pane.set_nav_history(self.nav_history.clone());
             pane
         });

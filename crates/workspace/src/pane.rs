@@ -87,6 +87,7 @@ use util::paths::PathStyle;
 use util::truncate_and_remove_front;
 
 use crate::CloseWindow;
+use crate::NewFile;
 use crate::Open;
 use crate::OpenInTerminal;
 use crate::OpenOptions;
@@ -3674,6 +3675,29 @@ pub fn render_tab_bar_zoom_button(pane: &Pane, cx: &mut Context<Pane>) -> AnyEle
         }))
         .tooltip(move |_window, cx| Tooltip::for_action(if zoomed { "Zoom Out" } else { "Zoom In" }, &ToggleZoom, cx))
         .into_any_element()
+}
+
+/// Center (editor) panes get a "+" left of the shared buttons that opens an
+/// untitled file in the pane: a top-row tab bar's empty space acts as a
+/// titlebar, so a double click there can't create one.
+pub fn set_editor_tab_bar_buttons(pane: &mut Pane, cx: &mut Context<Pane>) {
+    pane.set_render_tab_bar_buttons(cx, |pane, window, cx| {
+        if !pane.has_focus(window, cx) {
+            return (None, None);
+        }
+        let right_children = h_flex()
+            .gap(DynamicSpacing::Base02.rems())
+            .child(
+                IconButton::new("new_file", IconName::Plus)
+                    .icon_size(IconSize::Small)
+                    .on_click(|_, window, cx| window.dispatch_action(NewFile.boxed_clone(), cx))
+                    .tooltip(Tooltip::for_action_title("New File", &NewFile)),
+            )
+            .children(render_tab_bar_pane_buttons(pane, cx))
+            .into_any_element()
+            .into();
+        (None, right_children)
+    });
 }
 
 fn default_render_tab_bar_buttons(

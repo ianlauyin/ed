@@ -201,7 +201,10 @@ because it hurt readability; an opaque window is also cheaper to composite.
   tab bar behaves the same. There is no search button: search is opened with
   `cmd-f`, the menu or the action. Left of Zoom, an eye button opens the Markdown/HTML, SVG or
   tabular data preview of the active file (Option-click opens it in a split),
-  shown only for files that have one.
+  shown only for files that have one. Center (editor) panes and the terminal
+  panel put a "+" before them: `workspace::NewFile` (an untitled file) and
+  `NewTerminal`. A top-row tab bar's empty space is a titlebar, so its double
+  click can't create one.
 - Previews go through `workspace::preview`: each preview crate registers a
   `PreviewProvider` (a tooltip for items it can preview, and how to open
   one); the first that matches an item wins. One pair of actions,
