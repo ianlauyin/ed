@@ -669,7 +669,7 @@ impl RenderOnce for ButtonLike {
                 this.tab_index(tab_index).tab_stop(!self.disabled)
             })
             .when_some(self.focus_handle, |this, focus_handle| this.track_focus(&focus_handle))
-            .font_ui()
+            .font_ui(cx)
             .group("")
             .flex_none()
             .h(self.height.unwrap_or(self.size.rems().into()))

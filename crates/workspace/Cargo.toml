@@ -40,6 +40,7 @@ sqlez.workspace = true
 strum.workspace = true
 task.workspace = true
 theme.workspace = true
+theme_settings.workspace = true
 ui.workspace = true
 ui_input.workspace = true
 url.workspace = true

@@ -64,6 +64,7 @@ use serde::Deserialize;
 use settings::Settings;
 use settings::SettingsStore;
 use theme::ThemeColors;
+use theme_settings::ThemeSettings;
 use ui::ContextMenu;
 use ui::ContextMenuEntry;
 use ui::ContextMenuItem;
@@ -4379,7 +4380,7 @@ pub fn render_item_indicator(item: Box<dyn ItemHandle>, cx: &App) -> Option<Indi
 
 impl Render for DraggedTab {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let ui_font = ui::font::ui_font().clone();
+        let ui_font = ThemeSettings::get_global(cx).ui_font.clone();
         let label = self.item.tab_content(
             TabContentParams {
                 detail: Some(self.detail),

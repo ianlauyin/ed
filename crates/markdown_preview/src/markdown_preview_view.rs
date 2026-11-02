@@ -106,10 +106,7 @@ use crate::ScrollToBottom;
 use crate::ScrollToTop;
 use crate::ScrollUp;
 use crate::ScrollUpByItem;
-use crate::markdown_preview_style::adjust_preview_font_size;
-use crate::markdown_preview_style::preview_font_size;
 use crate::markdown_preview_style::preview_markdown_style;
-use crate::markdown_preview_style::reset_preview_font_size;
 use crate::mermaid_diagrams::MermaidDiagrams;
 
 /// Languages the preview renders.
@@ -694,19 +691,21 @@ impl MarkdownPreviewView {
     }
 
     fn line_scroll_amount(&self, cx: &App) -> Pixels {
-        preview_font_size(cx) * ThemeSettings::get_global(cx).buffer_line_height.value()
+        let settings = ThemeSettings::get_global(cx);
+        settings.markdown_preview_font_size(cx) * settings.buffer_line_height.value()
     }
 
+    // The preview has no font size setting, so zoom is always in-memory, even for persisting actions.
     fn increase_font_size(&mut self, _: &IncreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        adjust_preview_font_size(cx, |size| size + px(1.0));
+        theme_settings::adjust_markdown_preview_font_size(cx, |size| size + px(1.0));
     }
 
     fn decrease_font_size(&mut self, _: &DecreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        adjust_preview_font_size(cx, |size| size - px(1.0));
+        theme_settings::adjust_markdown_preview_font_size(cx, |size| size - px(1.0));
     }
 
     fn reset_font_size(&mut self, _: &ResetBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        reset_preview_font_size(cx);
+        theme_settings::reset_markdown_preview_font_size(cx);
     }
 
     fn scroll_by_amount(&self, distance: Pixels) {
@@ -1459,7 +1458,7 @@ impl Item for MarkdownPreviewView {
 impl Render for MarkdownPreviewView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let bg_color = cx.theme().colors().editor_background;
-        let preview_font_size = preview_font_size(cx);
+        let preview_font_size = ThemeSettings::get_global(cx).markdown_preview_font_size(cx);
         let hovered_url = self.hovered_url.clone();
         div()
             .image_cache(self.image_cache.clone())

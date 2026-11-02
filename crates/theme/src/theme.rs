@@ -5,6 +5,7 @@ mod fallback_themes;
 mod scale;
 mod schema;
 mod styles;
+mod theme_settings_provider;
 
 use std::sync::Arc;
 
@@ -42,6 +43,7 @@ pub use crate::fallback_themes::apply_theme_color_defaults;
 pub use crate::scale::*;
 pub use crate::schema::*;
 pub use crate::styles::*;
+pub use crate::theme_settings_provider::*;
 
 /// Defines window border radius for platforms that use client side decorations.
 pub const CLIENT_SIDE_DECORATION_ROUNDING: Pixels = px(10.0);

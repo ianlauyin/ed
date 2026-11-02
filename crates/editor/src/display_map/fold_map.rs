@@ -88,10 +88,13 @@ impl FoldPlaceholder {
         use gpui::InteractiveElement as _;
         use gpui::StatefulInteractiveElement as _;
         use gpui::Styled as _;
+        use settings::Settings as _;
         use theme::ActiveTheme as _;
+        use theme_settings::ThemeSettings;
+        let settings = ThemeSettings::get_global(cx);
         gpui::div()
             .id(fold_id)
-            .font(ui::font::buffer_font().clone())
+            .font(settings.buffer_font.clone())
             .text_color(cx.theme().colors().text_placeholder)
             .bg(cx.theme().colors().ghost_element_background)
             .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))

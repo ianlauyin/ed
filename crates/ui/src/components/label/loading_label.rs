@@ -70,8 +70,8 @@ impl LabelCommon for LoadingLabel {
         self
     }
 
-    fn buffer_font(mut self) -> Self {
-        self.base = self.base.buffer_font();
+    fn buffer_font(mut self, cx: &App) -> Self {
+        self.base = self.base.buffer_font(cx);
         self
     }
 

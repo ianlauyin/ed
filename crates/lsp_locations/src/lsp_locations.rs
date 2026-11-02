@@ -47,6 +47,7 @@ use settings::GoToDefinitionFallback;
 use settings::Settings as _;
 use text::Anchor;
 use text::Point;
+use theme_settings::ThemeSettings;
 use ui::Divider;
 use ui::FluentBuilder;
 use ui::ListItem;
@@ -760,13 +761,14 @@ impl PickerDelegate for LspLocationsDelegate {
 /// ids against the current theme and overlaying the match with a highlighted
 /// background and bold weight.
 fn render_matched_line(location_match: &LocationMatch, cx: &App) -> StyledText {
+    let settings = ThemeSettings::get_global(cx);
     let text_style = TextStyle {
         color: cx.theme().colors().text,
-        font_family: ui::font::buffer_font().family.clone(),
-        font_features: ui::font::buffer_font().features.clone(),
-        font_fallbacks: ui::font::buffer_font().fallbacks.clone(),
-        font_size: ui::font::buffer_font_size(cx).into(),
-        font_weight: ui::font::buffer_font().weight,
+        font_family: settings.buffer_font.family.clone(),
+        font_features: settings.buffer_font.features.clone(),
+        font_fallbacks: settings.buffer_font.fallbacks.clone(),
+        font_size: settings.buffer_font_size(cx).into(),
+        font_weight: settings.buffer_font.weight,
         line_height: relative(1.),
         ..Default::default()
     };

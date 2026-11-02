@@ -254,8 +254,8 @@ impl LabelCommon for Label {
         self
     }
 
-    fn buffer_font(mut self) -> Self {
-        self.base = self.base.buffer_font();
+    fn buffer_font(mut self, cx: &App) -> Self {
+        self.base = self.base.buffer_font(cx);
         self
     }
 
@@ -271,7 +271,7 @@ impl RenderOnce for Label {
         if self.render_code_spans
             && let Some((stripped, code_ranges)) = parse_backtick_spans(&self.label)
         {
-            let buffer_font_family = crate::font::buffer_font().family.clone();
+            let buffer_font_family = theme::theme_settings(cx).buffer_font(cx).family.clone();
             let background_color = cx.theme().colors().element_background;
 
             let highlights = code_ranges.iter().map(|range| {

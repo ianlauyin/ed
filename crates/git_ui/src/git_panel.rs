@@ -1169,17 +1169,6 @@ pub(crate) fn commit_message_editor(
     commit_editor
 }
 
-const GIT_COMMIT_FONT_SIZE: Pixels = px(12.0);
-
-/// In-memory zoom of the commit message font size, independent of UI and buffer zoom.
-struct GitCommitFontSize(Pixels);
-
-impl gpui::Global for GitCommitFontSize {}
-
-fn git_commit_font_size(cx: &App) -> Pixels {
-    cx.try_global::<GitCommitFontSize>().map_or(GIT_COMMIT_FONT_SIZE, |size| size.0)
-}
-
 impl GitPanel {
     fn new_with_serialized_panel(
         workspace: &Workspace,
@@ -4028,24 +4017,46 @@ impl GitPanel {
         }
     }
 
-    pub(crate) fn increase_font_size(&mut self, _: &IncreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        Self::adjust_font_size(px(1.0), cx);
+    pub(crate) fn increase_font_size(
+        &mut self,
+        action: &IncreaseBufferFontSize,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.handle_font_size_action(action.persist, px(1.0), cx);
     }
 
-    pub(crate) fn decrease_font_size(&mut self, _: &DecreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        Self::adjust_font_size(px(-1.0), cx);
+    pub(crate) fn decrease_font_size(
+        &mut self,
+        action: &DecreaseBufferFontSize,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.handle_font_size_action(action.persist, px(-1.0), cx);
     }
 
-    fn adjust_font_size(delta: Pixels, cx: &mut Context<Self>) {
-        let size = ui::font::clamp_font_size(git_commit_font_size(cx) + delta);
-        cx.set_global(GitCommitFontSize(size));
-        cx.refresh_windows();
+    fn handle_font_size_action(&self, persist: bool, delta: Pixels, cx: &mut Context<Self>) {
+        if persist {
+            update_settings_file(self.fs.clone(), cx, move |settings, cx| {
+                let git_commit_buffer_font_size = ThemeSettings::get_global(cx).git_commit_buffer_font_size(cx) + delta;
+
+                let _ = settings
+                    .theme
+                    .git_commit_buffer_font_size
+                    .insert(f32::from(theme_settings::clamp_font_size(git_commit_buffer_font_size)).into());
+            });
+        } else {
+            theme_settings::adjust_git_commit_buffer_font_size(cx, |size| size + delta);
+        }
     }
 
-    pub(crate) fn reset_font_size(&mut self, _: &ResetBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        if cx.has_global::<GitCommitFontSize>() {
-            cx.remove_global::<GitCommitFontSize>();
-            cx.refresh_windows();
+    pub(crate) fn reset_font_size(&mut self, action: &ResetBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
+        if action.persist {
+            update_settings_file(self.fs.clone(), cx, move |settings, _| {
+                settings.theme.git_commit_buffer_font_size = None;
+            });
+        } else {
+            theme_settings::reset_git_commit_buffer_font_size(cx);
         }
     }
 
@@ -5061,7 +5072,8 @@ impl GitPanel {
 
     pub fn render_footer(&self, window: &mut Window, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let active_repository = self.active_repository.clone()?;
-        let panel_editor_style = git_commit_editor_style(git_commit_font_size(cx), cx);
+        let settings = ThemeSettings::get_global(cx);
+        let panel_editor_style = git_commit_editor_style(settings.git_commit_buffer_font_size(cx), cx);
 
         let branch = active_repository.read(cx).branch.clone();
         let head_commit = active_repository.read(cx).head_commit.clone();
@@ -6697,11 +6709,11 @@ pub(crate) fn git_commit_editor_style(font_size: gpui::Pixels, cx: &App) -> Edit
         local_player: cx.theme().player(),
         text: TextStyle {
             color: cx.theme().colors().text,
-            font_family: ui::font::buffer_font().family.clone(),
-            font_fallbacks: ui::font::buffer_font().fallbacks.clone(),
-            font_features: ui::font::buffer_font().features.clone(),
+            font_family: settings.buffer_font.family.clone(),
+            font_fallbacks: settings.buffer_font.fallbacks.clone(),
+            font_features: settings.buffer_font.features.clone(),
             font_size: AbsoluteLength::from(font_size),
-            font_weight: ui::font::buffer_font().weight,
+            font_weight: settings.buffer_font.weight,
             line_height: (font_size * settings.buffer_line_height.value()).into(),
             ..Default::default()
         },

@@ -4,9 +4,14 @@ mod settings;
 use std::sync::Arc;
 
 use ::settings::IntoGpui;
+use ::settings::Settings;
+use ::settings::SettingsStore;
 use gpui::App;
+use gpui::Font;
 use gpui::HighlightStyle;
+use gpui::Pixels;
 use gpui::Refineable;
+use gpui::px;
 use theme::AccentColors;
 use theme::Appearance;
 use theme::AppearanceContent;
@@ -17,6 +22,7 @@ use theme::SyntaxTheme;
 use theme::SystemColors;
 use theme::Theme;
 use theme::ThemeColors;
+use theme::ThemeSettingsProvider;
 use theme::ThemeStyles;
 use theme::try_parse_color;
 
@@ -33,16 +39,81 @@ pub use crate::schema::status_colors_refinement;
 pub use crate::schema::theme_colors_refinement;
 pub use crate::settings::BufferLineHeight;
 pub use crate::settings::FontFamilyName;
+pub use crate::settings::GitCommitBufferFontSize;
+pub use crate::settings::MarkdownPreviewFontSize;
 pub use crate::settings::ThemeSettings;
+use crate::settings::adjust_buffer_font_size;
+pub use crate::settings::adjust_git_commit_buffer_font_size;
+pub use crate::settings::adjust_markdown_preview_font_size;
+pub use crate::settings::adjust_ui_font_size;
+pub use crate::settings::adjusted_font_size;
 use crate::settings::apply_floating_chrome;
 pub use crate::settings::buffer_line_height_from_settings;
+pub use crate::settings::clamp_font_size;
+pub use crate::settings::observe_buffer_font_size_adjustment;
+pub use crate::settings::reset_buffer_font_size;
+pub use crate::settings::reset_git_commit_buffer_font_size;
+pub use crate::settings::reset_markdown_preview_font_size;
+pub use crate::settings::reset_ui_font_size;
+pub use crate::settings::setup_ui_font;
+
+struct ThemeSettingsProviderImpl;
+
+impl ThemeSettingsProvider for ThemeSettingsProviderImpl {
+    fn ui_font<'a>(&'a self, cx: &'a App) -> &'a Font {
+        &ThemeSettings::get_global(cx).ui_font
+    }
+
+    fn buffer_font<'a>(&'a self, cx: &'a App) -> &'a Font {
+        &ThemeSettings::get_global(cx).buffer_font
+    }
+
+    fn ui_font_size(&self, cx: &App) -> Pixels {
+        ThemeSettings::get_global(cx).ui_font_size(cx)
+    }
+
+    fn buffer_font_size(&self, cx: &App) -> Pixels {
+        ThemeSettings::get_global(cx).buffer_font_size(cx)
+    }
+}
 
 /// The only theme: Nord, embedded in the binary.
 const NORD_THEME_JSON: &[u8] = include_bytes!("../../../assets/themes/nord/nord.json");
 
-/// Initializes the theme system with the constant Nord theme.
+/// Initializes the theme system: sets the constant Nord theme and wires up font size settings.
 pub fn init(cx: &mut App) {
+    theme::set_theme_settings_provider(Box::new(ThemeSettingsProviderImpl), cx);
     cx.set_global(GlobalTheme::new(Arc::new(nord_theme())));
+
+    let settings = ThemeSettings::get_global(cx);
+
+    let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
+    let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
+    let mut prev_git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
+
+    cx.observe_global::<SettingsStore>(move |cx| {
+        let settings = ThemeSettings::get_global(cx);
+
+        let buffer_font_size_settings = settings.buffer_font_size_settings();
+        let ui_font_size_settings = settings.ui_font_size_settings();
+        let git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
+
+        if buffer_font_size_settings != prev_buffer_font_size_settings {
+            prev_buffer_font_size_settings = buffer_font_size_settings;
+            reset_buffer_font_size(cx);
+        }
+
+        if ui_font_size_settings != prev_ui_font_size_settings {
+            prev_ui_font_size_settings = ui_font_size_settings;
+            reset_ui_font_size(cx);
+        }
+
+        if git_commit_buffer_font_size_settings != prev_git_commit_buffer_font_size_settings {
+            prev_git_commit_buffer_font_size_settings = git_commit_buffer_font_size_settings;
+            reset_git_commit_buffer_font_size(cx);
+        }
+    })
+    .detach();
 }
 
 /// Builds the Nord theme with the floating-card chrome applied.
@@ -154,6 +225,18 @@ pub fn merge_accent_colors(accent_colors: &mut AccentColors, user_accent_colors:
     if !colors.is_empty() {
         accent_colors.0 = Arc::from(colors);
     }
+}
+
+/// Increases the buffer font size by 1 pixel, without persisting the result in the settings.
+/// This will be effective until the app is restarted.
+pub fn increase_buffer_font_size(cx: &mut App) {
+    adjust_buffer_font_size(cx, |size| size + px(1.0));
+}
+
+/// Decreases the buffer font size by 1 pixel, without persisting the result in the settings.
+/// This will be effective until the app is restarted.
+pub fn decrease_buffer_font_size(cx: &mut App) {
+    adjust_buffer_font_size(cx, |size| size - px(1.0));
 }
 
 #[cfg(test)]

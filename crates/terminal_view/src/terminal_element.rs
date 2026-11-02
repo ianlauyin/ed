@@ -71,6 +71,7 @@ use terminal::is_default_background_color;
 use terminal::terminal_settings::TerminalSettings;
 use theme::ActiveTheme;
 use theme::Theme;
+use theme_settings::ThemeSettings;
 use ui::ParentElement;
 use ui::Tooltip;
 use ui::utils::ensure_minimum_contrast;
@@ -976,7 +977,8 @@ impl TerminalElement {
     }
 
     fn rem_size(&self, cx: &App) -> Option<Pixels> {
-        let buffer_font_size = ui::font::buffer_font_size(cx);
+        let settings = ThemeSettings::get_global(cx);
+        let buffer_font_size = settings.buffer_font_size(cx);
         let rem_size_scale = {
             // Our default UI font size is 14px on a 16px base scale.
             // This means the default UI font size is 0.875rems.
@@ -1033,8 +1035,9 @@ impl Element for TerminalElement {
         let rem_size = self.rem_size(cx);
         self.interactivity.prepaint(global_id, bounds, bounds.size, window, cx, |_, _, hitbox, window, cx| {
             let hitbox = hitbox.unwrap();
+            let settings = ThemeSettings::get_global(cx);
 
-            let buffer_font_size = ui::font::buffer_font_size(cx);
+            let buffer_font_size = settings.buffer_font_size(cx);
 
             let terminal_settings = TerminalSettings::get_global(cx);
             let minimum_contrast = terminal_settings.minimum_contrast;
@@ -1042,10 +1045,10 @@ impl Element for TerminalElement {
             let font_family = terminal_settings
                 .font_family
                 .as_ref()
-                .map_or_else(|| ui::font::buffer_font().family.clone(), |font_family| font_family.0.clone().into());
+                .map_or_else(|| settings.buffer_font.family.clone(), |font_family| font_family.0.clone().into());
 
             let font_fallbacks =
-                terminal_settings.font_fallbacks.as_ref().or(ui::font::buffer_font().fallbacks.as_ref()).cloned();
+                terminal_settings.font_fallbacks.as_ref().or(settings.buffer_font.fallbacks.as_ref()).cloned();
 
             let font_features =
                 terminal_settings.font_features.as_ref().unwrap_or(&FontFeatures::disable_ligatures()).clone();
@@ -1054,8 +1057,9 @@ impl Element for TerminalElement {
 
             let line_height = terminal_settings.line_height.value();
 
-            let font_size =
-                terminal_settings.font_size.map_or(buffer_font_size, |size| ui::font::adjusted_font_size(size, cx));
+            let font_size = terminal_settings
+                .font_size
+                .map_or(buffer_font_size, |size| theme_settings::adjusted_font_size(size, cx));
 
             let theme = cx.theme().clone();
 

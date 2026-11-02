@@ -15,8 +15,9 @@ ordered-float.workspace = true
 picker.workspace = true
 picker_preview.workspace = true
 project.workspace = true
+settings.workspace = true
 theme.workspace = true
-ui.workspace = true
+theme_settings.workspace = true
 util.workspace = true
 workspace.workspace = true
 

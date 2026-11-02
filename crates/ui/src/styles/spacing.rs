@@ -54,7 +54,7 @@ impl DynamicSpacing {
 
     /// Returns the spacing value in pixels, scaled by the UI font size.
     pub fn px(self, cx: &App) -> Pixels {
-        let ui_font_size: f32 = crate::font::ui_font_size(cx).into();
+        let ui_font_size: f32 = theme::theme_settings(cx).ui_font_size(cx).into();
         px(ui_font_size * self.base_px() / BASE_REM_SIZE_IN_PX)
     }
 }

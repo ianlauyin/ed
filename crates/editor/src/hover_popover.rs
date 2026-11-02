@@ -51,6 +51,7 @@ use project::HoverBlock;
 use project::HoverBlockKind;
 use project::InlayHintLabelPart;
 use settings::Settings;
+use theme_settings::ThemeSettings;
 use ui::CopyButton;
 use ui::ScrollAxes;
 use ui::Scrollbars;
@@ -832,13 +833,14 @@ fn unclosed_code_fence(markdown: &str) -> Option<String> {
 }
 
 pub fn hover_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
-    let ui_font_family = ui::font::ui_font().family.clone();
-    let ui_font_features = ui::font::ui_font().features.clone();
-    let ui_font_fallbacks = ui::font::ui_font().fallbacks.clone();
-    let buffer_font_family = ui::font::buffer_font().family.clone();
-    let buffer_font_features = ui::font::buffer_font().features.clone();
-    let buffer_font_fallbacks = ui::font::buffer_font().fallbacks.clone();
-    let buffer_font_weight = ui::font::buffer_font().weight;
+    let settings = ThemeSettings::get_global(cx);
+    let ui_font_family = settings.ui_font.family.clone();
+    let ui_font_features = settings.ui_font.features.clone();
+    let ui_font_fallbacks = settings.ui_font.fallbacks.clone();
+    let buffer_font_family = settings.buffer_font.family.clone();
+    let buffer_font_features = settings.buffer_font.features.clone();
+    let buffer_font_fallbacks = settings.buffer_font.fallbacks.clone();
+    let buffer_font_weight = settings.buffer_font.weight;
 
     let mut base_text_style = window.text_style();
     base_text_style.refine(&TextStyleRefinement {
@@ -852,7 +854,7 @@ pub fn hover_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
         base_text_style,
         code_block: StyleRefinement::default()
             .my(rems(1.))
-            .font_buffer()
+            .font_buffer(cx)
             .font_features(buffer_font_features.clone())
             .font_weight(buffer_font_weight),
         inline_code: TextStyleRefinement {
@@ -884,12 +886,13 @@ pub fn hover_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
 }
 
 pub fn diagnostics_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
-    let ui_font_family = ui::font::ui_font().family.clone();
-    let ui_font_fallbacks = ui::font::ui_font().fallbacks.clone();
-    let ui_font_features = ui::font::ui_font().features.clone();
-    let buffer_font_family = ui::font::buffer_font().family.clone();
-    let buffer_font_features = ui::font::buffer_font().features.clone();
-    let buffer_font_fallbacks = ui::font::buffer_font().fallbacks.clone();
+    let settings = ThemeSettings::get_global(cx);
+    let ui_font_family = settings.ui_font.family.clone();
+    let ui_font_fallbacks = settings.ui_font.fallbacks.clone();
+    let ui_font_features = settings.ui_font.features.clone();
+    let buffer_font_family = settings.buffer_font.family.clone();
+    let buffer_font_features = settings.buffer_font.features.clone();
+    let buffer_font_fallbacks = settings.buffer_font.fallbacks.clone();
 
     let mut base_text_style = window.text_style();
     base_text_style.refine(&TextStyleRefinement {
@@ -901,7 +904,7 @@ pub fn diagnostics_markdown_style(window: &Window, cx: &App) -> MarkdownStyle {
     });
     MarkdownStyle {
         base_text_style,
-        code_block: StyleRefinement::default().my(rems(1.)).font_buffer(),
+        code_block: StyleRefinement::default().my(rems(1.)).font_buffer(cx),
         inline_code: TextStyleRefinement {
             background_color: Some(cx.theme().colors().editor_background.opacity(0.5)),
             font_family: Some(buffer_font_family),
@@ -1277,7 +1280,7 @@ fn render_code_lenses(
         .px_2()
         .py_1()
         .gap_x_2()
-        .font_ui()
+        .font_ui(cx)
         .text_sm()
         .text_color(lens_color)
         .when(has_content_below, |this| this.border_b_1().border_color(border_color))

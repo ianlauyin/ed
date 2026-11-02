@@ -33,10 +33,10 @@ pub(crate) fn with_copy_on_right_click<E: StatefulInteractiveElement>(
                 cx.write_to_clipboard(ClipboardItem::new_string(text_to_copy.to_string()));
             }
         })
-        .tooltip(Tooltip::element(move |_window, _cx| {
+        .tooltip(Tooltip::element(move |_window, cx| {
             v_flex()
                 .gap_1()
-                .child(div().font_buffer().child(text.clone()))
+                .child(div().font_buffer(cx).child(text.clone()))
                 .child(Divider::horizontal())
                 .child(Label::new(hint).size(LabelSize::Small).color(Color::Muted))
                 .into_any_element()
@@ -77,6 +77,6 @@ fn create_table_cell(
             VerticalAlignment::Top => div.items_start(),
             VerticalAlignment::Center => div.items_center(),
         })
-        .font_buffer();
+        .font_buffer(cx);
     with_copy_on_right_click(cell, cell_content.clone(), "Right click to copy content").child(div().child(cell_content))
 }

@@ -476,7 +476,7 @@ impl TableView {
             .overflow_hidden()
             .w_full()
             .items_center()
-            .font_buffer()
+            .font_buffer(cx)
             .text_buffer(cx)
             .child({
                 let header_text_cell = div()

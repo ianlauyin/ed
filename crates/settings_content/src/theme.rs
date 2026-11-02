@@ -138,8 +138,32 @@ impl TryFrom<&ThemeColor> for gpui::Rgba {
 
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct ThemeSettingsContent {
+    /// The default font size for text in the UI.
+    pub ui_font_size: Option<FontSize>,
+    /// The name of a font to use for rendering in the UI.
+    pub ui_font_family: Option<FontFamilyName>,
+    /// The font fallbacks to use for rendering in the UI.
+    pub ui_font_fallbacks: Option<Vec<FontFamilyName>>,
+    /// The OpenType features to enable for text in the UI.
+    pub ui_font_features: Option<FontFeaturesContent>,
+    /// The weight of the UI font in CSS units from 100 to 900.
+    pub ui_font_weight: Option<FontWeightContent>,
+    /// The name of a font to use for rendering in text buffers.
+    pub buffer_font_family: Option<FontFamilyName>,
+    /// The font fallbacks to use for rendering in text buffers.
+    pub buffer_font_fallbacks: Option<Vec<FontFamilyName>>,
+    /// The default font size for rendering in text buffers.
+    pub buffer_font_size: Option<FontSize>,
+    /// The weight of the editor font in CSS units from 100 to 900.
+    pub buffer_font_weight: Option<FontWeightContent>,
     /// The buffer's line height.
     pub buffer_line_height: Option<BufferLineHeight>,
+    /// The OpenType features to enable for rendering in text buffers.
+    pub buffer_font_features: Option<FontFeaturesContent>,
+    pub git_commit_buffer_font_size: Option<FontSize>,
+    /// The name of a font to use for rendering Mermaid diagrams in the
+    /// markdown preview. Falls back to the UI font if unset.
+    pub mermaid_font_family: Option<FontFamilyName>,
     /// How much to fade out unused code.
     pub unnecessary_code_fade: Option<CodeFade>,
 }

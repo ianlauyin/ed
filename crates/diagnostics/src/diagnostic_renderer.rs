@@ -198,7 +198,7 @@ impl DiagnosticBlock {
             _ => (status_colors.ignored_background, status_colors.ignored),
         };
         let settings = ThemeSettings::get_global(cx);
-        let editor_line_height = (settings.line_height() * ui::font::buffer_font_size(cx)).round();
+        let editor_line_height = (settings.line_height() * settings.buffer_font_size(cx)).round();
         let line_height = editor_line_height;
         let diagnostics_editor = self.diagnostics_editor.clone();
 

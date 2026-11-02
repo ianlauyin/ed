@@ -188,6 +188,7 @@ pub use status_bar::status_item_color;
 use task::SpawnInTerminal;
 use theme::ActiveTheme;
 use theme::ClientDecorationsExt;
+use theme_settings::ThemeSettings;
 pub use toast_layer::ToastAction;
 pub use toast_layer::ToastLayer;
 pub use toast_layer::ToastView;
@@ -6070,7 +6071,7 @@ fn notify_if_database_failed(window: WindowHandle<Workspace>, cx: &mut AsyncApp)
 }
 
 fn px_with_ui_font_fallback(val: u32, cx: &Context<Workspace>) -> Pixels {
-    if val == 0 { ui::font::ui_font_size(cx) } else { px(val as f32) }
+    if val == 0 { ThemeSettings::get_global(cx).ui_font_size(cx) } else { px(val as f32) }
 }
 
 fn adjust_active_dock_size_by_px(px: Pixels, workspace: &Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
@@ -6129,7 +6130,7 @@ impl Render for Workspace {
             log::info!("Rendered first frame");
         }
 
-        let ui_font = ui::font::setup_ui_font(window, cx);
+        let ui_font = theme_settings::setup_ui_font(window, cx);
 
         let theme = cx.theme().clone();
         let colors = theme.colors();

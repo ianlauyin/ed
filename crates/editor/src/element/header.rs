@@ -389,7 +389,7 @@ pub(crate) fn render_buffer_header(
                                             Label::new(filename)
                                                 .single_line()
                                                 .color(file_status_label_color(file_status))
-                                                .buffer_font()
+                                                .buffer_font(cx)
                                                 .when(file_status.is_some_and(|s| s.is_deleted()), |label| {
                                                     label.strikethrough()
                                                 }),
@@ -410,7 +410,7 @@ pub(crate) fn render_buffer_header(
                                         })),
                                 )
                                 .when_some(parent_path, |then, path| {
-                                    then.child(Label::new(path).buffer_font().truncate_start().color(
+                                    then.child(Label::new(path).buffer_font(cx).truncate_start().color(
                                         if file_status.is_some_and(FileStatus::is_deleted) {
                                             Color::Custom(colors.text_disabled)
                                         } else {
@@ -426,7 +426,7 @@ pub(crate) fn render_buffer_header(
                             h_flex()
                                 .gap_2()
                                 .when_some(diff_stat, |this, (added, removed)| {
-                                    let ui_font_size = ui::font::ui_font_size(cx);
+                                    let ui_font_size = theme_settings::ThemeSettings::get_global(cx).ui_font_size(cx);
                                     this.child(WithRemSize::new(ui_font_size).child(DiffStat::new(
                                         ("buffer-header-diff-stat", buffer_id.to_proto()),
                                         added as usize,

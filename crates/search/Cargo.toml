@@ -32,6 +32,7 @@ regex.workspace = true
 settings.workspace = true
 smol.workspace = true
 text.workspace = true
+theme_settings.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true

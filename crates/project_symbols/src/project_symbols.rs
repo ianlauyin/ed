@@ -28,7 +28,9 @@ use picker::PreviewUpdate;
 use project::Project;
 use project::Symbol;
 use project::lsp_store::SymbolLocation;
+use settings::Settings;
 use theme::ActiveTheme;
+use theme_settings::ThemeSettings;
 use util::ResultExt;
 use workspace::Workspace;
 use workspace::ui::LabelLike;
@@ -268,13 +270,15 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         let line_number = symbol.range.start.0.row + 1;
         let path = path.into_owned();
 
+        let settings = ThemeSettings::get_global(cx);
+
         let text_style = TextStyle {
             color: cx.theme().colors().text,
-            font_family: ui::font::buffer_font().family.clone(),
-            font_features: ui::font::buffer_font().features.clone(),
-            font_fallbacks: ui::font::buffer_font().fallbacks.clone(),
-            font_size: ui::font::buffer_font_size(cx).into(),
-            font_weight: ui::font::buffer_font().weight,
+            font_family: settings.buffer_font.family.clone(),
+            font_features: settings.buffer_font.features.clone(),
+            font_fallbacks: settings.buffer_font.fallbacks.clone(),
+            font_size: settings.buffer_font_size(cx).into(),
+            font_weight: settings.buffer_font.weight,
             line_height: relative(1.),
             ..Default::default()
         };

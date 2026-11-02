@@ -32,13 +32,14 @@ pub fn is_light(cx: &mut App) -> bool {
 }
 
 pub fn buffer_text_style(cx: &App) -> gpui::TextStyle {
-    let buffer_font = crate::font::buffer_font();
+    let settings = theme::theme_settings(cx);
+    let buffer_font = settings.buffer_font(cx);
     gpui::TextStyle {
         color: cx.theme().colors().text,
         font_family: buffer_font.family.clone(),
         font_features: buffer_font.features.clone(),
         font_fallbacks: buffer_font.fallbacks.clone(),
-        font_size: gpui::AbsoluteLength::from(crate::font::buffer_font_size(cx)),
+        font_size: gpui::AbsoluteLength::from(settings.buffer_font_size(cx)),
         font_weight: buffer_font.weight,
         line_height: gpui::relative(1.),
         ..gpui::TextStyle::default()
@@ -46,7 +47,8 @@ pub fn buffer_text_style(cx: &App) -> gpui::TextStyle {
 }
 
 pub fn ui_text_style(cx: &App) -> gpui::TextStyle {
-    let ui_font = crate::font::ui_font();
+    let settings = theme::theme_settings(cx);
+    let ui_font = settings.ui_font(cx);
     gpui::TextStyle {
         color: cx.theme().colors().text,
         font_family: ui_font.family.clone(),
