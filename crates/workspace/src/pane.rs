@@ -4421,6 +4421,7 @@ mod tests {
     use gpui::Styled;
     use gpui::WeakEntity;
     use gpui::px;
+    use theme::ThemeColors;
 
     use super::NavHistory;
     use super::Pane;
@@ -4448,7 +4449,7 @@ mod tests {
 
     #[test]
     fn test_card_corner_mask_style() {
-        let colors = theme::built_in::theme_colors();
+        let colors = ThemeColors::dark();
         let style = Pane::card_corner_mask_style(&colors)(StyleRefinement::default());
 
         assert_eq!(style.border_color, Some(colors.editor_background));
@@ -4505,7 +4506,7 @@ mod tests {
 
     #[test]
     fn test_drop_target_style() {
-        let colors = theme::built_in::theme_colors();
+        let colors = ThemeColors::dark();
         let style = Pane::drop_target_style(&colors)(StyleRefinement::default().rounded(px(8.)));
 
         assert_eq!(style.border_color, Some(colors.drop_target_border()));

@@ -10,12 +10,9 @@ because it hurt readability; an opaque window is also cheaper to composite.
 
 ## Theme
 
-- The theme is constant: Nord (dark), a fully resolved Rust struct in
-  `theme::built_in` (like `settings::built_in`). Every colour is spelled out,
-  including the floating-card chrome, so there is no theme JSON, no
-  light/dark default palette, no refinement or fallback derivation, and no
-  `theme_settings` crate. To change colours, edit `theme::built_in` and rebuild.
-- There are no Vim/Helix theme colours (`vim_*`).
+- The theme is constant: Nord (`assets/themes/nord/nord.json`, dark), embedded
+  in the binary and built once at startup. It is the only bundled theme; to
+  change colours, edit that file and rebuild.
 - There is no theme registry, theme picker, light/dark mode toggle, `Settings`
   app-menu submenu, or theme settings (`theme`, `markdown_preview.theme`,
   `theme_overrides`, `experimental.theme_overrides`).

@@ -92,6 +92,7 @@ terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }
+theme_settings = { path = "crates/theme_settings" }
 time_format = { path = "crates/time_format" }
 title_bar = { path = "crates/title_bar" }
 trash = { path = "crates/trash" }

@@ -53,9 +53,8 @@ migrator, or Vim/Helix mode.
   text, buffer font family for code, semibold (600) headings, content centered
   and capped at 1200px, and no auto-opening of markdown files in the preview.
   Preview zoom (cmd +/-/0) is in-memory only.
-- Fonts and font sizes are not settings; see "Fonts" in `ui-layout.md`. There
-  are no theme settings: buffer line height (1.618) and unnecessary-code fade
-  (0.3) are constants in `theme::built_in`.
+- Fonts and font sizes are not settings; see "Fonts" in `ui-layout.md`. The
+  only theme settings left are buffer line height and unnecessary-code fade.
 - Semantic token fallback mappings are constructed in Rust. Personal rules take
   precedence over language/extension rules, which take precedence over fallback
   mappings. Rule order and theme-style fallback order are preserved. There is no

@@ -6,7 +6,6 @@ use gpui::Pixels;
 use serde::Deserialize;
 use serde::Serialize;
 pub use settings::AlternateScroll;
-use settings::FontFamilyName;
 use settings::IntoGpui;
 use settings::PathHyperlinkRegex;
 use settings::TerminalBlink;
@@ -14,6 +13,7 @@ use settings::TerminalDockPosition;
 use settings::TerminalLineHeight;
 use settings::WorkingDirectory;
 use task::Shell;
+use theme_settings::FontFamilyName;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TerminalSettings {

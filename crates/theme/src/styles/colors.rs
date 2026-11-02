@@ -4,6 +4,7 @@ use gpui::App;
 use gpui::Hsla;
 use gpui::SharedString;
 use gpui::WindowBackgroundAppearance;
+use refineable::Refineable;
 use strum::AsRefStr;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
@@ -12,10 +13,12 @@ use crate::AccentColors;
 use crate::ActiveTheme;
 use crate::PlayerColor;
 use crate::StatusColors;
+use crate::StatusColorsRefinement;
 use crate::SyntaxTheme;
 use crate::SystemColors;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Refineable, Clone, Debug, PartialEq)]
+#[refineable(Debug, serde::Deserialize)]
 pub struct ThemeColors {
     /// Border color. Used for most borders, is usually a high contrast color.
     pub border: Hsla,
@@ -159,6 +162,43 @@ pub struct ThemeColors {
     pub minimap_thumb_active_background: Hsla,
     /// The border color of the minimap thumb.
     pub minimap_thumb_border: Hsla,
+
+    /// Background color for Vim Normal mode indicator.
+    pub vim_normal_background: Hsla,
+    /// Background color for Vim Insert mode indicator.
+    pub vim_insert_background: Hsla,
+    /// Background color for Vim Replace mode indicator.
+    pub vim_replace_background: Hsla,
+    /// Background color for Vim Visual mode indicator.
+    pub vim_visual_background: Hsla,
+    /// Background color for Vim Visual Line mode indicator.
+    pub vim_visual_line_background: Hsla,
+    /// Background color for Vim Visual Block mode indicator.
+    pub vim_visual_block_background: Hsla,
+    /// Background color for Vim yank highlight.
+    pub vim_yank_background: Hsla,
+    /// Foreground color for Helix jump labels.
+    pub vim_helix_jump_label_foreground: Hsla,
+    /// Background color for Vim Helix Normal mode indicator.
+    pub vim_helix_normal_background: Hsla,
+    /// Background color for Vim Helix Select mode indicator.
+    pub vim_helix_select_background: Hsla,
+    /// Foreground color for Vim Normal mode indicator.
+    pub vim_normal_foreground: Hsla,
+    /// Foreground color for Vim Insert mode indicator.
+    pub vim_insert_foreground: Hsla,
+    /// Foreground color for Vim Replace mode indicator.
+    pub vim_replace_foreground: Hsla,
+    /// Foreground color for Vim Visual mode indicator.
+    pub vim_visual_foreground: Hsla,
+    /// Foreground color for Vim Visual Line mode indicator.
+    pub vim_visual_line_foreground: Hsla,
+    /// Foreground color for Vim Visual Block mode indicator.
+    pub vim_visual_block_foreground: Hsla,
+    /// Foreground color for Vim Helix Normal mode indicator.
+    pub vim_helix_normal_foreground: Hsla,
+    /// Foreground color for Vim Helix Select mode indicator.
+    pub vim_helix_select_foreground: Hsla,
 
     // ===
     // Editor
@@ -574,7 +614,7 @@ pub fn all_theme_colors(cx: &mut App) -> Vec<(Hsla, SharedString)> {
         .collect()
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Refineable, Clone, Debug, PartialEq)]
 pub struct ThemeStyles {
     /// The background appearance of the window.
     pub window_background_appearance: WindowBackgroundAppearance,
@@ -584,8 +624,10 @@ pub struct ThemeStyles {
     /// Example: Player colors, rainbow brackets and indent guides, etc.
     pub accents: AccentColors,
 
+    #[refineable]
     pub colors: ThemeColors,
 
+    #[refineable]
     pub status: StatusColors,
 
     pub player: PlayerColor,
@@ -595,11 +637,11 @@ pub struct ThemeStyles {
 
 #[cfg(test)]
 mod tests {
-    use crate::built_in;
+    use super::ThemeColors;
 
     #[test]
     fn test_drop_target_colors_follow_accent() {
-        let colors = built_in::theme_colors();
+        let colors = ThemeColors::dark();
         assert_eq!(colors.drop_target_border(), colors.text_accent);
         assert_eq!(colors.drop_target_background(), colors.text_accent.opacity(0.12));
     }

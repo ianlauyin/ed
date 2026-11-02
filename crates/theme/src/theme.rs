@@ -1,5 +1,9 @@
-pub mod built_in;
+mod buffer_line_height;
 mod color_space;
+mod default_colors;
+mod fallback_themes;
+mod scale;
+mod schema;
 mod styles;
 
 use std::sync::Arc;
@@ -13,8 +17,30 @@ use gpui::Styled;
 use gpui::Tiling;
 use gpui::WindowBackgroundAppearance;
 use gpui::px;
+use serde::Deserialize;
 
+pub use crate::buffer_line_height::*;
 pub use crate::color_space::*;
+pub(crate) use crate::default_colors::amber;
+pub(crate) use crate::default_colors::blue;
+pub(crate) use crate::default_colors::cyan;
+pub(crate) use crate::default_colors::gold;
+pub(crate) use crate::default_colors::grass;
+pub(crate) use crate::default_colors::indigo;
+pub(crate) use crate::default_colors::iris;
+pub(crate) use crate::default_colors::jade;
+pub(crate) use crate::default_colors::lime;
+pub(crate) use crate::default_colors::neutral;
+pub(crate) use crate::default_colors::orange;
+pub(crate) use crate::default_colors::pink;
+pub(crate) use crate::default_colors::purple;
+pub(crate) use crate::default_colors::red;
+pub(crate) use crate::default_colors::tomato;
+pub(crate) use crate::default_colors::yellow;
+pub use crate::fallback_themes::apply_status_color_defaults;
+pub use crate::fallback_themes::apply_theme_color_defaults;
+pub use crate::scale::*;
+pub use crate::schema::*;
 pub use crate::styles::*;
 
 /// Defines window border radius for platforms that use client side decorations.
@@ -47,7 +73,7 @@ pub trait ClientDecorationsExt: Styled {
 impl<T: Styled> ClientDecorationsExt for T {}
 
 /// The appearance of the theme.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize)]
 pub enum Appearance {
     /// A light appearance.
     Light,
@@ -154,11 +180,6 @@ impl Theme {
         hsla.l = (hsla.l - amount).max(0.0);
         hsla
     }
-}
-
-/// Installs the built-in theme as the active theme.
-pub fn init(cx: &mut App) {
-    cx.set_global(GlobalTheme::new(Arc::new(built_in::theme())));
 }
 
 /// The active theme.
