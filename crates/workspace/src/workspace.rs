@@ -57,6 +57,7 @@ pub use dock::Panel;
 use dock::PanelButtons;
 use dock::PanelHandle;
 use dock::RESIZE_HANDLE_SIZE;
+use ed_actions::theme::ToggleMode;
 use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -188,6 +189,7 @@ pub use status_bar::status_item_color;
 use task::SpawnInTerminal;
 use theme::ActiveTheme;
 use theme::ClientDecorationsExt;
+use theme::SystemAppearance;
 use theme_settings::ThemeSettings;
 pub use toast_layer::ToastAction;
 pub use toast_layer::ToastLayer;
@@ -1443,6 +1445,13 @@ impl Workspace {
                     .ok();
                 }));
                 cx.notify();
+            }),
+            cx.observe_window_appearance(window, |_, window, cx| {
+                let window_appearance = window.appearance();
+
+                *SystemAppearance::global_mut(cx) = SystemAppearance(window_appearance.into());
+
+                theme_settings::reload_theme(cx);
             }),
             cx.on_release({
                 let weak_handle = weak_handle.clone();
@@ -5228,6 +5237,7 @@ impl Workspace {
             .on_action(cx.listener(Self::move_item_to_pane_at_index))
             .on_action(cx.listener(Self::move_focused_panel_to_next_position))
             .on_action(cx.listener(Self::reopen_last_picker))
+            .on_action(cx.listener(Self::toggle_theme_mode))
             .when(!active_item_is_read_only, |this| {
                 this.on_action(cx.listener(|workspace, action: &Save, window, cx| {
                     workspace
@@ -5859,6 +5869,23 @@ impl Workspace {
         let size = new_size.min(self.bounds.bottom() - RESIZE_HANDLE_SIZE - self.bounds.top());
         self.bottom_dock.update(cx, |bottom_dock, cx| {
             bottom_dock.resize_panel_sizes(Some(size), window, cx);
+        });
+    }
+
+    fn toggle_theme_mode(&mut self, _: &ToggleMode, _window: &mut Window, cx: &mut Context<Self>) {
+        let current_mode = ThemeSettings::get_global(cx).theme.mode();
+        let next_mode = match current_mode {
+            Some(theme_settings::ThemeAppearanceMode::Light) => theme_settings::ThemeAppearanceMode::Dark,
+            Some(theme_settings::ThemeAppearanceMode::Dark) => theme_settings::ThemeAppearanceMode::Light,
+            Some(theme_settings::ThemeAppearanceMode::System) | None => match cx.theme().appearance() {
+                theme::Appearance::Light => theme_settings::ThemeAppearanceMode::Dark,
+                theme::Appearance::Dark => theme_settings::ThemeAppearanceMode::Light,
+            },
+        };
+
+        let fs = self.project().read(cx).fs().clone();
+        settings::update_settings_file(fs, cx, move |settings, _cx| {
+            theme_settings::set_mode(settings, next_mode);
         });
     }
 

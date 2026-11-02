@@ -8,22 +8,11 @@ way: theme colour tweaks plus a shared card style, with no changes to GPUI's
 clipping. A translucent, blurred liquid-glass variant was tried and dropped,
 because it hurt readability; an opaque window is also cheaper to composite.
 
-## Theme
-
-- The theme is constant: Nord (`assets/themes/nord/nord.json`, dark), embedded
-  in the binary and built once at startup. It is the only bundled theme; to
-  change colours, edit that file and rebuild.
-- There is no theme registry, theme picker, light/dark mode toggle, `Settings`
-  app-menu submenu, or theme settings (`theme`, `markdown_preview.theme`,
-  `theme_overrides`, `experimental.theme_overrides`).
-- The theme never changes at runtime, so nothing observes theme changes and the
-  OS light/dark appearance is not tracked. Native window chrome is forced to the
-  theme's appearance.
-
 ## Behaviour
 
-- The chrome is the theme's `panel_background`; `background`, the title bar
-  colours and `status_bar_background` are set to it.
+- The chrome is the active theme's `panel_background`. Before user theme
+  overrides run, `background`, the title bar colours and `status_bar_background`
+  are set to it. User `theme_overrides` can still change any of these.
 - Card content is derived from the chrome colour instead of a new theme key:
   the editor, gutter, toolbar and terminal backgrounds are shifted together so
   the editor sits 5 points of HSL lightness below the chrome (above it in light

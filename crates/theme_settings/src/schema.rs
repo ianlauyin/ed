@@ -1,3 +1,4 @@
+use gpui::HighlightStyle;
 use gpui::Hsla;
 use palette::FromColor;
 use serde::Deserialize;
@@ -5,6 +6,7 @@ use serde::Serialize;
 pub use settings::FontStyleContent;
 pub use settings::FontWeightContent;
 pub use settings::HighlightStyleContent;
+use settings::IntoGpui;
 pub use settings::StatusColorsContent;
 pub use settings::ThemeColorsContent;
 pub use settings::ThemeStyleContent;
@@ -36,6 +38,27 @@ pub struct ThemeContent {
 }
 
 /// Returns the syntax style overrides in the [`ThemeContent`].
+pub fn syntax_overrides(this: &settings::ThemeStyleContent) -> Vec<(String, HighlightStyle)> {
+    this.syntax
+        .iter()
+        .map(|(key, style)| {
+            (
+                key.clone(),
+                HighlightStyle {
+                    color: style.color.as_ref().and_then(|color| theme::try_parse_color(color).ok()),
+                    background_color: style
+                        .background_color
+                        .as_ref()
+                        .and_then(|color| theme::try_parse_color(color).ok()),
+                    font_style: style.font_style.map(|s| s.into_gpui()),
+                    font_weight: style.font_weight.map(|w| w.into_gpui()),
+                    ..Default::default()
+                },
+            )
+        })
+        .collect()
+}
+
 pub fn status_colors_refinement(colors: &settings::StatusColorsContent) -> StatusColorsRefinement {
     StatusColorsRefinement {
         conflict: colors.conflict.as_ref().and_then(|color| try_parse_color(color).ok()),

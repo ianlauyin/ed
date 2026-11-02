@@ -23,6 +23,7 @@ use gpui::ScrollHandle;
 use gpui::Size;
 use gpui::Stateful;
 use gpui::StyledText;
+use gpui::Subscription;
 use gpui::Task;
 use gpui::Window;
 use gpui::img;
@@ -66,6 +67,7 @@ pub(crate) struct MermaidDiagrams {
     /// The preview's temporary font zoom (cmd +/-) the diagrams are rendered
     /// at; see [`preview_zoom`].
     zoom: f32,
+    _theme_subscription: Subscription,
 }
 
 /// Per-diagram view state, keyed by source offset in [`MermaidDiagrams::views`].
@@ -93,6 +95,10 @@ impl MermaidDiagrams {
             order: Vec::new(),
             views: HashMap::default(),
             zoom: preview_zoom(cx),
+            _theme_subscription: cx.observe_global::<theme::GlobalTheme>(|this, cx| {
+                this.rerender_all(cx);
+                cx.notify();
+            }),
         }
     }
 

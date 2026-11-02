@@ -19,8 +19,9 @@ There are no collaborator replicas: buffers only ever see the local replica,
 the SSH remote server replica, and local branches. Dead sharing/unsharing APIs
 and the call-status-icon and public-channel-sharing settings are removed.
 
-The theme has a single local player color (cursor and selection). The theme
-JSON keeps the `players` array format, but only the first entry is read. Places that need several distinct colors (git blame, Mermaid diagrams, debug
+The theme has a single local player color (cursor and selection). Themes and
+`theme_overrides` keep the `players` array format, but only the first entry is
+read. Places that need several distinct colors (git blame, Mermaid diagrams, debug
 ranges) use the theme's `accents` palette. The drag-and-drop cursor is the local
 cursor at half opacity.
 

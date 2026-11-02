@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use collections::HashMap;
 use collections::IndexMap;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -164,8 +165,23 @@ pub struct ThemeSettingsContent {
     /// The name of a font to use for rendering Mermaid diagrams in the
     /// markdown preview. Falls back to the UI font if unset.
     pub mermaid_font_family: Option<FontFamilyName>,
+    /// The name of the ed theme to use.
+    pub theme: Option<ThemeSelection>,
+
     /// How much to fade out unused code.
     pub unnecessary_code_fade: Option<CodeFade>,
+
+    /// EXPERIMENTAL: Overrides for the current theme.
+    ///
+    /// These values will override the ones on the current theme specified in `theme`.
+    #[serde(rename = "experimental.theme_overrides")]
+    pub experimental_theme_overrides: Option<ThemeStyleContent>,
+
+    /// Overrides per theme
+    ///
+    /// These values will override the ones on the specified theme
+    #[serde(default)]
+    pub theme_overrides: HashMap<String, ThemeStyleContent>,
 }
 
 /// A font size value in pixels, wrapping around `f32` for custom settings UI rendering.
@@ -199,6 +215,59 @@ impl From<f32> for CodeFade {
     fn from(x: f32) -> Self {
         Self(x)
     }
+}
+
+/// Represents the selection of a theme, which can be either static or dynamic.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
+#[serde(untagged)]
+pub enum ThemeSelection {
+    /// A static theme selection, represented by a single theme name.
+    Static(ThemeName),
+    /// A dynamic theme selection, which can change based the [ThemeMode].
+    Dynamic {
+        /// The mode used to determine which theme to use.
+        #[serde(default)]
+        mode: ThemeAppearanceMode,
+        /// The theme to use for light mode.
+        light: ThemeName,
+        /// The theme to use for dark mode.
+        dark: ThemeName,
+    },
+}
+
+pub const DEFAULT_LIGHT_THEME: &str = "One Light";
+pub const DEFAULT_DARK_THEME: &str = "One Dark";
+
+impl Default for ThemeSelection {
+    fn default() -> Self {
+        Self::Dynamic {
+            mode: ThemeAppearanceMode::default(),
+            light: ThemeName(DEFAULT_LIGHT_THEME.into()),
+            dark: ThemeName(DEFAULT_DARK_THEME.into()),
+        }
+    }
+}
+
+/// The mode use to select a theme.
+///
+/// `Light` and `Dark` will select their respective themes.
+///
+/// `System` will select the theme based on the system's appearance.
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize, strum::VariantArray, strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeAppearanceMode {
+    /// Use the specified `light` theme.
+    Light,
+
+    /// Use the specified `dark` theme.
+    Dark,
+
+    /// Use the theme based on the system's appearance.
+    #[default]
+    System,
 }
 
 /// Font family name.
@@ -283,6 +352,11 @@ pub struct PlayerColorContent {
     pub cursor: Option<ThemeColor>,
     pub selection: Option<ThemeColor>,
 }
+
+/// Theme name.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct ThemeName(pub Arc<str>);
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]

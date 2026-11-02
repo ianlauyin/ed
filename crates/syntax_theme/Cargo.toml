@@ -7,9 +7,15 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+bundled-themes = ["dep:serde", "dep:serde_json"]
+
 [lib]
 path = "src/syntax_theme.rs"
 doctest = false
 
 [dependencies]
 gpui.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }

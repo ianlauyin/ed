@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use collections::HashMap;
 use gpui::App;
 use gpui::Context;
 use gpui::Font;
@@ -9,14 +12,35 @@ use gpui::SharedString;
 use gpui::Subscription;
 use gpui::Window;
 use gpui::px;
+use refineable::Refineable;
+use serde::Deserialize;
+use serde::Serialize;
 pub use settings::FontFamilyName;
 use settings::IntoGpui;
 use settings::Settings;
+use settings::SettingsContent;
+pub use settings::ThemeAppearanceMode;
+pub use settings::ThemeName;
+use theme::Appearance;
+use theme::SyntaxTheme;
 use theme::Theme;
+
+use crate::merge_accent_colors;
+use crate::merge_player_color;
+use crate::schema::status_colors_refinement;
+use crate::schema::syntax_overrides;
+use crate::schema::theme_colors_refinement;
 
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
 const MIN_LINE_HEIGHT: f32 = 1.0;
+
+pub const fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
+    match appearance {
+        Appearance::Light => ThemeAppearanceMode::Light,
+        Appearance::Dark => ThemeAppearanceMode::Dark,
+    }
+}
 
 /// Customizable settings for the UI and theme system.
 #[derive(Clone, PartialEq)]
@@ -46,11 +70,27 @@ pub struct ThemeSettings {
     ///
     /// The terminal font family can be overridden using it's own setting.
     pub buffer_line_height: BufferLineHeight,
+    /// The current theme selection.
+    pub theme: ThemeSelection,
+    /// Manual overrides for the active theme.
+    ///
+    /// Note: This setting is still experimental. See [this tracking issue](https://github.com/zed-industries/zed/issues/18078)
+    pub experimental_theme_overrides: Option<settings::ThemeStyleContent>,
+    /// Manual overrides per theme
+    pub theme_overrides: HashMap<String, settings::ThemeStyleContent>,
     /// The amount of fading applied to unnecessary code.
     pub unnecessary_code_fade: f32,
 }
 
 settings::register_setting!(ThemeSettings);
+
+/// Returns the name of the default theme for the given [`Appearance`].
+pub const fn default_theme(appearance: Appearance) -> &'static str {
+    match appearance {
+        Appearance::Light => settings::DEFAULT_LIGHT_THEME,
+        Appearance::Dark => settings::DEFAULT_DARK_THEME,
+    }
+}
 
 #[derive(Default)]
 struct BufferFontSize(Pixels);
@@ -72,6 +112,123 @@ impl Global for GitCommitBufferFontSize {}
 pub struct MarkdownPreviewFontSize(Pixels);
 
 impl Global for MarkdownPreviewFontSize {}
+
+/// Represents the selection of a theme, which can be either static or dynamic.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ThemeSelection {
+    /// A static theme selection, represented by a single theme name.
+    Static(ThemeName),
+    /// A dynamic theme selection, which can change based the [ThemeMode].
+    Dynamic {
+        /// The mode used to determine which theme to use.
+        #[serde(default)]
+        mode: ThemeAppearanceMode,
+        /// The theme to use for light mode.
+        light: ThemeName,
+        /// The theme to use for dark mode.
+        dark: ThemeName,
+    },
+}
+
+impl From<settings::ThemeSelection> for ThemeSelection {
+    fn from(selection: settings::ThemeSelection) -> Self {
+        match selection {
+            settings::ThemeSelection::Static(theme) => ThemeSelection::Static(theme),
+            settings::ThemeSelection::Dynamic { mode, light, dark } => ThemeSelection::Dynamic { mode, light, dark },
+        }
+    }
+}
+
+impl ThemeSelection {
+    /// Returns the theme name for the selected [ThemeMode].
+    pub fn name(&self, system_appearance: Appearance) -> ThemeName {
+        match self {
+            Self::Static(theme) => theme.clone(),
+            Self::Dynamic { mode, light, dark } => match mode {
+                ThemeAppearanceMode::Light => light.clone(),
+                ThemeAppearanceMode::Dark => dark.clone(),
+                ThemeAppearanceMode::System => match system_appearance {
+                    Appearance::Light => light.clone(),
+                    Appearance::Dark => dark.clone(),
+                },
+            },
+        }
+    }
+
+    /// Returns the [ThemeMode] for the [ThemeSelection].
+    pub const fn mode(&self) -> Option<ThemeAppearanceMode> {
+        match self {
+            ThemeSelection::Static(_) => None,
+            ThemeSelection::Dynamic { mode, .. } => Some(*mode),
+        }
+    }
+}
+
+/// Sets the theme for the given appearance to the theme with the specified name.
+///
+/// The caller should make sure that the [`Appearance`] matches the theme associated with the name.
+///
+/// If the current [`ThemeAppearanceMode`] is set to [`System`] and the user's system [`Appearance`]
+/// is different than the new theme's [`Appearance`], this function will update the
+/// [`ThemeAppearanceMode`] to the new theme's appearance in order to display the new theme.
+///
+/// [`System`]: ThemeAppearanceMode::System
+pub fn set_theme(
+    current: &mut SettingsContent,
+    theme_name: impl Into<Arc<str>>,
+    theme_appearance: Appearance,
+    system_appearance: Appearance,
+) {
+    let theme_name = ThemeName(theme_name.into());
+
+    let Some(selection) = current.theme.theme.as_mut() else {
+        current.theme.theme = Some(settings::ThemeSelection::Static(theme_name));
+        return;
+    };
+
+    match selection {
+        settings::ThemeSelection::Static(theme) => {
+            *theme = theme_name;
+        }
+        settings::ThemeSelection::Dynamic { mode, light, dark } => {
+            match theme_appearance {
+                Appearance::Light => *light = theme_name,
+                Appearance::Dark => *dark = theme_name,
+            }
+
+            let should_update_mode = !(mode == &ThemeAppearanceMode::System && theme_appearance == system_appearance);
+
+            if should_update_mode {
+                *mode = appearance_to_mode(theme_appearance);
+            }
+        }
+    }
+}
+
+/// Sets the mode for the theme.
+pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
+    let theme = content.theme.as_mut();
+
+    if let Some(selection) = theme.theme.as_mut() {
+        match selection {
+            settings::ThemeSelection::Static(_) => {
+                *selection = settings::ThemeSelection::Dynamic {
+                    mode: ThemeAppearanceMode::System,
+                    light: ThemeName(settings::DEFAULT_LIGHT_THEME.into()),
+                    dark: ThemeName(settings::DEFAULT_DARK_THEME.into()),
+                };
+            }
+            settings::ThemeSelection::Dynamic { mode: mode_to_update, .. } => *mode_to_update = mode,
+        }
+    } else {
+        theme.theme = Some(settings::ThemeSelection::Dynamic {
+            mode,
+            light: ThemeName(settings::DEFAULT_LIGHT_THEME.into()),
+            dark: ThemeName(settings::DEFAULT_DARK_THEME.into()),
+        });
+    }
+}
 
 pub use theme::BufferLineHeight;
 
@@ -143,11 +300,52 @@ impl ThemeSettings {
     pub const fn line_height(&self) -> f32 {
         f32::max(self.buffer_line_height.value(), MIN_LINE_HEIGHT)
     }
+
+    /// Applies the theme overrides, if there are any, to the current theme.
+    pub fn apply_theme_overrides(&self, mut arc_theme: Arc<Theme>) -> Arc<Theme> {
+        let mut theme = (*arc_theme).clone();
+        apply_floating_chrome(&mut theme);
+        arc_theme = Arc::new(theme);
+
+        if let Some(experimental_theme_overrides) = &self.experimental_theme_overrides {
+            let mut theme = (*arc_theme).clone();
+            ThemeSettings::modify_theme(&mut theme, experimental_theme_overrides);
+            arc_theme = Arc::new(theme);
+        }
+
+        if let Some(theme_overrides) = self.theme_overrides.get(arc_theme.name.as_ref()) {
+            let mut theme = (*arc_theme).clone();
+            ThemeSettings::modify_theme(&mut theme, theme_overrides);
+            arc_theme = Arc::new(theme);
+        }
+
+        arc_theme
+    }
+
+    fn modify_theme(base_theme: &mut Theme, theme_overrides: &settings::ThemeStyleContent) {
+        if let Some(window_background_appearance) = theme_overrides.window_background_appearance {
+            base_theme.styles.window_background_appearance = window_background_appearance.into_gpui();
+        }
+        let status_color_refinement = status_colors_refinement(&theme_overrides.status);
+
+        let theme_color_refinement = theme_colors_refinement(
+            &theme_overrides.colors,
+            &status_color_refinement,
+            base_theme.appearance.is_light(),
+        );
+        base_theme.styles.colors.refine(&theme_color_refinement);
+        base_theme.styles.status.refine(&status_color_refinement);
+        merge_player_color(&mut base_theme.styles.player, &theme_overrides.players);
+        merge_accent_colors(&mut base_theme.styles.accents, &theme_overrides.accents);
+        base_theme.styles.syntax =
+            SyntaxTheme::merge(base_theme.styles.syntax.clone(), syntax_overrides(theme_overrides));
+    }
 }
 
 /// Floating-card look: everything around the editor and terminal cards (gaps, title bar,
 /// status bar, side docks) is one opaque chrome colour, the theme's panel background.
-pub(crate) fn apply_floating_chrome(theme: &mut Theme) {
+/// Applied before user theme overrides so they can still adjust it.
+fn apply_floating_chrome(theme: &mut Theme) {
     /// How far the editor / terminal content sits from the chrome, in HSL lightness.
     const CONTENT_CONTRAST: f32 = 0.05;
 
@@ -300,6 +498,7 @@ fn font_fallbacks_from_settings(fallbacks: Option<Vec<settings::FontFamilyName>>
 impl settings::Settings for ThemeSettings {
     fn from_settings(settings_content: &settings::SettingsContent) -> Self {
         let content = &settings_content.theme;
+        let theme_selection: ThemeSelection = content.theme.clone().unwrap().into();
         Self {
             ui_font_size: clamp_font_size(content.ui_font_size.unwrap().into_gpui()),
             ui_font: Font {
@@ -320,6 +519,9 @@ impl settings::Settings for ThemeSettings {
             buffer_line_height: buffer_line_height_from_settings(content.buffer_line_height.unwrap()),
             git_commit_buffer_font_size: content.git_commit_buffer_font_size.map(|s| s.into_gpui()),
             mermaid_font_family: content.mermaid_font_family.as_ref().map(|font| font.0.clone().into()),
+            theme: theme_selection,
+            experimental_theme_overrides: content.experimental_theme_overrides.clone(),
+            theme_overrides: content.theme_overrides.clone(),
             unnecessary_code_fade: content.unnecessary_code_fade.unwrap().0.clamp(0.0, 0.9),
         }
     }
