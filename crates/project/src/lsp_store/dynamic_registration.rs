@@ -100,53 +100,27 @@ impl LspStore {
             .text_documents
             .entry(method.to_owned())
             .or_default();
-        // Remote clients track registrations by id, so notify on any id-visible change; caches only
-        // consume the (selector, options) value set, so refresh flags compare sets.
-        let previous_registration = registrations.get(&registration_id);
-        let registration_changed = previous_registration != Some(&new_registration);
-        let applicable_set_changed = match previous_registration {
-            Some(previous_registration) if previous_registration == &new_registration => false,
-            Some(previous_registration) => {
-                let mut other_registrations = registrations
-                    .iter()
-                    .filter(|(id, _)| **id != registration_id)
-                    .map(|(_, registration)| registration);
-                let previous_value_remains =
-                    other_registrations.clone().any(|registration| registration == previous_registration);
-                let new_value_exists = other_registrations.any(|registration| registration == &new_registration);
-                !previous_value_remains || !new_value_exists
-            }
-            None => !registrations.values().any(|registration| registration == &new_registration),
+        let Some(applicable_set_changed) =
+            insert_text_document_registration(registrations, method, registration_id, new_registration)
+        else {
+            return Ok(CapabilityRegistrationChange {
+                active_capability_changed: false,
+                text_document_registration_changed: false,
+                registration_changed: false,
+            });
         };
-        if previous_registration.is_some() {
-            log::warn!(
-                "Received a duplicate {method} registration with ID {registration_id}, replacing the previous one"
-            );
-        }
-        registrations.insert(registration_id, new_registration);
-        let new_active_envelope =
-            registrations.last().map(|(_, registration)| registration.server_capabilities.clone());
-        let new_active = match new_active_envelope {
-            Some(mut envelope) => capability_of(&mut envelope).take(),
-            None => local
-                .initial_server_capabilities
-                .get(&server_id)
-                .cloned()
-                .and_then(|mut capabilities| capability_of(&mut capabilities).take()),
-        };
-        let mut current_capabilities = server.capabilities();
-        let previous_active = capability_of(&mut current_capabilities).take();
-        let active_changed = new_active != previous_active;
-        if active_changed {
-            server.update_capabilities(|capabilities| *capability_of(capabilities) = new_active);
-        }
-        if active_changed || registration_changed {
-            self.notify_server_capabilities_updated(server, cx);
-        }
+        let new_active = active_text_document_capability(
+            registrations,
+            local.initial_server_capabilities.get(&server_id),
+            &capability_of,
+        );
+        let active_changed = update_active_capability(server, new_active, &capability_of);
+        // Remote clients track registrations by id, so any stored change is notified.
+        self.notify_server_capabilities_updated(server, cx);
         Ok(CapabilityRegistrationChange {
             active_capability_changed: active_changed,
             text_document_registration_changed: applicable_set_changed,
-            registration_changed,
+            registration_changed: true,
         })
     }
 
@@ -159,43 +133,24 @@ impl LspStore {
     ) -> anyhow::Result<Option<CapabilityRegistrationChange>> {
         let server_id = server.server_id();
         let local = self.as_local_mut().context("Expected LSP Store to be local")?;
-        let Some(registrations) = local
+        let Some((registrations, applicable_set_changed)) = local
             .language_server_dynamic_registrations
             .get_mut(&server_id)
             .and_then(|dynamic_registrations| dynamic_registrations.text_documents.get_mut(&unregistration.method))
+            .and_then(|registrations| {
+                let applicable_set_changed = remove_text_document_registration(registrations, &unregistration.id)?;
+                Some((registrations, applicable_set_changed))
+            })
         else {
-            log::warn!(
-                "Attempted to unregister non-existent {} registration with ID {}",
-                unregistration.method,
-                unregistration.id
-            );
+            log_unknown_unregistration(unregistration);
             return Ok(None);
         };
-        let Some(removed) = registrations.shift_remove(&unregistration.id) else {
-            log::warn!(
-                "Attempted to unregister non-existent {} registration with ID {}",
-                unregistration.method,
-                unregistration.id
-            );
-            return Ok(None);
-        };
-        let applicable_set_changed = !registrations.values().any(|remaining| remaining == &removed);
-        let new_active_envelope =
-            registrations.last().map(|(_, registration)| registration.server_capabilities.clone());
-        let new_active = match new_active_envelope {
-            Some(mut envelope) => capability_of(&mut envelope).take(),
-            None => local
-                .initial_server_capabilities
-                .get(&server_id)
-                .cloned()
-                .and_then(|mut capabilities| capability_of(&mut capabilities).take()),
-        };
-        let mut current_capabilities = server.capabilities();
-        let previous_active = capability_of(&mut current_capabilities).take();
-        let active_changed = new_active != previous_active;
-        if active_changed {
-            server.update_capabilities(|capabilities| *capability_of(capabilities) = new_active);
-        }
+        let new_active = active_text_document_capability(
+            registrations,
+            local.initial_server_capabilities.get(&server_id),
+            &capability_of,
+        );
+        let active_changed = update_active_capability(server, new_active, &capability_of);
         self.notify_server_capabilities_updated(server, cx);
         Ok(Some(CapabilityRegistrationChange {
             active_capability_changed: active_changed,
@@ -227,24 +182,13 @@ impl LspStore {
                 registrations.push((RegistrationSource::Static, static_options));
             }
         }
-        let previously_active = registrations.last().map(|(_, options)| options.clone());
-        if let Some(index) =
-            registrations.iter().position(|(source, _)| source.registration_id() == Some(registration_id.as_str()))
-        {
-            log::warn!(
-                "Received a duplicate {method} registration with ID {registration_id}, replacing the previous one"
-            );
-            registrations[index].1 = options;
-        } else {
-            registrations.push((RegistrationSource::Dynamic(registration_id), options));
+        if !insert_capability_registration(registrations, method, registration_id, options) {
+            return Ok(false);
         }
         let active = registrations.last().map(|(_, options)| options.clone());
-        let active_changed = active != previously_active;
-        if active_changed {
-            server.update_capabilities(|capabilities| *capability_of(capabilities) = active);
-            self.notify_server_capabilities_updated(server, cx);
-        }
-        Ok(active_changed)
+        server.update_capabilities(|capabilities| *capability_of(capabilities) = active);
+        self.notify_server_capabilities_updated(server, cx);
+        Ok(true)
     }
 
     fn unregister_dynamic_capability<T: Clone + PartialEq>(
@@ -257,31 +201,21 @@ impl LspStore {
     ) -> anyhow::Result<Option<bool>> {
         let server_id = server.server_id();
         let local = self.as_local_mut().context("Expected LSP Store to be local")?;
-        let Some(dynamic_registrations) = local.language_server_dynamic_registrations.get_mut(&server_id) else {
-            log::warn!(
-                "Attempted to unregister non-existent {} registration with ID {}",
-                unregistration.method,
-                unregistration.id
-            );
-            return Ok(None);
-        };
-        let registrations = registrations_of(dynamic_registrations);
-        let Some(index) =
-            registrations.iter().position(|(source, _)| source.registration_id() == Some(unregistration.id.as_str()))
+        let Some((registrations, active_changed)) =
+            local.language_server_dynamic_registrations.get_mut(&server_id).map(registrations_of).and_then(
+                |registrations| {
+                    let active_changed = remove_capability_registration(registrations, &unregistration.id)?;
+                    Some((registrations, active_changed))
+                },
+            )
         else {
-            log::warn!(
-                "Attempted to unregister non-existent {} registration with ID {}",
-                unregistration.method,
-                unregistration.id
-            );
+            log_unknown_unregistration(unregistration);
             return Ok(None);
         };
-        let removed_active = index + 1 == registrations.len();
-        let (_, removed_options) = registrations.remove(index);
-        let restored = registrations.last().map(|(_, options)| options.clone());
-        if !removed_active || restored.as_ref() == Some(&removed_options) {
+        if !active_changed {
             return Ok(Some(false));
         }
+        let restored = registrations.last().map(|(_, options)| options.clone());
         server.update_capabilities(|capabilities| *capability_of(capabilities) = restored);
         self.notify_server_capabilities_updated(server, cx);
         Ok(Some(true))
@@ -524,23 +458,6 @@ impl LspStore {
                         document_selector,
                         cx,
                         |capabilities| &mut capabilities.code_action_provider,
-                    )?;
-                }
-                "textDocument/prepareCallHierarchy" => {
-                    let document_selector = parse_text_document_registration(reg.register_options.as_ref())?;
-                    let options = parse_register_capabilities(reg.register_options)?;
-                    let provider = match options {
-                        OneOf::Left(value) => lsp::CallHierarchyServerCapability::Simple(value),
-                        OneOf::Right(options) => lsp::CallHierarchyServerCapability::Options(options),
-                    };
-                    self.register_dynamic_text_document_capability(
-                        &server,
-                        &reg.method,
-                        reg.id,
-                        provider,
-                        document_selector,
-                        cx,
-                        |capabilities| &mut capabilities.call_hierarchy_provider,
                     )?;
                 }
                 "textDocument/definition" => {
@@ -896,11 +813,6 @@ impl LspStore {
                         &mut capabilities.code_action_provider
                     })?;
                 }
-                "textDocument/prepareCallHierarchy" => {
-                    self.unregister_dynamic_text_document_capability(&server, unreg, cx, |capabilities| {
-                        &mut capabilities.call_hierarchy_provider
-                    })?;
-                }
                 "textDocument/definition" => {
                     self.unregister_dynamic_text_document_capability(&server, unreg, cx, |capabilities| {
                         &mut capabilities.definition_provider
@@ -1044,6 +956,111 @@ impl LspStore {
     }
 }
 
+// Servers like Biome unregister capabilities they never registered and re-register existing IDs
+// whenever their configuration loads, so neither is worth a warning.
+fn log_unknown_unregistration(unregistration: &lsp::Unregistration) {
+    log::debug!(
+        "Ignoring unregistration of unknown {} registration with ID {}",
+        unregistration.method,
+        unregistration.id
+    );
+}
+
+/// Returns `None` when an identical registration with the same ID is already stored, otherwise
+/// whether the set of (selector, options) values that buffer caches consume changed.
+fn insert_text_document_registration(
+    registrations: &mut IndexMap<String, DynamicTextDocumentRegistration>,
+    method: &str,
+    registration_id: String,
+    new_registration: DynamicTextDocumentRegistration,
+) -> Option<bool> {
+    let applicable_set_changed = match registrations.get(&registration_id) {
+        Some(previous_registration) if previous_registration == &new_registration => return None,
+        Some(previous_registration) => {
+            log::debug!("Replacing {method} registration with duplicate ID {registration_id}");
+            let mut other_registrations =
+                registrations.iter().filter(|(id, _)| **id != registration_id).map(|(_, registration)| registration);
+            let previous_value_remains =
+                other_registrations.clone().any(|registration| registration == previous_registration);
+            let new_value_exists = other_registrations.any(|registration| registration == &new_registration);
+            !previous_value_remains || !new_value_exists
+        }
+        None => !registrations.values().any(|registration| registration == &new_registration),
+    };
+    registrations.insert(registration_id, new_registration);
+    Some(applicable_set_changed)
+}
+
+/// Returns `None` when no registration has the ID, otherwise whether the set of
+/// (selector, options) values changed.
+fn remove_text_document_registration(
+    registrations: &mut IndexMap<String, DynamicTextDocumentRegistration>,
+    registration_id: &str,
+) -> Option<bool> {
+    let removed = registrations.shift_remove(registration_id)?;
+    Some(!registrations.values().any(|remaining| remaining == &removed))
+}
+
+/// The most recent registration wins; with none left, the statically declared capability applies.
+fn active_text_document_capability<T>(
+    registrations: &IndexMap<String, DynamicTextDocumentRegistration>,
+    initial_capabilities: Option<&lsp::ServerCapabilities>,
+    capability_of: impl Fn(&mut lsp::ServerCapabilities) -> &mut Option<T>,
+) -> Option<T> {
+    match registrations.last() {
+        Some((_, registration)) => capability_of(&mut registration.server_capabilities.clone()).take(),
+        None => initial_capabilities.cloned().and_then(|mut capabilities| capability_of(&mut capabilities).take()),
+    }
+}
+
+/// Returns whether the server's capability differed from `active` and was updated.
+fn update_active_capability<T: PartialEq>(
+    server: &LanguageServer,
+    active: Option<T>,
+    capability_of: impl Fn(&mut lsp::ServerCapabilities) -> &mut Option<T>,
+) -> bool {
+    let mut current_capabilities = server.capabilities();
+    if *capability_of(&mut current_capabilities) == active {
+        return false;
+    }
+    server.update_capabilities(|capabilities| *capability_of(capabilities) = active);
+    true
+}
+
+/// Returns whether the active (most recent) registration's options changed.
+fn insert_capability_registration<T: PartialEq>(
+    registrations: &mut CapabilityRegistrations<T>,
+    method: &str,
+    registration_id: String,
+    options: T,
+) -> bool {
+    match registrations.iter().position(|(source, _)| source.registration_id() == Some(registration_id.as_str())) {
+        Some(index) => {
+            if registrations[index].1 == options {
+                return false;
+            }
+            log::debug!("Replacing {method} registration with duplicate ID {registration_id}");
+            registrations[index].1 = options;
+            index + 1 == registrations.len()
+        }
+        None => {
+            let active_changed = registrations.last().is_none_or(|(_, active)| active != &options);
+            registrations.push((RegistrationSource::Dynamic(registration_id), options));
+            active_changed
+        }
+    }
+}
+
+/// Returns `None` when no registration has the ID, otherwise whether the active options changed.
+fn remove_capability_registration<T: PartialEq>(
+    registrations: &mut CapabilityRegistrations<T>,
+    registration_id: &str,
+) -> Option<bool> {
+    let index = registrations.iter().position(|(source, _)| source.registration_id() == Some(registration_id))?;
+    let (_, removed) = registrations.remove(index);
+    Some(index == registrations.len() && registrations.last().is_none_or(|(_, restored)| restored != &removed))
+}
+
 fn parse_text_document_registration(
     register_options: Option<&serde_json::Value>,
 ) -> Result<Option<lsp::DocumentSelector>> {
@@ -1072,5 +1089,171 @@ fn take_text_document_sync_options(capabilities: &mut lsp::ServerCapabilities) -
             lsp::TextDocumentSyncOptions { change: Some(sync_kind), ..Default::default() }
         }
         None => lsp::TextDocumentSyncOptions::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn definition_registration(document_selector: Option<lsp::DocumentSelector>) -> DynamicTextDocumentRegistration {
+        DynamicTextDocumentRegistration {
+            document_selector,
+            server_capabilities: lsp::ServerCapabilities {
+                definition_provider: Some(OneOf::Left(true)),
+                ..lsp::ServerCapabilities::default()
+            },
+        }
+    }
+
+    fn rust_selector() -> Option<lsp::DocumentSelector> {
+        Some(vec![lsp::DocumentFilter { language: Some("rust".to_owned()), scheme: None, pattern: None }])
+    }
+
+    fn capability_registrations(entries: &[(Option<&str>, i32)]) -> CapabilityRegistrations<i32> {
+        entries
+            .iter()
+            .map(|(id, options)| {
+                let source = match id {
+                    Some(id) => RegistrationSource::Dynamic((*id).to_owned()),
+                    None => RegistrationSource::Static,
+                };
+                (source, *options)
+            })
+            .collect()
+    }
+
+    fn capability_values(registrations: &CapabilityRegistrations<i32>) -> Vec<(Option<&str>, i32)> {
+        registrations.iter().map(|(source, options)| (source.registration_id(), *options)).collect()
+    }
+
+    #[test]
+    fn insert_text_document_registration_reports_applicable_set_changes() {
+        let mut registrations = IndexMap::default();
+        assert_eq!(
+            insert_text_document_registration(&mut registrations, "m", "a".to_owned(), definition_registration(None)),
+            Some(true)
+        );
+        // Same value under a new ID leaves the value set unchanged.
+        assert_eq!(
+            insert_text_document_registration(&mut registrations, "m", "b".to_owned(), definition_registration(None)),
+            Some(false)
+        );
+        assert_eq!(registrations.len(), 2);
+    }
+
+    #[test]
+    fn insert_text_document_registration_skips_identical_duplicate() {
+        let mut registrations = IndexMap::default();
+        insert_text_document_registration(&mut registrations, "m", "a".to_owned(), definition_registration(None));
+        assert_eq!(
+            insert_text_document_registration(&mut registrations, "m", "a".to_owned(), definition_registration(None)),
+            None
+        );
+        assert_eq!(registrations.len(), 1);
+    }
+
+    #[test]
+    fn insert_text_document_registration_replaces_duplicate_id() {
+        let mut registrations = IndexMap::default();
+        insert_text_document_registration(&mut registrations, "m", "a".to_owned(), definition_registration(None));
+        insert_text_document_registration(&mut registrations, "m", "b".to_owned(), definition_registration(None));
+        // "b" still holds the old value, so only the new value is an addition.
+        assert_eq!(
+            insert_text_document_registration(
+                &mut registrations,
+                "m",
+                "a".to_owned(),
+                definition_registration(rust_selector())
+            ),
+            Some(true)
+        );
+        assert_eq!(registrations.len(), 2);
+        assert_eq!(registrations["a"], definition_registration(rust_selector()));
+        // Replacing with a value that both existed before and still remains is not a set change.
+        assert_eq!(
+            insert_text_document_registration(&mut registrations, "m", "b".to_owned(), definition_registration(None)),
+            None
+        );
+        insert_text_document_registration(&mut registrations, "m", "c".to_owned(), definition_registration(None));
+        assert_eq!(
+            insert_text_document_registration(
+                &mut registrations,
+                "m",
+                "c".to_owned(),
+                definition_registration(rust_selector())
+            ),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn remove_text_document_registration_reports_applicable_set_changes() {
+        let mut registrations = IndexMap::default();
+        insert_text_document_registration(&mut registrations, "m", "a".to_owned(), definition_registration(None));
+        insert_text_document_registration(&mut registrations, "m", "b".to_owned(), definition_registration(None));
+        assert_eq!(remove_text_document_registration(&mut registrations, "missing"), None);
+        assert_eq!(remove_text_document_registration(&mut registrations, "a"), Some(false));
+        assert_eq!(remove_text_document_registration(&mut registrations, "b"), Some(true));
+        assert_eq!(remove_text_document_registration(&mut registrations, "b"), None);
+    }
+
+    #[test]
+    fn active_text_document_capability_prefers_latest_registration() {
+        fn definition_of(
+            capabilities: &mut lsp::ServerCapabilities,
+        ) -> &mut Option<OneOf<bool, lsp::DefinitionOptions>> {
+            &mut capabilities.definition_provider
+        }
+        let initial = lsp::ServerCapabilities {
+            definition_provider: Some(OneOf::Left(false)),
+            ..lsp::ServerCapabilities::default()
+        };
+        let mut registrations = IndexMap::default();
+        assert_eq!(active_text_document_capability(&registrations, None, definition_of), None);
+        assert_eq!(
+            active_text_document_capability(&registrations, Some(&initial), definition_of),
+            Some(OneOf::Left(false))
+        );
+        registrations.insert("a".to_owned(), definition_registration(None));
+        assert_eq!(
+            active_text_document_capability(&registrations, Some(&initial), definition_of),
+            Some(OneOf::Left(true))
+        );
+    }
+
+    #[test]
+    fn insert_capability_registration_tracks_active_options() {
+        let mut registrations = capability_registrations(&[(None, 1)]);
+        assert!(!insert_capability_registration(&mut registrations, "m", "a".to_owned(), 1));
+        assert!(insert_capability_registration(&mut registrations, "m", "b".to_owned(), 2));
+        assert_eq!(capability_values(&registrations), [(None, 1), (Some("a"), 1), (Some("b"), 2)]);
+
+        let mut registrations = CapabilityRegistrations::<i32>::new();
+        assert!(insert_capability_registration(&mut registrations, "m", "a".to_owned(), 1));
+    }
+
+    #[test]
+    fn insert_capability_registration_handles_duplicate_ids() {
+        let mut registrations = capability_registrations(&[(Some("a"), 1), (Some("b"), 2)]);
+        assert!(!insert_capability_registration(&mut registrations, "m", "b".to_owned(), 2));
+        assert!(!insert_capability_registration(&mut registrations, "m", "a".to_owned(), 3));
+        assert!(insert_capability_registration(&mut registrations, "m", "b".to_owned(), 4));
+        assert_eq!(capability_values(&registrations), [(Some("a"), 3), (Some("b"), 4)]);
+    }
+
+    #[test]
+    fn remove_capability_registration_restores_previous_options() {
+        let mut registrations = capability_registrations(&[(None, 1), (Some("a"), 2), (Some("b"), 2), (Some("c"), 3)]);
+        assert_eq!(remove_capability_registration(&mut registrations, "missing"), None);
+        assert_eq!(remove_capability_registration(&mut registrations, "a"), Some(false));
+        assert_eq!(remove_capability_registration(&mut registrations, "c"), Some(true));
+        assert_eq!(capability_values(&registrations), [(None, 1), (Some("b"), 2)]);
+        assert_eq!(remove_capability_registration(&mut registrations, "b"), Some(true));
+
+        let mut registrations = capability_registrations(&[(Some("a"), 1), (Some("b"), 1)]);
+        assert_eq!(remove_capability_registration(&mut registrations, "b"), Some(false));
+        assert_eq!(remove_capability_registration(&mut registrations, "a"), Some(true));
+        assert!(registrations.is_empty());
     }
 }

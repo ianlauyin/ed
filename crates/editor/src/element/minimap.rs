@@ -85,7 +85,7 @@ impl EditorElement {
         if minimap_settings.on_active_editor() {
             let active_editor =
                 self.editor.read(cx).workspace().and_then(|ws| {
-                    ws.read(cx).active_pane().read(cx).active_item().and_then(|i| i.act_as::<Editor>(cx))
+                    ws.read(cx).shown_pane().read(cx).active_item().and_then(|i| i.act_as::<Editor>(cx))
                 });
             if active_editor.is_some_and(|e| e != self.editor) {
                 return None;
@@ -420,21 +420,10 @@ impl EditorElement {
                             MinimapThumbBorder::None => Edges::default(),
                         };
 
-                        // The minimap's bottom edge sits against the pane card's rounded
-                        // corner, so the thumb's bottom-right corner is concentric with it,
-                        // curving in as the thumb approaches the bottom.
-                        let concentric_radius = workspace::CARD_RADIUS - workspace::CARD_INSET;
-                        let gap_to_bottom = minimap_hitbox.bounds.bottom() - thumb_bounds.bottom();
-                        let thumb_corners = Corners {
-                            bottom_right: (concentric_radius - gap_to_bottom).max(Pixels::ZERO),
-                            ..Default::default()
-                        }
-                        .clamp_radii_for_quad_size(thumb_bounds.size);
-
                         window.paint_layer(minimap_hitbox.bounds, |window| {
                             window.paint_quad(quad(
                                 thumb_bounds,
-                                thumb_corners,
+                                Corners::default(),
                                 minimap_thumb_color,
                                 minimap_thumb_border,
                                 cx.theme().colors().minimap_thumb_border,

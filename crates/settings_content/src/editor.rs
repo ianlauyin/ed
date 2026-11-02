@@ -63,8 +63,6 @@ pub struct EditorSettingsContent {
     ///
     /// Default: 300
     pub hover_popover_hiding_delay: Option<DelayMs>,
-    /// Toolbar related settings
-    pub toolbar: Option<ToolbarContent>,
     /// Minimap related settings
     pub minimap: Option<MinimapContent>,
     /// Whether the editor will scroll beyond the last line.
@@ -261,23 +259,6 @@ pub struct CursorAnimationSettingsContent {
     ///
     /// Default: false
     pub enabled: Option<bool>,
-}
-
-// Toolbar related settings
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ToolbarContent {
-    /// Whether to display breadcrumbs in the editor toolbar.
-    ///
-    /// Default: true
-    pub breadcrumbs: Option<bool>,
-    /// Whether to display quick action buttons in the editor toolbar.
-    ///
-    /// Default: true
-    pub quick_actions: Option<bool>,
-    /// Whether to display code action buttons in the editor toolbar.
-    ///
-    /// Default: false
-    pub code_actions: Option<bool>,
 }
 
 /// Minimap related settings
@@ -643,38 +624,5 @@ impl Display for InactiveOpacity {
 impl From<f32> for InactiveOpacity {
     fn from(x: f32) -> Self {
         Self(x)
-    }
-}
-
-/// Centered layout related setting (left/right).
-///
-/// Valid range: 0.0 to 0.4
-/// Default: 2.0
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, PartialOrd, derive_more::FromStr)]
-#[serde(transparent)]
-pub struct CenteredPaddingSettings(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
-
-impl CenteredPaddingSettings {
-    pub const MIN_PADDING: f32 = 0.0;
-    // This is an f64 so serde_json can give a type hint without random numbers in the back
-    pub const DEFAULT_PADDING: f64 = 0.2;
-    pub const MAX_PADDING: f32 = 0.4;
-}
-
-impl Display for CenteredPaddingSettings {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:.2}", self.0)
-    }
-}
-
-impl From<f32> for CenteredPaddingSettings {
-    fn from(x: f32) -> Self {
-        Self(x)
-    }
-}
-
-impl Default for CenteredPaddingSettings {
-    fn default() -> Self {
-        Self(Self::DEFAULT_PADDING as f32)
     }
 }

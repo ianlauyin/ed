@@ -27,14 +27,12 @@ use gpui::Entity;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
-use gpui::Font;
 use gpui::IntoElement;
 use gpui::Render;
 use gpui::Task;
 use gpui::WeakEntity;
 use gpui::Window;
 use language::Buffer;
-use language::HighlightedText;
 use language::Point;
 use project::Project;
 use project::ProjectPath;
@@ -145,22 +143,6 @@ impl FileDiffView {
             );
             splittable.set_diff_hunk_renderer(Some(Arc::new(HiddenUnstagedDiffHunkRenderer)), cx);
             splittable
-        });
-
-        let include_root = project.read(cx).visible_worktrees(cx).count() > 1;
-        let breadcrumb_path = |buffer: &Entity<Buffer>| {
-            buffer
-                .read(cx)
-                .snapshot()
-                .resolve_file_path(include_root, cx)
-                .unwrap_or_else(|| MultiBuffer::DEFAULT_TITLE.to_string())
-        };
-        let old_path = breadcrumb_path(&old_buffer);
-        let new_path = breadcrumb_path(&new_buffer);
-        editor.update(cx, |editor, cx| {
-            editor.rhs_editor().update(cx, |editor, _| {
-                editor.set_breadcrumb_header(format!("{old_path} ↔ {new_path}"));
-            });
         });
 
         let (buffer_changes_tx, mut buffer_changes_rx) = watch::channel(());
@@ -338,14 +320,6 @@ impl Item for FileDiffView {
     fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.editor
             .update(cx, |editor, cx| editor.rhs_editor().update(cx, |editor, cx| editor.navigate(data, window, cx)))
-    }
-
-    fn breadcrumb_location(&self, _: &App) -> ToolbarItemLocation {
-        ToolbarItemLocation::PrimaryLeft
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        self.editor.breadcrumbs(cx)
     }
 
     fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {

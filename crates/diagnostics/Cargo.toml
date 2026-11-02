@@ -9,7 +9,6 @@ path = "src/diagnostics.rs"
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
-ed_actions.workspace = true
 editor.workspace = true
 futures-lite.workspace = true
 gpui.workspace = true

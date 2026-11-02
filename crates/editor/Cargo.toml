@@ -10,7 +10,6 @@ path = "src/editor.rs"
 aho-corasick.workspace = true
 anyhow.workspace = true
 base64.workspace = true
-breadcrumbs.workspace = true
 buffer_diff.workspace = true
 clock.workspace = true
 collections.workspace = true

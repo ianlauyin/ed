@@ -277,8 +277,7 @@ impl RemoteClientDelegate {
 
 /// Shows a [`RemoteConnectionModal`] on the given workspace and establishes
 /// a remote connection. This is a convenience wrapper around
-/// [`RemoteConnectionModal`] and [`connect`] suitable for use as the
-/// `connect_remote` callback in [`MultiWorkspace::find_or_create_workspace`].
+/// [`RemoteConnectionModal`] and [`connect`].
 ///
 /// When the global connection pool already has a live connection for the
 /// given options, the modal is skipped entirely and the connection is

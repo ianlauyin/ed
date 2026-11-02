@@ -9,9 +9,6 @@ use settings_content::AutosaveSetting;
 use settings_content::BottomDockLayout;
 use settings_content::BranchPickerSettingsContent;
 use settings_content::BufferLineHeight;
-use settings_content::CallHierarchySettingsContent;
-use settings_content::CenteredLayoutSettings;
-use settings_content::CenteredPaddingSettings;
 use settings_content::ClosePosition;
 use settings_content::CloseWindowWhenNoItems;
 use settings_content::CodeFade;
@@ -88,7 +85,6 @@ use settings_content::LspNotificationSettingsContent;
 use settings_content::LspPullDiagnosticsSettingsContent;
 use settings_content::LspSettings;
 use settings_content::LspSettingsMap;
-use settings_content::MarkdownPreviewSettingsContent;
 use settings_content::MinimapContent;
 use settings_content::MinimapThumb;
 use settings_content::MinimapThumbBorder;
@@ -102,6 +98,7 @@ use settings_content::PaneSplitDirectionVertical;
 use settings_content::PathHyperlinkRegex;
 use settings_content::PixelSetting;
 use settings_content::PreviewTabsSettingsContent;
+use settings_content::OutlinePanelSettingsContent;
 use settings_content::ProjectPanelAutoOpenSettings;
 use settings_content::ProjectPanelEntrySpacing;
 use settings_content::ProjectPanelIndentGuidesSettings;
@@ -141,19 +138,16 @@ use settings_content::TerminalDockPosition;
 use settings_content::TerminalLineHeight;
 use settings_content::TerminalSettingsContent;
 use settings_content::TextRenderingMode;
-use settings_content::ThemeName;
-use settings_content::ThemeSelection;
 use settings_content::ThemeSettingsContent;
+use settings_content::ThemeSelection;
+use settings_content::ThemeName;
 use settings_content::TitleBarSettingsContent;
-use settings_content::ToolbarContent;
 use settings_content::WhitespaceMapContent;
 use settings_content::WindowDecorations;
 use settings_content::WordsCompletionMode;
 use settings_content::WorkingDirectory;
 use settings_content::WorkspaceSettingsContent;
 use settings_content::WorktreeSettingsContent;
-
-pub const DEFAULT_WINDOW_TITLE_FORMAT: &str = "${projectName}${separator}${fileName}";
 
 /// The complete application settings. Edit this constructor to change persistent preferences.
 pub fn settings() -> SettingsContent {
@@ -171,7 +165,6 @@ pub fn settings() -> SettingsContent {
             include_ignored: Some(IncludeIgnoredContent::Smart),
             prefill_query_from_selection: Some(true),
         }),
-        call_hierarchy: Some(CallHierarchySettingsContent { modal_max_width: Some(ModalWidthContent::Medium) }),
         git_panel: Some(GitPanelSettingsContent {
             button: Some(true),
             dock: Some(DockPosition::Right),
@@ -198,7 +191,6 @@ pub fn settings() -> SettingsContent {
         }),
         tab_bar: Some(TabBarSettingsContent {
             show: Some(true),
-            show_nav_history_buttons: Some(true),
             show_tab_bar_buttons: Some(true),
             show_pinned_tabs_in_separate_row: Some(false),
         }),
@@ -220,7 +212,6 @@ pub fn settings() -> SettingsContent {
         }),
         diagnostics: Some(DiagnosticsSettingsContent {
             button: Some(true),
-            include_warnings: Some(true),
             lsp_pull_diagnostics: Some(LspPullDiagnosticsSettingsContent {
                 enabled: Some(true),
                 debounce_ms: Some(DelayMs(50)),
@@ -268,18 +259,21 @@ pub fn settings() -> SettingsContent {
             }),
         }),
         image_viewer: Some(ImageViewerSettingsContent { unit: Some(ImageFileSizeUnit::Binary) }),
-        markdown_preview: Some(MarkdownPreviewSettingsContent {
-            font_family: None,
-            code_font_family: None,
-            font_size: None,
-            heading_font_weight: Some(FontWeightContent(600.0)),
-            open_markdown_files_in_preview: Some(false),
-            limit_content_width: Some(true),
-            max_width: Some(PixelSetting(1200.0)),
-            ..Default::default()
-        }),
         hide_mouse: Some(HideMouseMode::OnTypingAndAction),
         line_indicator_format: Some(LineIndicatorFormat::Long),
+        outline_panel: Some(OutlinePanelSettingsContent {
+            button: Some(true),
+            default_width: Some(PixelSetting(300.0)),
+            dock: Some(DockSide::Right),
+            file_icons: Some(true),
+            folder_indicator: Some(FolderIndicator::Icon),
+            git_status: Some(true),
+            indent_size: Some(PixelSetting(20.0)),
+            auto_reveal_entries: Some(true),
+            auto_fold_dirs: Some(true),
+            indent_guides: Some(ProjectPanelIndentGuidesSettings { show: Some(ShowIndentGuides::Always) }),
+            expand_outlines_with_depth: Some(100),
+        }),
         project_panel: Some(ProjectPanelSettingsContent {
             button: Some(true),
             hide_gitignore: Some(false),
@@ -387,7 +381,6 @@ const fn editor_settings() -> EditorSettingsContent {
         hover_popover_delay: Some(DelayMs(300)),
         hover_popover_sticky: Some(true),
         hover_popover_hiding_delay: Some(DelayMs(300)),
-        toolbar: Some(ToolbarContent { breadcrumbs: Some(true), quick_actions: Some(true), code_actions: Some(false) }),
         minimap: Some(MinimapContent {
             show: Some(ShowMinimap::Always),
             display_in: Some(DisplayIn::ActiveEditor),
@@ -446,16 +439,11 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         bottom_dock_layout: Some(BottomDockLayout::Contained),
         pane_split_direction_horizontal: Some(PaneSplitDirectionHorizontal::Down),
         pane_split_direction_vertical: Some(PaneSplitDirectionVertical::Right),
-        centered_layout: Some(CenteredLayoutSettings {
-            left_padding: Some(CenteredPaddingSettings(0.2)),
-            right_padding: Some(CenteredPaddingSettings(0.2)),
-        }),
         confirm_quit: Some(false),
         autosave: Some(AutosaveSetting::OnFocusChange),
         restore_on_startup: Some(RestoreOnStartupBehavior::LastSession),
         default_open_behavior: Some(DefaultOpenBehavior::ExistingWindow),
         restore_on_file_reopen: Some(true),
-        reveal_if_open: Some(false),
         drop_target_size: Some(0.2),
         when_closing_with_no_tabs: Some(CloseWindowWhenNoItems::PlatformDefault),
         use_system_path_prompts: Some(true),
@@ -465,9 +453,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         resize_all_panels_in_dock: Some(vec![DockPosition::Left]),
         close_on_file_delete: Some(false),
         fullscreen_mode: Some(FullscreenMode::Native),
-        close_panel_on_toggle: Some(false),
-        window_title_format: Some(DEFAULT_WINDOW_TITLE_FORMAT.into()),
-        window_title_separator: Some(" — ".into()),
         window_decorations: Some(WindowDecorations::Client),
         focus_follows_mouse: Some(FocusFollowsMouse { enabled: Some(false), debounce_ms: Some(250) }),
     }

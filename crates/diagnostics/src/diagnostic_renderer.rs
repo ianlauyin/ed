@@ -27,7 +27,12 @@ use theme_settings::ThemeSettings;
 use ui::CopyButton;
 use ui::prelude::*;
 
-use crate::toolbar_controls::DiagnosticsToolbarEditor;
+/// A diagnostics view whose current diagnostics a block can look up when
+/// rendering.
+pub(crate) trait DiagnosticsEditor: Send + Sync {
+    fn get_diagnostics_for_buffer(&self, buffer_id: BufferId, cx: &App)
+    -> Vec<language::DiagnosticEntry<text::Anchor>>;
+}
 
 pub struct DiagnosticRenderer;
 
@@ -35,7 +40,7 @@ impl DiagnosticRenderer {
     pub fn diagnostic_blocks_for_group(
         diagnostic_group: Vec<DiagnosticEntryRef<'_, Point>>,
         buffer_id: BufferId,
-        diagnostics_editor: Option<Arc<dyn DiagnosticsToolbarEditor>>,
+        diagnostics_editor: Option<Arc<dyn DiagnosticsEditor>>,
         language_registry: Option<Arc<LanguageRegistry>>,
         cx: &mut App,
     ) -> Vec<DiagnosticBlock> {
@@ -174,7 +179,7 @@ pub(crate) struct DiagnosticBlock {
     pub(crate) initial_range: Range<Point>,
     pub(crate) severity: DiagnosticSeverity,
     pub(crate) markdown: Entity<Markdown>,
-    pub(crate) diagnostics_editor: Option<Arc<dyn DiagnosticsToolbarEditor>>,
+    pub(crate) diagnostics_editor: Option<Arc<dyn DiagnosticsEditor>>,
     pub(crate) copy_message: SharedString,
 }
 
@@ -236,7 +241,7 @@ impl DiagnosticBlock {
 
     pub fn open_link(
         editor: &mut Editor,
-        diagnostics_editor: &Option<Arc<dyn DiagnosticsToolbarEditor>>,
+        diagnostics_editor: &Option<Arc<dyn DiagnosticsEditor>>,
         link: SharedString,
         window: &mut Window,
         cx: &mut Context<Editor>,

@@ -224,7 +224,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("alt-enter", "search::SelectAllMatches"),
             KeyBindingSpec::new("cmd-f", "search::FocusSearch"),
             KeyBindingSpec::new("cmd-alt-l", "search::ToggleSelection"),
-            KeyBindingSpec::new("cmd-shift-o", "outline::Toggle"),
             KeyBindingSpec::new("alt-cmd-f", "text_finder::Toggle"),
         ],
     );
@@ -384,7 +383,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("shift-f12", "editor::GoToImplementation"),
             KeyBindingSpec::new("alt-cmd-f12", "editor::GoToTypeDefinitionSplit"),
             KeyBindingSpec::new("alt-shift-f12", "editor::FindAllReferences"),
-            // KeyBindingSpec::new("cmd-k cmd-h", "call_hierarchy::ShowIncomingCalls"),
             KeyBindingSpec::new("cmd-|", "editor::MoveToEnclosingBracket"),
             KeyBindingSpec::new("ctrl-m", "editor::MoveToEnclosingBracket"),
             KeyBindingSpec::new("alt-cmd-[", "editor::Fold"),
@@ -413,31 +411,11 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("Editor && extension == md"),
+        Some("Editor"),
         true,
         [
-            // KeyBindingSpec::new("cmd-k v", "markdown::OpenPreviewToTheSide"),
-            KeyBindingSpec::new("cmd-shift-v", "markdown::OpenPreview"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
-        Some("Editor && extension == svg"),
-        true,
-        [
-            // KeyBindingSpec::new("cmd-k v", "svg::OpenPreviewToTheSide"),
-            KeyBindingSpec::new("cmd-shift-v", "svg::OpenPreview"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
-        Some(
-            "Editor && (extension == csv || extension == tsv || extension == ssv || extension == psv || extension == jsonl || extension == ndjson)",
-        ),
-        true,
-        [
-            // KeyBindingSpec::new("cmd-k v", "tabular_data::OpenPreviewToTheSide"),
-            KeyBindingSpec::new("cmd-shift-v", "tabular_data::OpenPreview"),
+            // KeyBindingSpec::new("cmd-k v", "preview::OpenPreviewToTheSide"),
+            KeyBindingSpec::new("cmd-shift-v", "preview::OpenPreview"),
         ],
     );
     add_bindings(
@@ -445,7 +423,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         Some("Editor && mode == full"),
         true,
         [
-            KeyBindingSpec::new("cmd-shift-o", "outline::Toggle"),
             KeyBindingSpec::new("ctrl-g", "go_to_line::Toggle"),
             KeyBindingSpec::new("cmd-shift-backspace", "editor::GoToPreviousChange"),
             KeyBindingSpec::new("cmd-shift-alt-backspace", "editor::GoToNextChange"),
@@ -466,8 +443,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("ctrl-8", "pane::ActivateItem").with_input(json!(7)),
             KeyBindingSpec::new("ctrl-9", "pane::ActivateItem").with_input(json!(8)),
             KeyBindingSpec::new("ctrl-0", "pane::ActivateLastItem"),
-            KeyBindingSpec::new("ctrl--", "pane::GoBack"),
-            KeyBindingSpec::new("ctrl-_", "pane::GoForward"),
             KeyBindingSpec::new("cmd-shift-f", "pane::DeploySearch"),
         ],
     );
@@ -476,6 +451,8 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         Some("Workspace"),
         true,
         [
+            KeyBindingSpec::new("ctrl--", "workspace::GoBack"),
+            KeyBindingSpec::new("ctrl-_", "workspace::GoForward"),
             KeyBindingSpec::new("f6", "workspace::FocusNextPart"),
             KeyBindingSpec::new("shift-f6", "workspace::FocusPreviousPart"),
             KeyBindingSpec::new("cmd-f6", "workspace::FocusNextPart"),
@@ -509,8 +486,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-alt-b", "workspace::ToggleRightDock"),
             KeyBindingSpec::new("cmd-r", "workspace::ToggleRightDock"),
             KeyBindingSpec::new("cmd-j", "workspace::ToggleBottomDock"),
-            KeyBindingSpec::new("cmd-alt-j", "multi_workspace::ToggleWorkspaceSidebar"),
-            KeyBindingSpec::new("cmd-alt-;", "multi_workspace::FocusWorkspaceSidebar"),
             KeyBindingSpec::new("alt-cmd-y", "workspace::ToggleAllDocks"),
             KeyBindingSpec::new("ctrl-alt-0", "workspace::ResetActiveDockSize"),
             KeyBindingSpec::new("ctrl-alt--", "workspace::DecreaseActiveDockSize").with_input(json!({"px": 0})),
@@ -636,9 +611,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         Some("Editor && mode == full"),
         true,
         [
-            KeyBindingSpec::new("alt-enter", "editor::OpenExcerpts"),
             KeyBindingSpec::new("shift-enter", "editor::ExpandExcerpts"),
-            KeyBindingSpec::new("cmd-alt-enter", "editor::OpenExcerptsSplit"),
             KeyBindingSpec::new("cmd-shift-e", "pane::RevealInProjectPanel"),
             KeyBindingSpec::new("cmd-f8", "editor::GoToHunk"),
             KeyBindingSpec::new("cmd-shift-f8", "editor::GoToPreviousHunk"),
@@ -649,6 +622,22 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         Some("ProjectSearchBar && !in_replace"),
         true,
         [KeyBindingSpec::new("cmd-enter", "project_search::SearchInNew")],
+    );
+    add_bindings(
+        &mut keymap,
+        Some("OutlinePanel && not_editing"),
+        true,
+        [
+            KeyBindingSpec::new("escape", "menu::Cancel"),
+            KeyBindingSpec::new("left", "outline_panel::CollapseSelectedEntry"),
+            KeyBindingSpec::new("right", "outline_panel::ExpandSelectedEntry"),
+            KeyBindingSpec::new("cmd-alt-c", "workspace::CopyPath"),
+            KeyBindingSpec::new("alt-cmd-shift-c", "workspace::CopyRelativePath"),
+            KeyBindingSpec::new("alt-cmd-r", "outline_panel::RevealInFileManager"),
+            KeyBindingSpec::new("space", "outline_panel::OpenSelectedEntry"),
+            KeyBindingSpec::new("shift-down", "menu::SelectNext"),
+            KeyBindingSpec::new("shift-up", "menu::SelectPrevious"),
+        ],
     );
     add_bindings(
         &mut keymap,
@@ -790,16 +779,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("CallHierarchyPicker > Picker > Editor"),
-        true,
-        [
-            // KeyBindingSpec::new("cmd-k cmd-h", "call_hierarchy::ToggleDirection"),
-            // KeyBindingSpec::new("cmd-k right", "menu::SelectChild"),
-            // KeyBindingSpec::new("cmd-k left", "menu::SelectParent"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
         Some("Picker > Editor"),
         true,
         [
@@ -924,12 +903,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("Diagnostics"),
-        true,
-        [KeyBindingSpec::new("ctrl-r", "diagnostics::ToggleDiagnosticsRefresh")],
-    );
-    add_bindings(
-        &mut keymap,
         Some("MarkdownPreview"),
         false,
         [
@@ -943,23 +916,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-down", "markdown::ScrollToBottom"),
             KeyBindingSpec::new("cmd-shift-v", "markdown::CloseAndReturnToEditor"),
             KeyBindingSpec::new("cmd-f", "buffer_search::Deploy"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
-        Some("Welcome"),
-        true,
-        [
-            KeyBindingSpec::new("cmd-n", "workspace::NewFile"),
-            KeyBindingSpec::new("cmd-=", "ed::IncreaseUiFontSize").with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-+", "ed::IncreaseUiFontSize").with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd--", "ed::DecreaseUiFontSize").with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-0", "ed::ResetUiFontSize").with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-1", "welcome::OpenRecentProject").with_input(json!(0)),
-            KeyBindingSpec::new("cmd-2", "welcome::OpenRecentProject").with_input(json!(1)),
-            KeyBindingSpec::new("cmd-3", "welcome::OpenRecentProject").with_input(json!(2)),
-            KeyBindingSpec::new("cmd-4", "welcome::OpenRecentProject").with_input(json!(3)),
-            KeyBindingSpec::new("cmd-5", "welcome::OpenRecentProject").with_input(json!(4)),
         ],
     );
     add_bindings(
@@ -1028,6 +984,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         [
             KeyBindingSpec::new("tab", "git_graph::FocusNextTabStop"),
             KeyBindingSpec::new("shift-tab", "git_graph::FocusPreviousTabStop"),
+            KeyBindingSpec::new("cmd-f", "buffer_search::Deploy"),
         ],
     );
     add_bindings(
@@ -1105,8 +1062,8 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         None,
         false,
         [
-            KeyBindingSpec::new("cmd-[", "pane::GoBack").with_override(),
-            KeyBindingSpec::new("cmd-]", "pane::GoForward").with_override(),
+            KeyBindingSpec::new("cmd-[", "workspace::GoBack").with_override(),
+            KeyBindingSpec::new("cmd-]", "workspace::GoForward").with_override(),
         ],
     );
     add_bindings(

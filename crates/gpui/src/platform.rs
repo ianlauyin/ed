@@ -237,7 +237,7 @@ pub trait Platform: 'static {
     fn request_windowing(&self, _request: WindowingRequest) -> Task<anyhow::Result<()>> {
         Task::ready(Err(anyhow::anyhow!("this platform cannot switch between headless and windowed modes")))
     }
-    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<OsString>);
+    fn restart(&self, arguments: Vec<OsString>);
     fn activate(&self, ignoring_other_apps: bool);
     /// Sets the initial or current activation policy. Has no effect outside macOS.
     fn set_activation_policy(&self, _policy: ActivationPolicy) {}

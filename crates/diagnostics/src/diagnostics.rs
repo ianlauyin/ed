@@ -1,5 +1,4 @@
 pub mod items;
-mod toolbar_controls;
 
 mod buffer_diagnostics;
 mod diagnostic_renderer;
@@ -18,6 +17,7 @@ use collections::BTreeSet;
 use collections::HashMap;
 use collections::HashSet;
 use diagnostic_renderer::DiagnosticBlock;
+use diagnostic_renderer::DiagnosticsEditor;
 use editor::Anchor;
 use editor::Editor;
 use editor::EditorEvent;
@@ -38,7 +38,6 @@ use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::FocusOutEvent;
 use gpui::Focusable;
-use gpui::Global;
 use gpui::InteractiveElement;
 use gpui::IntoElement;
 use gpui::ParentElement;
@@ -64,13 +63,9 @@ use project::DiagnosticSummary;
 use project::Project;
 use project::ProjectPath;
 use project::project_settings::DiagnosticSeverity;
-use project::project_settings::ProjectSettings;
-use settings::Settings;
 use text::BufferId;
 use text::OffsetRangeExt;
 use theme::ActiveTheme;
-use toolbar_controls::DiagnosticsToolbarEditor;
-pub use toolbar_controls::ToolbarControls;
 use ui::Icon;
 use ui::IconName;
 use ui::Label;
@@ -91,16 +86,8 @@ actions!(
     [
         /// Opens the project diagnostics view.
         Deploy,
-        /// Toggles the display of warning-level diagnostics.
-        ToggleWarnings,
-        /// Toggles automatic refresh of diagnostics.
-        ToggleDiagnosticsRefresh
     ]
 );
-
-#[derive(Default)]
-pub(crate) struct IncludeWarnings(bool);
-impl Global for IncludeWarnings {}
 
 pub fn init(cx: &mut App) {
     editor::set_diagnostic_renderer(diagnostic_renderer::DiagnosticRenderer {}, cx);
@@ -118,7 +105,6 @@ pub(crate) struct ProjectDiagnosticsEditor {
     summary: DiagnosticSummary,
     multibuffer: Entity<MultiBuffer>,
     paths_to_update: BTreeSet<ProjectPath>,
-    include_warnings: bool,
     update_excerpts_task: Option<Task<Result<()>>>,
     diagnostic_summary_update: Task<()>,
     _subscription: Subscription,
@@ -131,14 +117,7 @@ const DIAGNOSTICS_SUMMARY_UPDATE_DEBOUNCE: Duration = Duration::from_millis(30);
 
 impl Render for ProjectDiagnosticsEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let warning_count = if self.include_warnings { self.summary.warning_count } else { 0 };
-
-        let child = if warning_count + self.summary.error_count == 0 && self.editor.read(cx).is_empty(cx) {
-            let label = if self.summary.warning_count == 0 {
-                SharedString::new_static("No problems in workspace")
-            } else {
-                SharedString::new_static("No errors in workspace")
-            };
+        let child = if self.summary.warning_count + self.summary.error_count == 0 && self.editor.read(cx).is_empty(cx) {
             v_flex()
                 .key_context("EmptyPane")
                 .size_full()
@@ -147,28 +126,12 @@ impl Render for ProjectDiagnosticsEditor {
                 .items_center()
                 .text_center()
                 .bg(cx.theme().colors().editor_background)
-                .child(Label::new(label).color(Color::Muted))
-                .when(self.summary.warning_count > 0, |this| {
-                    let plural_suffix = if self.summary.warning_count > 1 { "s" } else { "" };
-                    let label = format!("Show {} warning{}", self.summary.warning_count, plural_suffix);
-                    this.child(Button::new("diagnostics-show-warning-label", label).on_click(cx.listener(
-                        |this, _, window, cx| {
-                            this.toggle_warnings(&ToggleWarnings, window, cx);
-                            cx.notify();
-                        },
-                    )))
-                })
+                .child(Label::new("No problems in workspace").color(Color::Muted))
         } else {
             div().size_full().child(self.editor.clone())
         };
 
-        div()
-            .key_context("Diagnostics")
-            .track_focus(&self.focus_handle(cx))
-            .size_full()
-            .on_action(cx.listener(Self::toggle_warnings))
-            .on_action(cx.listener(Self::toggle_diagnostics_refresh))
-            .child(child)
+        div().key_context("Diagnostics").track_focus(&self.focus_handle(cx)).size_full().child(child)
     }
 }
 
@@ -184,7 +147,6 @@ impl ProjectDiagnosticsEditor {
     }
 
     fn new(
-        include_warnings: bool,
         project_handle: Entity<Project>,
         workspace: WeakEntity<Workspace>,
         window: &mut Window,
@@ -231,10 +193,7 @@ impl ProjectDiagnosticsEditor {
             let mut editor = Editor::for_multibuffer(excerpts.clone(), Some(project_handle.clone()), window, cx);
             editor.set_vertical_scroll_margin(5, cx);
             editor.disable_inline_diagnostics();
-            editor.set_max_diagnostics_severity(
-                if include_warnings { DiagnosticSeverity::Warning } else { DiagnosticSeverity::Error },
-                cx,
-            );
+            editor.set_max_diagnostics_severity(DiagnosticSeverity::Warning, cx);
             editor.set_all_diagnostics_active(cx);
             editor
         });
@@ -253,18 +212,6 @@ impl ProjectDiagnosticsEditor {
             }
         })
         .detach();
-        cx.observe_global_in::<IncludeWarnings>(window, |this, window, cx| {
-            let include_warnings = cx.global::<IncludeWarnings>().0;
-            this.include_warnings = include_warnings;
-            this.editor.update(cx, |editor, cx| {
-                editor.set_max_diagnostics_severity(
-                    if include_warnings { DiagnosticSeverity::Warning } else { DiagnosticSeverity::Error },
-                    cx,
-                )
-            });
-            this.refresh(window, cx);
-        })
-        .detach();
 
         let project = project_handle.read(cx);
         let mut this = Self {
@@ -272,7 +219,6 @@ impl ProjectDiagnosticsEditor {
             summary: project.diagnostic_summary(false, cx),
             diagnostics: HashMap::default(),
             blocks: HashMap::default(),
-            include_warnings,
             workspace,
             multibuffer: excerpts,
             focus_handle,
@@ -365,40 +311,10 @@ impl ProjectDiagnosticsEditor {
         } else {
             let workspace_handle = cx.entity().downgrade();
 
-            let include_warnings = match cx.try_global::<IncludeWarnings>() {
-                Some(include_warnings) => include_warnings.0,
-                None => ProjectSettings::get_global(cx).diagnostics.include_warnings,
-            };
-
-            let diagnostics = cx.new(|cx| {
-                ProjectDiagnosticsEditor::new(
-                    include_warnings,
-                    workspace.project().clone(),
-                    workspace_handle,
-                    window,
-                    cx,
-                )
-            });
+            let diagnostics =
+                cx.new(|cx| ProjectDiagnosticsEditor::new(workspace.project().clone(), workspace_handle, window, cx));
             workspace.add_item_to_active_pane(Box::new(diagnostics), None, true, window, cx);
         }
-    }
-
-    fn toggle_warnings(&mut self, _: &ToggleWarnings, _: &mut Window, cx: &mut Context<Self>) {
-        cx.set_global(IncludeWarnings(!self.include_warnings));
-    }
-
-    fn toggle_diagnostics_refresh(
-        &mut self,
-        _: &ToggleDiagnosticsRefresh,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.update_excerpts_task.is_some() {
-            self.update_excerpts_task = None;
-        } else {
-            self.refresh(window, cx);
-        }
-        cx.notify();
     }
 
     fn focus_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -462,8 +378,7 @@ impl ProjectDiagnosticsEditor {
         let buffer_snapshot = buffer.read(cx).snapshot();
         let buffer_id = buffer_snapshot.remote_id();
 
-        let max_severity =
-            if self.include_warnings { lsp::DiagnosticSeverity::WARNING } else { lsp::DiagnosticSeverity::ERROR };
+        let max_severity = lsp::DiagnosticSeverity::WARNING;
 
         cx.spawn_in(window, async move |this, cx| {
             let diagnostics = buffer_snapshot
@@ -718,15 +633,9 @@ impl Item for ProjectDiagnosticsEditor {
     where
         Self: Sized,
     {
-        Task::ready(Some(cx.new(|cx| {
-            ProjectDiagnosticsEditor::new(
-                self.include_warnings,
-                self.project.clone(),
-                self.workspace.clone(),
-                window,
-                cx,
-            )
-        })))
+        Task::ready(Some(
+            cx.new(|cx| ProjectDiagnosticsEditor::new(self.project.clone(), self.workspace.clone(), window, cx)),
+        ))
     }
 
     fn is_dirty(&self, cx: &App) -> bool {
@@ -793,44 +702,7 @@ impl Item for ProjectDiagnosticsEditor {
     }
 }
 
-impl DiagnosticsToolbarEditor for WeakEntity<ProjectDiagnosticsEditor> {
-    fn include_warnings(&self, cx: &App) -> bool {
-        self.read_with(cx, |project_diagnostics_editor, _cx| project_diagnostics_editor.include_warnings)
-            .unwrap_or(false)
-    }
-
-    fn is_updating(&self, cx: &App) -> bool {
-        self.read_with(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.update_excerpts_task.is_some()
-                || project_diagnostics_editor
-                    .project
-                    .read(cx)
-                    .language_servers_running_disk_based_diagnostics(cx)
-                    .next()
-                    .is_some()
-        })
-        .unwrap_or(false)
-    }
-
-    fn stop_updating(&self, cx: &mut App) {
-        let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.update_excerpts_task = None;
-            cx.notify();
-        });
-    }
-
-    fn refresh_diagnostics(&self, window: &mut Window, cx: &mut App) {
-        let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.refresh(window, cx);
-        });
-    }
-
-    fn toggle_warnings(&self, window: &mut Window, cx: &mut App) {
-        let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.toggle_warnings(&ToggleWarnings, window, cx);
-        });
-    }
-
+impl DiagnosticsEditor for WeakEntity<ProjectDiagnosticsEditor> {
     fn get_diagnostics_for_buffer(
         &self,
         buffer_id: text::BufferId,

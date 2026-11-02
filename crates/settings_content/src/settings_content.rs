@@ -94,8 +94,6 @@ pub struct SettingsContent {
     /// Settings related to the file finder.
     pub file_finder: Option<FileFinderSettingsContent>,
 
-    pub call_hierarchy: Option<CallHierarchySettingsContent>,
-
     pub git_panel: Option<GitPanelSettingsContent>,
 
     pub tabs: Option<ItemSettingsContent>,
@@ -117,9 +115,6 @@ pub struct SettingsContent {
     /// The settings for the image viewer.
     pub image_viewer: Option<ImageViewerSettingsContent>,
 
-    /// The settings for the markdown preview.
-    pub markdown_preview: Option<MarkdownPreviewSettingsContent>,
-
     /// Determines when the mouse cursor should be hidden in response to
     /// keyboard input. Applies globally across all input surfaces (editors,
     /// terminals, palettes, etc.).
@@ -128,6 +123,8 @@ pub struct SettingsContent {
     pub hide_mouse: Option<HideMouseMode>,
 
     pub line_indicator_format: Option<LineIndicatorFormat>,
+
+    pub outline_panel: Option<OutlinePanelSettingsContent>,
 
     pub project_panel: Option<ProjectPanelSettingsContent>,
 
@@ -368,11 +365,55 @@ impl ModalWidthContent {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
-pub struct CallHierarchySettingsContent {
-    /// Determines how much space the call hierarchy picker can take up in relation to the available window width.
+pub struct OutlinePanelSettingsContent {
+    /// Whether to show the outline panel button in the status bar.
     ///
-    /// Default: medium
-    pub modal_max_width: Option<ModalWidthContent>,
+    /// Default: true
+    pub button: Option<bool>,
+    /// Customize default width (in pixels) taken by outline panel
+    ///
+    /// Default: 240
+    pub default_width: Option<PixelSetting>,
+    /// The position of outline panel
+    ///
+    /// Default: right
+    pub dock: Option<DockSide>,
+    /// Whether to show file icons in the outline panel.
+    ///
+    /// Default: true
+    pub file_icons: Option<bool>,
+    /// What to show for directories in the outline panel.
+    ///
+    /// Default: icon
+    pub folder_indicator: Option<FolderIndicator>,
+    /// Whether to show the git status in the outline panel.
+    ///
+    /// Default: true
+    pub git_status: Option<bool>,
+    /// Amount of indentation (in pixels) for nested items.
+    ///
+    /// Default: 20
+    pub indent_size: Option<PixelSetting>,
+    /// Whether to reveal it in the outline panel automatically,
+    /// when a corresponding project entry becomes active.
+    /// Gitignored entries are never auto revealed.
+    ///
+    /// Default: true
+    pub auto_reveal_entries: Option<bool>,
+    /// Whether to fold directories automatically
+    /// when directory has only one directory inside.
+    ///
+    /// Default: true
+    pub auto_fold_dirs: Option<bool>,
+    /// Settings related to indent guides in the outline panel.
+    pub indent_guides: Option<ProjectPanelIndentGuidesSettings>,
+    /// Default depth to expand outline items in the current file.
+    /// The default depth to which outline entries are expanded on reveal.
+    /// - Set to 0 to collapse all items that have children
+    /// - Set to 1 or higher to collapse items at that depth or deeper
+    ///
+    /// Default: 100
+    pub expand_outlines_with_depth: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, strum::VariantArray, strum::VariantNames)]
@@ -395,43 +436,6 @@ pub enum LineIndicatorFormat {
     Short,
     #[default]
     Long,
-}
-
-/// The settings for the markdown preview.
-#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
-pub struct MarkdownPreviewSettingsContent {
-    /// The name of a font to use for rendering in the markdown preview.
-    /// Falls back to the UI font if unset.
-    pub font_family: Option<FontFamilyName>,
-    /// The name of a font to use for code (code blocks and inline code) in the
-    /// markdown preview. Falls back to the buffer font if unset.
-    pub code_font_family: Option<FontFamilyName>,
-    /// The font size to use for rendering in the markdown preview.
-    /// Falls back to the UI font size if unset.
-    pub font_size: Option<FontSize>,
-    /// The theme to use for the markdown preview.
-    /// Falls back to the main editor theme if unset.
-    pub theme: Option<ThemeSelection>,
-    /// The weight of headings (H1 through H6) in the markdown preview, in CSS
-    /// units from 100 to 900.
-    ///
-    /// Default: 600
-    pub heading_font_weight: Option<FontWeightContent>,
-    /// Whether to automatically open Markdown files in the preview.
-    ///
-    /// Default: false
-    pub open_markdown_files_in_preview: Option<bool>,
-    /// Whether to limit the width of the rendered markdown content. When
-    /// enabled, content is constrained to `max_width` and centered
-    /// horizontally within the preview pane, for optimal readability.
-    ///
-    /// Default: true
-    pub limit_content_width: Option<bool>,
-    /// The maximum width, in pixels, of the rendered markdown content when
-    /// `limit_content_width` is enabled.
-    ///
-    /// Default: 800
-    pub max_width: Option<PixelSetting>,
 }
 
 /// The settings for the image viewer.

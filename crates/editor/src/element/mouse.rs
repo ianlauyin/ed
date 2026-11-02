@@ -519,10 +519,7 @@ impl EditorElement {
                         let line_offset_from_top = display_row - scroll_position_row as u32;
                         // if double click is made without alt, open the corresponding excerp
                         editor.open_excerpts_common(
-                            Some(JumpData::MultiBufferRow {
-                                row: MultiBufferRow(multi_buffer_row),
-                                line_offset_from_top,
-                            }),
+                            JumpData::MultiBufferRow { row: MultiBufferRow(multi_buffer_row), line_offset_from_top },
                             false,
                             window,
                             cx,
@@ -550,7 +547,7 @@ impl EditorElement {
                 let line_offset_from_top = display_row - position_map.scroll_position.y as u32;
 
                 editor.open_excerpts_common(
-                    Some(JumpData::MultiBufferRow { row: MultiBufferRow(multi_buffer_row), line_offset_from_top }),
+                    JumpData::MultiBufferRow { row: MultiBufferRow(multi_buffer_row), line_offset_from_top },
                     modifiers.alt,
                     window,
                     cx,

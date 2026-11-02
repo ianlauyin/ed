@@ -199,9 +199,7 @@ impl Editor {
 
             display_map.folds_in_range(MultiBufferOffset(0)..display_map.buffer_snapshot().len()).next().is_some()
         } else {
-            let snapshot = self.buffer.read(cx).snapshot(cx);
-
-            snapshot.all_buffer_ids().any(|buffer_id| self.is_buffer_folded(buffer_id, cx))
+            self.are_all_buffers_folded(cx)
         };
 
         if has_folds {
@@ -538,11 +536,14 @@ impl Editor {
         self.display_map.read(cx).is_buffer_folded(buffer)
     }
 
-    pub fn has_any_buffer_folded(&self, cx: &App) -> bool {
-        if self.buffer().read(cx).is_singleton() {
+    /// Whether every file of a multibuffer is folded: collapse/expand all only
+    /// expands then, so a partly folded view collapses on the first click.
+    pub fn are_all_buffers_folded(&self, cx: &App) -> bool {
+        let buffer = self.buffer().read(cx);
+        if buffer.is_singleton() {
             return false;
         }
-        !self.folded_buffers(cx).is_empty()
+        all_buffers_folded(buffer.snapshot(cx).all_buffer_ids(), self.folded_buffers(cx))
     }
 
     pub fn folded_buffers<'a>(&self, cx: &'a App) -> &'a HashSet<BufferId> {
@@ -577,10 +578,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> bool {
         self.display_map.update(cx, |map, cx| map.update_fold_widths(widths, cx))
-    }
-
-    pub fn default_fold_placeholder(&self, cx: &App) -> FoldPlaceholder {
-        self.display_map.read(cx).fold_placeholder.clone()
     }
 
     pub fn insert_creases(
@@ -920,5 +917,28 @@ impl Editor {
         cx.notify();
         self.scrollbar_marker_state.dirty = true;
         self.active_indent_guides_state.dirty = true;
+    }
+}
+
+fn all_buffers_folded(mut buffer_ids: impl Iterator<Item = BufferId>, folded: &HashSet<BufferId>) -> bool {
+    let mut any = false;
+    buffer_ids.all(|buffer_id| {
+        any = true;
+        folded.contains(&buffer_id)
+    }) && any
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_buffers_folded() {
+        let ids = [BufferId::new(1).unwrap(), BufferId::new(2).unwrap()];
+        let folded = |folded_ids: &[BufferId]| folded_ids.iter().copied().collect::<HashSet<BufferId>>();
+        assert!(!all_buffers_folded(ids.into_iter(), &folded(&[])));
+        assert!(!all_buffers_folded(ids.into_iter(), &folded(&ids[..1])));
+        assert!(all_buffers_folded(ids.into_iter(), &folded(&ids)));
+        assert!(!all_buffers_folded(std::iter::empty(), &folded(&[])));
     }
 }

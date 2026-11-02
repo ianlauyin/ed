@@ -6,7 +6,6 @@ use gpui::Entity;
 use gpui::EntityId;
 use gpui::EventEmitter;
 use gpui::Global;
-use gpui::KeyContext;
 use gpui::ParentElement as _;
 use gpui::Render;
 use gpui::Styled;
@@ -36,10 +35,6 @@ pub trait ToolbarItemView: Render + EventEmitter<ToolbarItemEvent> {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation;
-
-    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
-
-    fn contribute_context(&self, _context: &mut KeyContext, _cx: &App) {}
 }
 
 trait ToolbarItemViewHandle: Send {
@@ -51,8 +46,6 @@ trait ToolbarItemViewHandle: Send {
         window: &mut Window,
         cx: &mut App,
     ) -> ToolbarItemLocation;
-    fn focus_changed(&mut self, pane_focused: bool, window: &mut Window, cx: &mut App);
-    fn contribute_context(&self, context: &mut KeyContext, cx: &App);
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -116,7 +109,8 @@ impl Render for Toolbar {
                 this.child(
                     h_flex()
                         .items_start()
-                        .justify_between()
+                        // `justify_between` would put a lone right group on the left.
+                        .map(|this| if has_left_items { this.justify_between() } else { this.justify_end() })
                         .gap(DynamicSpacing::Base08.rems())
                         .when(has_left_items, |this| {
                             this.child(
@@ -195,26 +189,12 @@ impl Toolbar {
         }
     }
 
-    pub fn focus_changed(&mut self, focused: bool, window: &mut Window, cx: &mut Context<Self>) {
-        for (toolbar_item, _) in &mut self.items {
-            toolbar_item.focus_changed(focused, window, cx);
-        }
-    }
-
     pub fn item_of_type<T: ToolbarItemView>(&self) -> Option<Entity<T>> {
         self.items.iter().find_map(|(item, _)| item.to_any().downcast().ok())
     }
 
     pub const fn hidden(&self) -> bool {
         self.hidden
-    }
-
-    pub fn contribute_context(&self, context: &mut KeyContext, cx: &App) {
-        for (item, location) in &self.items {
-            if *location != ToolbarItemLocation::Hidden {
-                item.contribute_context(context, cx);
-            }
-        }
     }
 }
 
@@ -234,16 +214,5 @@ impl<T: ToolbarItemView> ToolbarItemViewHandle for Entity<T> {
         cx: &mut App,
     ) -> ToolbarItemLocation {
         self.update(cx, |this, cx| this.set_active_pane_item(active_pane_item, window, cx))
-    }
-
-    fn focus_changed(&mut self, pane_focused: bool, window: &mut Window, cx: &mut App) {
-        self.update(cx, |this, cx| {
-            this.pane_focus_update(pane_focused, window, cx);
-            cx.notify();
-        });
-    }
-
-    fn contribute_context(&self, context: &mut KeyContext, cx: &App) {
-        self.read(cx).contribute_context(context, cx)
     }
 }

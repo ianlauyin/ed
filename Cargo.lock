@@ -393,15 +393,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "breadcrumbs"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "ui",
- "workspace",
-]
-
-[[package]]
 name = "bstr"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -475,27 +466,6 @@ name = "bytes"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
-
-[[package]]
-name = "call_hierarchy"
-version = "0.1.0"
-dependencies = [
- "ed_actions",
- "editor",
- "fuzzy",
- "gpui",
- "language",
- "log",
- "menu",
- "picker",
- "project",
- "proto",
- "settings",
- "theme_settings",
- "ui",
- "util",
- "workspace",
-]
 
 [[package]]
 name = "cbindgen"
@@ -825,7 +795,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
- "ed_actions",
  "editor",
  "futures-lite",
  "gpui",
@@ -908,13 +877,11 @@ dependencies = [
 
 [[package]]
 name = "ed"
-version = "1.51.0"
+version = "1.56.0"
 dependencies = [
  "activity_indicator",
  "anyhow",
  "assets",
- "breadcrumbs",
- "call_hierarchy",
  "clap",
  "collections",
  "command_palette",
@@ -927,7 +894,6 @@ dependencies = [
  "file_finder",
  "fs",
  "futures",
- "git",
  "git_ui",
  "git_ui_core",
  "go_to_line",
@@ -945,7 +911,7 @@ dependencies = [
  "markdown_preview",
  "menu",
  "mimalloc",
- "outline",
+ "outline_panel",
  "paths",
  "project",
  "project_panel",
@@ -990,7 +956,6 @@ dependencies = [
  "aho-corasick",
  "anyhow",
  "base64 0.22.1",
- "breadcrumbs",
  "buffer_diff",
  "clock",
  "collections",
@@ -2079,7 +2044,6 @@ dependencies = [
  "menu",
  "project",
  "settings",
- "theme_settings",
  "ui",
  "util",
  "workspace",
@@ -3179,19 +3143,34 @@ dependencies = [
 ]
 
 [[package]]
-name = "outline"
+name = "outline_panel"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-channel",
+ "collections",
+ "db",
  "ed_actions",
  "editor",
- "fuzzy_nucleo",
+ "file_icons",
+ "fuzzy",
+ "git",
  "gpui",
  "language",
- "picker",
- "picker_preview",
+ "log",
+ "menu",
+ "project",
+ "search",
+ "serde",
+ "serde_json",
+ "settings",
+ "smallvec",
  "theme",
+ "theme_settings",
  "ui",
+ "util",
  "workspace",
+ "worktree",
 ]
 
 [[package]]
@@ -4590,7 +4569,6 @@ checksum = "0193cc4331cfd2f3d2011ef287590868599a2f33c3e69bc22c1a3d3acf9e02fb"
 name = "svg_preview"
 version = "0.1.0"
 dependencies = [
- "ed_actions",
  "file_icons",
  "gpui",
  "language",
@@ -4808,7 +4786,6 @@ name = "terminal_view"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "breadcrumbs",
  "collections",
  "db",
  "dirs",
@@ -5011,7 +4988,6 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 name = "title_bar"
 version = "0.1.0"
 dependencies = [
- "arrayvec",
  "ed_actions",
  "git_ui_core",
  "gpui",
@@ -6024,7 +6000,6 @@ dependencies = [
  "fs",
  "futures",
  "futures-lite",
- "git",
  "gpui",
  "itertools 0.15.0",
  "language",

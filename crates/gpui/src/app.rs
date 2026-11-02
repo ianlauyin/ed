@@ -560,7 +560,6 @@ pub struct App {
     // below is plain data, the drop order is insignificant here
     pub(crate) pending_notifications: FxHashSet<EntityId>,
     pub(crate) pending_global_notifications: TypeIdHashSet,
-    pub(crate) restart_path: Option<PathBuf>,
     pub(crate) restart_arguments: Vec<OsString>,
     pub(crate) layout_id_buffer: Vec<LayoutId>, // We recycle this memory across layout requests.
     pub(crate) propagate_event: bool,
@@ -644,7 +643,6 @@ impl App {
                 global_observers: SubscriberSet::new(),
                 quit_observers: SingleSubscriberSet::new(),
                 restart_observers: SingleSubscriberSet::new(),
-                restart_path: None,
                 restart_arguments: Vec::new(),
                 window_closed_observers: SingleSubscriberSet::new(),
                 layout_id_buffer: Vec::default(),
@@ -1337,12 +1335,7 @@ impl App {
     /// Restarts the application.
     pub fn restart(&mut self) {
         self.restart_observers.clone().retain(|observer| observer(self));
-        self.platform.restart(self.restart_path.take(), std::mem::take(&mut self.restart_arguments))
-    }
-
-    /// Sets the path to use when restarting the application.
-    pub fn set_restart_path(&mut self, path: PathBuf) {
-        self.restart_path = Some(path);
+        self.platform.restart(std::mem::take(&mut self.restart_arguments))
     }
 
     /// Configures when the application should automatically quit.

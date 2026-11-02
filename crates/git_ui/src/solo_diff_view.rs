@@ -15,7 +15,6 @@ use editor::SplittableEditor;
 use editor::ToggleSplitDiff;
 use editor::actions::GoToHunk;
 use editor::actions::GoToPreviousHunk;
-use editor::file_status_label_color;
 use git::Commit;
 use git::Restore;
 use git::StageAndNext;
@@ -34,7 +33,6 @@ use gpui::Entity;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
-use gpui::HighlightStyle;
 use gpui::IntoElement;
 use gpui::Render;
 use gpui::Subscription;
@@ -43,7 +41,6 @@ use gpui::WeakEntity;
 use gpui::Window;
 use language::Anchor;
 use language::Buffer;
-use language::HighlightedText;
 use language::OffsetRangeExt as _;
 use language::Point;
 use multi_buffer::MultiBuffer;
@@ -437,28 +434,6 @@ impl Item for SoloDiffView {
     fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.editor
             .update(cx, |editor, cx| editor.rhs_editor().update(cx, |editor, cx| editor.navigate(data, window, cx)))
-    }
-
-    fn breadcrumb_location(&self, _: &App) -> ToolbarItemLocation {
-        ToolbarItemLocation::PrimaryLeft
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<gpui::Font>)> {
-        let text: SharedString = self.repo_path.as_ref().display(PathStyle::local()).into_owned().into();
-
-        // When the git panel is set to convey status via label color rather
-        // than an icon, tint the whole path like multibuffer headers do.
-        let mut highlights = Vec::new();
-        if GitPanelSettings::get_global(cx).status_style == StatusStyle::LabelColor
-            && let Some(status) = self.repository.read(cx).status_for_path(&self.repo_path).map(|entry| entry.status)
-        {
-            highlights.push((0..text.len(), HighlightStyle::color(file_status_label_color(Some(status)).color(cx))));
-        }
-
-        Some((
-            vec![HighlightedText { text, highlights }],
-            Some(theme_settings::ThemeSettings::get_global(cx).buffer_font.clone()),
-        ))
     }
 
     fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {

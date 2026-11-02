@@ -628,19 +628,17 @@ impl Platform for MacPlatform {
         }
     }
 
-    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
+    fn restart(&self, arguments: Vec<std::ffi::OsString>) {
         use std::os::unix::process::CommandExt as _;
 
         let app_pid = std::process::id().to_string();
-        let app_path = binary_path
-            .or_else(|| {
-                self.app_path()
-                    .ok()
-                    // When the app is not bundled, `app_path` returns the
-                    // directory containing the executable. Disregard this
-                    // and get the path to the executable itself.
-                    .and_then(|path| (path.extension()?.to_str()? == "app").then_some(path))
-            })
+        let app_path = self
+            .app_path()
+            .ok()
+            // When the app is not bundled, `app_path` returns the
+            // directory containing the executable. Disregard this
+            // and get the path to the executable itself.
+            .and_then(|path| (path.extension()?.to_str()? == "app").then_some(path))
             .unwrap_or_else(|| std::env::current_exe().unwrap());
 
         // Wait until this process has exited and then re-open this path.

@@ -29,7 +29,6 @@ use model::SerializedItem;
 use model::SerializedPane;
 use model::SerializedPaneGroup;
 use model::SerializedWorkspace;
-use project::ProjectGroupKey;
 use project::trusted_worktrees::DbTrustedPaths;
 use project::trusted_worktrees::RemoteHostLocation;
 use remote::RemoteConnectionIdentity;
@@ -252,26 +251,10 @@ impl From<WindowBoundsJson> for WindowBounds {
     }
 }
 
-fn read_multi_workspace_state(window_id: WindowId, cx: &App) -> model::MultiWorkspaceState {
-    let kvp = KeyValueStore::global(cx);
-    kvp.scoped("multi_workspace_state")
-        .read(&window_id.as_u64().to_string())
-        .log_err()
-        .flatten()
-        .and_then(|json| serde_json::from_str(&json).ok())
-        .unwrap_or_default()
-}
-
-pub async fn write_multi_workspace_state(kvp: &KeyValueStore, window_id: WindowId, state: model::MultiWorkspaceState) {
-    if let Ok(json_str) = serde_json::to_string(&state) {
-        kvp.scoped("multi_workspace_state").write(window_id.as_u64().to_string(), json_str).await.log_err();
-    }
-}
-
-pub fn read_serialized_multi_workspaces(
-    session_workspaces: Vec<model::SessionWorkspace>,
-    cx: &App,
-) -> Vec<model::SerializedMultiWorkspace> {
+/// Picks the workspace to restore for each window of a previous session. A
+/// window has one workspace; should several rows still name the same window,
+/// the first one with paths wins.
+pub fn read_session_workspaces(session_workspaces: Vec<model::SessionWorkspace>) -> Vec<model::SessionWorkspace> {
     let mut window_groups: Vec<Vec<model::SessionWorkspace>> = Vec::new();
     let mut window_id_to_group: HashMap<WindowId, usize> = HashMap::default();
 
@@ -293,21 +276,8 @@ pub fn read_serialized_multi_workspaces(
     window_groups
         .into_iter()
         .filter_map(|group| {
-            let window_id = group.first().and_then(|sw| sw.window_id);
-            let state = window_id.map(|wid| read_multi_workspace_state(wid, cx)).unwrap_or_default();
-            let active_workspace = state
-                .active_workspace_id
-                .and_then(|id| group.iter().position(|ws| ws.workspace_id == id))
-                // If the persisted active workspace can't be matched (e.g. its
-                // pointer was lost or its row was pruned), fall back to the
-                // first workspace that actually has paths rather than blindly
-                // taking index 0, so a stray scratch/empty workspace isn't
-                // restored as the focused window. Only if none have paths do we
-                // fall back to the first entry.
-                .or_else(|| group.iter().position(|ws| !ws.paths.is_empty()))
-                .or(Some(0))
-                .and_then(|index| group.into_iter().nth(index))?;
-            Some(model::SerializedMultiWorkspace { active_workspace, state })
+            let index = group.iter().position(|ws| !ws.paths.is_empty()).unwrap_or(0);
+            group.into_iter().nth(index)
         })
         .collect()
 }
@@ -499,7 +469,6 @@ impl WorkspaceDb {
             identity_paths_order,
             window_bounds,
             display,
-            centered_layout,
             docks,
             window_id,
         ): (
@@ -510,7 +479,6 @@ impl WorkspaceDb {
             Option<String>,
             Option<SerializedWindowBounds>,
             Option<Uuid>,
-            Option<bool>,
             DockStructure,
             Option<u64>,
         ) = self
@@ -527,7 +495,6 @@ impl WorkspaceDb {
                     window_width,
                     window_height,
                     display,
-                    centered_layout,
                     left_dock_visible,
                     left_dock_active_panel,
                     left_dock_zoom,
@@ -572,7 +539,6 @@ impl WorkspaceDb {
             identity_paths,
             center_group: self.get_center_pane_group(workspace_id).context("Getting center group").log_err()?,
             window_bounds,
-            centered_layout: centered_layout.unwrap_or(false),
             display,
             docks,
             session_id: None,
@@ -591,7 +557,6 @@ impl WorkspaceDb {
             identity_paths_order,
             window_bounds,
             display,
-            centered_layout,
             docks,
             window_id,
             remote_connection_id,
@@ -602,7 +567,6 @@ impl WorkspaceDb {
             Option<String>,
             Option<SerializedWindowBounds>,
             Option<Uuid>,
-            Option<bool>,
             DockStructure,
             Option<u64>,
             Option<i32>,
@@ -619,7 +583,6 @@ impl WorkspaceDb {
                     window_width,
                     window_height,
                     display,
-                    centered_layout,
                     left_dock_visible,
                     left_dock_active_panel,
                     left_dock_zoom,
@@ -661,7 +624,6 @@ impl WorkspaceDb {
             identity_paths,
             center_group: self.get_center_pane_group(workspace_id).context("Getting center group").log_err()?,
             window_bounds,
-            centered_layout: centered_layout.unwrap_or(false),
             display,
             docks,
             session_id: None,
@@ -1366,14 +1328,6 @@ impl WorkspaceDb {
     }
 
     query! {
-        pub(crate) async fn set_centered_layout(workspace_id: WorkspaceId, centered_layout: bool) -> Result<()> {
-            UPDATE workspaces
-            SET centered_layout = ?2
-            WHERE workspace_id = ?1
-        }
-    }
-
-    query! {
         pub(crate) async fn set_session_binding(workspace_id: WorkspaceId, session_id: Option<String>, window_id: Option<u64>) -> Result<()> {
             UPDATE workspaces
             SET session_id = ?2, window_id = ?3
@@ -1486,16 +1440,6 @@ pub struct RecentWorkspace {
     pub timestamp: OffsetDateTime,
 }
 
-impl RecentWorkspace {
-    pub fn project_group_key(&self) -> ProjectGroupKey {
-        let host = match &self.location {
-            SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(options) => Some(options.clone()),
-        };
-        ProjectGroupKey::new(host, self.identity_paths.clone())
-    }
-}
-
 async fn resolve_local_workspace_identity(fs: &dyn Fs, paths: &PathList) -> Option<PathList> {
     let raw_paths = paths.paths();
     let resolved_paths = futures::future::join_all(
@@ -1561,4 +1505,43 @@ pub fn delete_unloaded_items(
         })
         .await
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::WindowId;
+    use util::path_list::PathList;
+
+    use super::model::SerializedWorkspaceLocation;
+    use super::model::SessionWorkspace;
+    use super::read_session_workspaces;
+    use crate::WorkspaceId;
+
+    fn session_workspace(id: i64, window_id: Option<u64>, paths: &[&str]) -> SessionWorkspace {
+        SessionWorkspace {
+            workspace_id: WorkspaceId::from_i64(id),
+            location: SerializedWorkspaceLocation::Local,
+            paths: PathList::new(paths),
+            window_id: window_id.map(WindowId::from),
+        }
+    }
+
+    #[test]
+    fn test_read_session_workspaces_keeps_one_per_window() {
+        let restored = read_session_workspaces(vec![
+            session_workspace(1, Some(1), &[]),
+            session_workspace(2, Some(1), &["/a"]),
+            session_workspace(3, Some(2), &[]),
+            session_workspace(4, None, &["/b"]),
+            session_workspace(5, Some(2), &[]),
+            session_workspace(6, None, &[]),
+        ]);
+        let ids = restored.iter().map(|workspace| workspace.workspace_id).collect::<Vec<_>>();
+        // A window prefers its first workspace with paths, else its first one;
+        // workspaces without a window are each restored on their own.
+        assert_eq!(
+            ids,
+            [WorkspaceId::from_i64(2), WorkspaceId::from_i64(3), WorkspaceId::from_i64(4), WorkspaceId::from_i64(6)]
+        );
+    }
 }

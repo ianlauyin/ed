@@ -27,7 +27,6 @@ use terminal::TerminalBuilder;
 use terminal::TerminalMode;
 use terminal::insert_ed_terminal_env;
 use terminal::terminal_settings::TerminalSettings;
-use util::command::new_std_command;
 use util::get_default_system_shell;
 use util::get_system_shell;
 use util::paths::PathStyle;
@@ -370,67 +369,6 @@ impl Project {
             settings_location = Some(SettingsLocation { worktree_id: worktree.read(cx).id(), path: RelPath::empty() });
         }
         TerminalSettings::get(settings_location, cx)
-    }
-
-    pub fn exec_in_shell(&self, command: String, cx: &mut Context<Self>) -> Task<Result<smol::process::Command>> {
-        let path = self.first_project_directory(cx);
-        let remote_client = self.remote_client.clone();
-        let settings = self.terminal_settings(&path, cx).clone();
-        let shell = remote_client
-            .as_ref()
-            .and_then(|remote_client| remote_client.read(cx).shell())
-            .map(Shell::Program)
-            .unwrap_or(Shell::System);
-        let builder = ShellBuilder::new(&shell).non_interactive();
-        let (command, args) = builder.build(Some(command), &Vec::new());
-
-        let env_task = self.resolve_directory_environment(
-            &shell.program(),
-            path.as_ref().map(|p| Arc::from(&**p)),
-            remote_client.clone(),
-            cx,
-        );
-
-        cx.spawn(async move |project, cx| {
-            let mut env = env_task.await.unwrap_or_default();
-            env.extend(settings.env);
-
-            project.update(cx, move |_, cx| {
-                match remote_client {
-                    Some(remote_client) => {
-                        let command_template = remote_client.read(cx).build_command(
-                            Some(command),
-                            &args,
-                            &env,
-                            None,
-                            None,
-                            Interactive::Yes,
-                        )?;
-                        let mut command = new_std_command(command_template.program);
-                        command.args(command_template.args);
-                        command.envs(command_template.env);
-                        Ok(command)
-                    }
-                    None => {
-                        let mut command = new_std_command(command);
-                        command.args(args);
-                        command.envs(env);
-                        if let Some(path) = path {
-                            command.current_dir(path);
-                        }
-                        Ok(command)
-                    }
-                }
-                .map(|mut process| {
-                    util::set_pre_exec_to_start_new_session(&mut process);
-                    smol::process::Command::from(process)
-                })
-            })?
-        })
-    }
-
-    pub const fn local_terminal_handles(&self) -> &Vec<WeakEntity<terminal::Terminal>> {
-        &self.terminals.local_handles
     }
 
     fn resolve_directory_environment(

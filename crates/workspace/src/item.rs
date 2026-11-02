@@ -17,7 +17,6 @@ use gpui::EntityId;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
-use gpui::Font;
 use gpui::Pixels;
 use gpui::Point;
 use gpui::Render;
@@ -48,7 +47,6 @@ use util::ResultExt;
 use crate::DelayedDebouncedEditAction;
 use crate::ItemNavHistory;
 use crate::SerializableItemRegistry;
-use crate::ToolbarItemLocation;
 use crate::Workspace;
 use crate::WorkspaceId;
 use crate::invalid_item_view::InvalidItemView;
@@ -58,8 +56,6 @@ use crate::persistence::model::ItemId;
 use crate::searchable::SearchableItemHandle;
 use crate::workspace_settings::AutosaveSetting;
 use crate::workspace_settings::WorkspaceSettings;
-
-pub const LEADER_UPDATE_THROTTLE: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Copy, Debug)]
 pub struct SaveOptions {
@@ -133,7 +129,7 @@ impl Settings for PreviewTabsSettings {
 pub enum ItemEvent {
     CloseItem,
     UpdateTab,
-    UpdateBreadcrumbs,
+    UpdateActivePath,
     Edit,
 }
 
@@ -225,10 +221,8 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(ItemEvent)) {}
 
     fn deactivated(&mut self, _window: &mut Window, _: &mut Context<Self>) {}
-    fn discarded(&self, _project: Entity<Project>, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn on_removed(&self, _cx: &mut Context<Self>) {}
     fn workspace_deactivated(&mut self, _window: &mut Window, _: &mut Context<Self>) {}
-    fn pane_changed(&mut self, _new_pane_id: EntityId, _cx: &mut Context<Self>) {}
     fn navigate(&mut self, _: Arc<dyn Any + Send>, _window: &mut Window, _: &mut Context<Self>) -> bool {
         false
     }
@@ -325,19 +319,6 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         None
     }
 
-    fn breadcrumb_location(&self, _: &App) -> ToolbarItemLocation {
-        ToolbarItemLocation::Hidden
-    }
-
-    fn breadcrumbs(&self, _cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        None
-    }
-
-    /// Returns optional elements to render to the left of the breadcrumb.
-    fn breadcrumb_prefix(&self, _window: &mut Window, _cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
-        None
-    }
-
     fn added_to_workspace(&mut self, _workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Self>) {}
 
     fn show_toolbar(&self) -> bool {
@@ -348,6 +329,11 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     /// e.g. commit details beside the commit diff.
     fn side_card(&self, _: &App) -> Option<AnyView> {
         None
+    }
+
+    /// A permanent tab has no close button and no close action closes it.
+    fn is_permanent(&self, _: &App) -> bool {
+        false
     }
 
     fn pixel_position_of_cursor(&self, _: &App) -> Option<Point<Pixels>> {
@@ -434,20 +420,12 @@ where
 
 pub trait ItemHandle: 'static + Send {
     fn item_focus_handle(&self, cx: &App) -> FocusHandle;
-    #[allow(clippy::type_complexity)]
-    fn subscribe_to_item_events(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-        handler: Box<dyn Fn(ItemEvent, &mut Window, &mut App)>,
-    ) -> gpui::Subscription;
     fn tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement;
     fn tab_content_text(&self, detail: usize, cx: &App) -> SharedString;
     fn suggested_filename(&self, cx: &App) -> SharedString;
     fn tab_icon(&self, window: &Window, cx: &App) -> Option<Icon>;
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString>;
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent>;
-    fn dragged_tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement;
     fn project_path(&self, cx: &App) -> Option<ProjectPath>;
     fn project_entry_ids(&self, cx: &App) -> SmallVec<[ProjectEntryId; 3]>;
     fn project_paths(&self, cx: &App) -> SmallVec<[ProjectPath; 3]>;
@@ -501,11 +479,9 @@ pub trait ItemHandle: 'static + Send {
     fn to_serializable_item_handle(&self, cx: &App) -> Option<Box<dyn SerializableItemHandle>>;
     fn on_release(&self, cx: &mut App, callback: Box<dyn FnOnce(&mut App) + Send>) -> gpui::Subscription;
     fn to_searchable_item_handle(&self, cx: &App) -> Option<Box<dyn SearchableItemHandle>>;
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation;
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)>;
-    fn breadcrumb_prefix(&self, window: &mut Window, cx: &mut App) -> Option<gpui::AnyElement>;
     fn show_toolbar(&self, cx: &App) -> bool;
     fn side_card(&self, cx: &App) -> Option<AnyView>;
+    fn is_permanent(&self, cx: &App) -> bool;
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>>;
     fn downgrade_item(&self) -> Box<dyn WeakItemHandle>;
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings;
@@ -538,18 +514,6 @@ impl dyn ItemHandle {
 }
 
 impl<T: Item> ItemHandle for Entity<T> {
-    #[allow(clippy::type_complexity)]
-    fn subscribe_to_item_events(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-        handler: Box<dyn Fn(ItemEvent, &mut Window, &mut App)>,
-    ) -> gpui::Subscription {
-        window.subscribe(self, cx, move |_, event, window, cx| {
-            T::to_item_events(event, &mut |item_event| handler(item_event, window, cx));
-        })
-    }
-
     fn item_focus_handle(&self, cx: &App) -> FocusHandle {
         self.read(cx).focus_handle(cx)
     }
@@ -575,10 +539,6 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
         self.read(cx).tab_tooltip_text(cx)
-    }
-
-    fn dragged_tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
-        self.read(cx).tab_content(TabContentParams { selected: true, ..params }, window, cx)
     }
 
     fn project_path(&self, cx: &App) -> Option<ProjectPath> {
@@ -668,17 +628,7 @@ impl<T: Item> ItemHandle for Entity<T> {
             workspace.enqueue_item_serialization(serializable_item).log_err();
         }
 
-        let new_pane_id = pane.entity_id();
         let old_item_pane = workspace.panes_by_item.insert(self.item_id(), pane.downgrade());
-
-        if old_item_pane
-            .as_ref()
-            .is_none_or(|old_pane| old_pane.upgrade().is_some_and(|old_pane| old_pane.entity_id() != new_pane_id))
-        {
-            self.update(cx, |this, cx| {
-                this.pane_changed(new_pane_id, cx);
-            });
-        }
 
         if old_item_pane.is_none() {
             let mut pending_autosave = DelayedDebouncedEditAction::new();
@@ -736,7 +686,7 @@ impl<T: Item> ItemHandle for Entity<T> {
                             }
                         }
 
-                        ItemEvent::UpdateBreadcrumbs => {
+                        ItemEvent::UpdateActivePath => {
                             if &pane == workspace.active_pane()
                                 && pane
                                     .read(cx)
@@ -899,24 +849,16 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.read(cx).as_searchable(self, cx)
     }
 
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        self.read(cx).breadcrumb_location(cx)
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        self.read(cx).breadcrumbs(cx)
-    }
-
-    fn breadcrumb_prefix(&self, window: &mut Window, cx: &mut App) -> Option<gpui::AnyElement> {
-        self.update(cx, |item, cx| item.breadcrumb_prefix(window, cx))
-    }
-
     fn show_toolbar(&self, cx: &App) -> bool {
         self.read(cx).show_toolbar()
     }
 
     fn side_card(&self, cx: &App) -> Option<AnyView> {
         self.read(cx).side_card(cx)
+    }
+
+    fn is_permanent(&self, cx: &App) -> bool {
+        self.read(cx).is_permanent(cx)
     }
 
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>> {

@@ -65,7 +65,7 @@ impl LanguageSelector {
 
     fn toggle(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<()> {
         let registry = workspace.app_state().languages.clone();
-        let buffer = workspace.active_item(cx)?.act_as::<Editor>(cx)?.read(cx).active_buffer(cx)?;
+        let buffer = workspace.shown_pane().read(cx).active_item()?.act_as::<Editor>(cx)?.read(cx).active_buffer(cx)?;
         let project = workspace.project().clone();
 
         workspace

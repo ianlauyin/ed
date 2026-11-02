@@ -225,7 +225,6 @@ pub struct RemoteWorktree {
     visible: bool,
     library_name: Option<Arc<str>>,
     disconnected: bool,
-    received_initial_update: bool,
 }
 
 #[derive(Clone)]
@@ -501,9 +500,6 @@ struct UpdateObservationState {
 pub enum Event {
     UpdatedEntries(UpdatedEntriesSet),
     UpdatedGitRepositories(UpdatedGitRepositoriesSet),
-    UpdatedRootRepoCommonDir {
-        old: Option<Arc<SanitizedPath>>,
-    },
     DeletedEntry(ProjectEntryId),
     /// The worktree root itself has been deleted (for single-file worktrees)
     Deleted,
@@ -664,7 +660,6 @@ impl Worktree {
                 visible: worktree.visible,
                 library_name: worktree.library_name.map(Into::into),
                 disconnected: false,
-                received_initial_update: false,
             };
 
             // Apply updates to a separate snapshot in a background task, then
@@ -693,8 +688,6 @@ impl Worktree {
                             return;
                         }
 
-                        let old_root_repo_common_dir = this.snapshot.root_repo_common_dir.clone();
-                        let old_root_repo_is_linked_worktree = this.snapshot.root_repo_is_linked_worktree;
                         let mut changed_entries: Vec<(Arc<RelPath>, ProjectEntryId, PathChange)> = Vec::new();
                         {
                             let mut lock = this.background_snapshot.lock();
@@ -728,14 +721,6 @@ impl Worktree {
 
                         if !changed_entries.is_empty() {
                             cx.emit(Event::UpdatedEntries(changed_entries.into()));
-                        }
-                        let is_first_update = !this.received_initial_update;
-                        this.received_initial_update = true;
-                        if this.snapshot.root_repo_common_dir != old_root_repo_common_dir
-                            || this.snapshot.root_repo_is_linked_worktree != old_root_repo_is_linked_worktree
-                            || (is_first_update && this.snapshot.root_repo_common_dir.is_none())
-                        {
-                            cx.emit(Event::UpdatedRootRepoCommonDir { old: old_root_repo_common_dir });
                         }
                         cx.notify();
                         while let Some((scan_id, _)) = this.snapshot_subscriptions.front() {
@@ -1341,9 +1326,6 @@ impl LocalWorktree {
             new_snapshot.root_repo_is_linked_worktree = false;
         }
 
-        let root_repo_metadata_changed = self.snapshot.root_repo_common_dir != new_snapshot.root_repo_common_dir
-            || self.snapshot.root_repo_is_linked_worktree != new_snapshot.root_repo_is_linked_worktree;
-        let old_root_repo_common_dir = root_repo_metadata_changed.then(|| self.snapshot.root_repo_common_dir.clone());
         self.snapshot = new_snapshot;
 
         if let Some(share) = self.update_observer.as_mut() {
@@ -1355,9 +1337,6 @@ impl LocalWorktree {
         }
         if !repo_changes.is_empty() {
             cx.emit(Event::UpdatedGitRepositories(repo_changes));
-        }
-        if let Some(old) = old_root_repo_common_dir {
-            cx.emit(Event::UpdatedRootRepoCommonDir { old });
         }
 
         while let Some((scan_id, _)) = self.snapshot_subscriptions.front() {

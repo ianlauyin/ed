@@ -1,7 +1,5 @@
 use std::ops::Range;
 
-use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
-use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 use gpui::Context;
 use gpui::DismissEvent;
 use gpui::Entity;
@@ -202,17 +200,7 @@ pub fn deploy_context_menu(
 
         let format_selections = window.is_action_available(&FormatSelections, cx);
 
-        let is_markdown = editor
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .and_then(|buffer| buffer.read(cx).language())
-            .is_some_and(|language| language.name().as_ref() == "Markdown");
-
-        let is_svg =
-            editor.buffer().read(cx).as_singleton().and_then(|buffer| buffer.read(cx).file()).is_some_and(|file| {
-                std::path::Path::new(file.file_name(cx)).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
-            });
+        let can_preview = window.is_action_available(&workspace::preview::OpenPreview, cx);
 
         ui::ContextMenu::build(window, cx, |menu, _window, _cx| {
             let builder = menu
@@ -222,8 +210,6 @@ pub fn deploy_context_menu(
                 .action("Go to Type Definition", Box::new(GoToTypeDefinition::default()))
                 .action("Go to Implementation", Box::new(GoToImplementation::default()))
                 .action("Find All References", Box::new(FindAllReferences::default()))
-                .action("Show Incoming Calls", Box::new(ed_actions::ShowIncomingCalls))
-                .action("Show Outgoing Calls", Box::new(ed_actions::ShowOutgoingCalls))
                 .separator()
                 .action("Rename Symbol", Box::new(Rename))
                 .action("Format Buffer", Box::new(Format))
@@ -240,8 +226,7 @@ pub fn deploy_context_menu(
                     ui::utils::reveal_in_file_manager_label(false),
                     Box::new(RevealInFileManager),
                 )
-                .when(is_markdown, |builder| builder.action("Open Markdown Preview", Box::new(OpenMarkdownPreview)))
-                .when(is_svg, |builder| builder.action("Open SVG Preview", Box::new(OpenSvgPreview)))
+                .when(can_preview, |builder| builder.action("Open Preview", Box::new(workspace::preview::OpenPreview)))
                 .action_disabled_when(!has_reveal_target, "Open in Terminal", Box::new(OpenInTerminal))
                 .action_disabled_when(!has_git_repo, "View File History", Box::new(git::FileHistory));
             match focus {

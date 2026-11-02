@@ -51,7 +51,6 @@ use crate::Navigated;
 use crate::PointForPosition;
 use crate::SelectPhase;
 use crate::editor_settings::GoToDefinitionFallback;
-use crate::scroll::ScrollAmount;
 
 #[derive(Clone, Action)]
 #[action(no_json, no_register)]
@@ -337,26 +336,6 @@ impl Editor {
             .map(|target| HoverLink::Text(LocationLink { origin: None, target }))
             .collect::<Vec<_>>();
         self.open_clicked_links(action.kind, links, action.origin.clone(), false, window, cx);
-    }
-
-    pub fn scroll_hover(&mut self, amount: ScrollAmount, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let selection = self.selections.newest_anchor().head();
-        let snapshot = self.snapshot(window, cx);
-
-        if let Some(popover) = self
-            .hover_state
-            .info_popovers
-            .iter()
-            .find(|popover| popover.symbol_range.point_within_range(&TriggerPoint::Text(selection), &snapshot))
-        {
-            popover.scroll(amount, window, cx);
-            true
-        } else if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
-            context_menu.scroll_aside(amount, window, cx);
-            true
-        } else {
-            false
-        }
     }
 
     fn reveal_clicked_links(

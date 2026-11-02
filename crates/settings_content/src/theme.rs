@@ -431,14 +431,6 @@ pub struct ThemeColorsContent {
     #[serde(rename = "element.selection_background")]
     pub element_selection_background: Option<ThemeColor>,
 
-    /// Background Color. Used for the area that shows where a dragged element will be dropped.
-    #[serde(rename = "drop_target.background")]
-    pub drop_target_background: Option<ThemeColor>,
-
-    /// Border Color. Used for the border that shows where a dragged element will be dropped.
-    #[serde(rename = "drop_target.border")]
-    pub drop_target_border: Option<ThemeColor>,
-
     /// Used for the background of a ghost element that should have the same background as the surface it's on.
     ///
     /// Elements might include: Buttons, Inputs, Checkboxes, Radio Buttons...

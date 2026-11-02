@@ -26,7 +26,6 @@ use settings::Settings;
 pub use settings::SshConnection;
 use util::paths::PathWithPosition;
 use workspace::AppState;
-use workspace::MultiWorkspace;
 use workspace::OpenOptions;
 use workspace::SerializedWorkspaceLocation;
 use workspace::Workspace;
@@ -98,7 +97,7 @@ pub async fn open_remote_project(
     app_state: Arc<AppState>,
     open_options: workspace::OpenOptions,
     cx: &mut AsyncApp,
-) -> Result<WindowHandle<MultiWorkspace>> {
+) -> Result<WindowHandle<Workspace>> {
     let created_new_window = open_options.requesting_window.is_none();
 
     let (existing, open_visible) = find_existing_workspace(
@@ -124,30 +123,24 @@ pub async fn open_remote_project(
                 determine_paths_with_positions(&remote_connection, paths).await;
 
             let open_results = existing_window
-                .update(cx, |multi_workspace, window, cx| {
+                .update(cx, |workspace, window, cx| {
                     window.activate_window();
-                    multi_workspace.activate(existing_workspace.clone(), None, window, cx);
-                    existing_workspace.update(cx, |workspace, cx| {
-                        workspace.open_paths(
-                            resolved_paths,
-                            OpenOptions { visible: Some(open_visible), ..Default::default() },
-                            None,
-                            window,
-                            cx,
-                        )
-                    })
+                    workspace.open_paths(
+                        resolved_paths,
+                        OpenOptions { visible: Some(open_visible), ..Default::default() },
+                        None,
+                        window,
+                        cx,
+                    )
                 })?
                 .await;
 
-            _ = existing_window.update(cx, |multi_workspace, _, cx| {
-                let workspace = multi_workspace.workspace().clone();
-                workspace.update(cx, |workspace, cx| {
-                    for item in open_results.iter().flatten() {
-                        if let Err(e) = item {
-                            workspace.show_error(format!("{e}"), cx);
-                        }
+            _ = existing_window.update(cx, |workspace, _, cx| {
+                for item in open_results.iter().flatten() {
+                    if let Err(e) = item {
+                        workspace.show_error(format!("{e}"), cx);
                     }
-                });
+                }
             });
 
             let items = open_results.into_iter().map(|r| r.and_then(|r| r.ok())).collect::<Vec<_>>();
@@ -161,7 +154,7 @@ pub async fn open_remote_project(
     }
 
     let (window, initial_workspace) = if let Some(window) = open_options.requesting_window {
-        let workspace = window.update(cx, |multi_workspace, _, _| multi_workspace.workspace().clone())?;
+        let workspace = window.entity(cx)?;
         (window, workspace)
     } else {
         let workspace_position = cx
@@ -179,14 +172,9 @@ pub async fn open_remote_project(
                 project::LocalProjectFlags { init_worktree_trust: false },
                 cx,
             );
-            let workspace = cx.new(|cx| {
-                let mut workspace = Workspace::new(None, project, app_state.clone(), window, cx);
-                workspace.centered_layout = workspace_position.centered_layout;
-                workspace
-            });
-            cx.new(|cx| MultiWorkspace::new(workspace, window, cx))
+            cx.new(|cx| Workspace::new(None, project, app_state.clone(), window, cx))
         })?;
-        let workspace = window.update(cx, |multi_workspace, _, _cx| multi_workspace.workspace().clone())?;
+        let workspace = window.entity(cx)?;
         (window, workspace)
     };
 
@@ -195,23 +183,20 @@ pub async fn open_remote_project(
         let delegate = window.update(cx, {
             let paths = paths.clone();
             let connection_options = connection_options.clone();
-            let initial_workspace = initial_workspace.clone();
-            move |_multi_workspace: &mut MultiWorkspace, window, cx| {
+            move |workspace: &mut Workspace, window, cx| {
                 window.activate_window();
-                initial_workspace.update(cx, |workspace, cx| {
-                    workspace.hide_modal(window, cx);
-                    workspace.toggle_modal(window, cx, |window, cx| {
-                        RemoteConnectionModal::new(&connection_options, paths, window, cx)
-                    });
+                workspace.hide_modal(window, cx);
+                workspace.toggle_modal(window, cx, |window, cx| {
+                    RemoteConnectionModal::new(&connection_options, paths, window, cx)
+                });
 
-                    let ui = workspace.active_modal::<RemoteConnectionModal>(cx)?.read(cx).prompt.clone();
+                let ui = workspace.active_modal::<RemoteConnectionModal>(cx)?.read(cx).prompt.clone();
 
-                    ui.update(cx, |ui, _cx| {
-                        ui.set_cancellation_tx(cancel_tx);
-                    });
+                ui.update(cx, |ui, _cx| {
+                    ui.set_cancellation_tx(cancel_tx);
+                });
 
-                    Some(Arc::new(RemoteClientDelegate::new(ui.downgrade())))
-                })
+                Some(Arc::new(RemoteClientDelegate::new(ui.downgrade())))
             }
         })?;
 
@@ -332,7 +317,7 @@ pub async fn open_remote_project(
 }
 
 pub fn navigate_to_positions(
-    window: &WindowHandle<MultiWorkspace>,
+    window: &WindowHandle<Workspace>,
     items: impl IntoIterator<Item = Option<Box<dyn workspace::item::ItemHandle>>>,
     positions: &[PathWithPosition],
     cx: &mut AsyncApp,

@@ -20,13 +20,11 @@ pub struct WorkspaceSettings {
     pub bottom_dock_layout: settings::BottomDockLayout,
     pub pane_split_direction_horizontal: settings::PaneSplitDirectionHorizontal,
     pub pane_split_direction_vertical: settings::PaneSplitDirectionVertical,
-    pub centered_layout: settings::CenteredLayoutSettings,
     pub confirm_quit: bool,
     pub autosave: AutosaveSetting,
     pub restore_on_startup: settings::RestoreOnStartupBehavior,
     pub default_open_behavior: settings::DefaultOpenBehavior,
     pub restore_on_file_reopen: bool,
-    pub reveal_if_open: bool,
     pub drop_target_size: f32,
     pub use_system_path_prompts: bool,
     pub command_aliases: HashMap<String, CommandAliasTarget>,
@@ -36,9 +34,6 @@ pub struct WorkspaceSettings {
     pub text_rendering_mode: settings::TextRenderingMode,
     pub resize_all_panels_in_dock: Vec<DockPosition>,
     pub close_on_file_delete: bool,
-    pub close_panel_on_toggle: bool,
-    pub window_title_format: String,
-    pub window_title_separator: String,
     pub fullscreen_mode: settings::FullscreenMode,
     pub window_decorations: settings::WindowDecorations,
     pub focus_follows_mouse: FocusFollowsMouse,
@@ -74,7 +69,6 @@ pub struct ActivePanelModifiers {
 #[derive(Deserialize)]
 pub struct TabBarSettings {
     pub show: bool,
-    pub show_nav_history_buttons: bool,
     pub show_tab_bar_buttons: bool,
     pub show_pinned_tabs_in_separate_row: bool,
 }
@@ -92,13 +86,11 @@ impl Settings for WorkspaceSettings {
             bottom_dock_layout: workspace.bottom_dock_layout.unwrap(),
             pane_split_direction_horizontal: workspace.pane_split_direction_horizontal.unwrap(),
             pane_split_direction_vertical: workspace.pane_split_direction_vertical.unwrap(),
-            centered_layout: workspace.centered_layout.unwrap(),
             confirm_quit: workspace.confirm_quit.unwrap(),
             autosave: workspace.autosave.unwrap(),
             restore_on_startup: workspace.restore_on_startup.unwrap(),
             default_open_behavior: workspace.default_open_behavior.unwrap(),
             restore_on_file_reopen: workspace.restore_on_file_reopen.unwrap(),
-            reveal_if_open: workspace.reveal_if_open.unwrap(),
             drop_target_size: workspace.drop_target_size.unwrap(),
             use_system_path_prompts: workspace.use_system_path_prompts.unwrap(),
             command_aliases: workspace.command_aliases.clone(),
@@ -114,9 +106,6 @@ impl Settings for WorkspaceSettings {
                 .map(Into::into)
                 .collect(),
             close_on_file_delete: workspace.close_on_file_delete.unwrap(),
-            close_panel_on_toggle: workspace.close_panel_on_toggle.unwrap(),
-            window_title_format: workspace.window_title_format.clone().unwrap(),
-            window_title_separator: workspace.window_title_separator.clone().unwrap(),
             fullscreen_mode: workspace.fullscreen_mode.unwrap(),
             window_decorations: workspace.window_decorations.unwrap(),
             focus_follows_mouse: FocusFollowsMouse {
@@ -132,7 +121,6 @@ impl Settings for TabBarSettings {
         let tab_bar = content.tab_bar.clone().unwrap();
         TabBarSettings {
             show: tab_bar.show.unwrap(),
-            show_nav_history_buttons: tab_bar.show_nav_history_buttons.unwrap(),
             show_tab_bar_buttons: tab_bar.show_tab_bar_buttons.unwrap(),
             show_pinned_tabs_in_separate_row: tab_bar.show_pinned_tabs_in_separate_row.unwrap(),
         }

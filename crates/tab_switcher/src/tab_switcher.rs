@@ -599,23 +599,6 @@ impl TabSwitcherDelegate {
             current_pane.update(cx, |pane, cx| {
                 pane.activate_item(index, true, true, window, cx);
             });
-        } else if selected_match.item.project_path(cx).is_some() && selected_match.item.can_split(cx) {
-            let Some(workspace) = self.workspace.upgrade() else {
-                return;
-            };
-            let database_id = workspace.read(cx).database_id();
-            let task = selected_match.item.clone_on_split(database_id, window, cx);
-            let current_pane = current_pane.downgrade();
-            cx.spawn_in(window, async move |_, cx| {
-                if let Some(clone) = task.await {
-                    current_pane
-                        .update_in(cx, |pane, window, cx| {
-                            pane.add_item(clone, true, true, None, window, cx);
-                        })
-                        .log_err();
-                }
-            })
-            .detach();
         } else {
             let Some(source_pane) = selected_match.pane.upgrade() else {
                 return;

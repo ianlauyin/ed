@@ -95,9 +95,6 @@ pub mod error_codes;
 pub mod notification;
 pub mod request;
 
-mod call_hierarchy;
-pub use call_hierarchy::*;
-
 mod code_action;
 pub use code_action::*;
 
@@ -1645,12 +1642,6 @@ pub struct TextDocumentClientCapabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linked_editing_range: Option<LinkedEditingRangeClientCapabilities>,
 
-    /// Capabilities specific to the various call hierarchy requests.
-    ///
-    /// @since 3.16.0
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub call_hierarchy: Option<CallHierarchyClientCapabilities>,
-
     /// Capabilities specific to the `textDocument/semanticTokens/*` requests.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_tokens: Option<SemanticTokensClientCapabilities>,
@@ -2091,10 +2082,6 @@ pub struct ServerCapabilities {
     /// Workspace specific server capabilities
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace: Option<WorkspaceServerCapabilities>,
-
-    /// Call hierarchy provider capabilities.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub call_hierarchy_provider: Option<CallHierarchyServerCapability>,
 
     /// Semantic tokens server capabilities.
     #[serde(skip_serializing_if = "Option::is_none")]

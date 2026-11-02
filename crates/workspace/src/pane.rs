@@ -18,8 +18,8 @@ use collections::VecDeque;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use gpui::Action;
-use gpui::Anchor;
 use gpui::AnyElement;
+use gpui::AnyView;
 use gpui::App;
 use gpui::AsyncWindowContext;
 use gpui::ClickEvent;
@@ -42,6 +42,7 @@ use gpui::Point;
 use gpui::PromptLevel;
 use gpui::Render;
 use gpui::ScrollHandle;
+use gpui::Stateful;
 use gpui::Subscription;
 use gpui::Task;
 use gpui::TaskExt;
@@ -49,8 +50,6 @@ use gpui::WeakEntity;
 use gpui::WeakFocusHandle;
 use gpui::Window;
 use gpui::actions;
-use gpui::anchored;
-use gpui::deferred;
 use gpui::prelude::*;
 use itertools::Itertools;
 use language::Capability;
@@ -64,6 +63,7 @@ use project::WorktreeId;
 use serde::Deserialize;
 use settings::Settings;
 use settings::SettingsStore;
+use theme::ThemeColors;
 use theme_settings::ThemeSettings;
 use ui::ContextMenu;
 use ui::ContextMenuEntry;
@@ -74,8 +74,6 @@ use ui::IconDecoration;
 use ui::IconDecorationKind;
 use ui::Indicator;
 use ui::KeyBinding;
-use ui::PopoverMenu;
-use ui::PopoverMenuHandle;
 use ui::Tab;
 use ui::TabBar;
 use ui::TabPosition;
@@ -90,9 +88,7 @@ use util::paths::PathStyle;
 use util::truncate_and_remove_front;
 
 use crate::CloseWindow;
-use crate::NewCenterTerminal;
 use crate::NewFile;
-use crate::NewTerminal;
 use crate::Open;
 use crate::OpenInTerminal;
 use crate::OpenOptions;
@@ -100,7 +96,6 @@ use crate::OpenTerminal;
 use crate::OpenVisible;
 use crate::SplitDirection;
 use crate::ToggleFileFinder;
-use crate::ToggleProjectSymbols;
 use crate::ToggleZoom;
 use crate::Workspace;
 use crate::WorkspaceItemBuilder;
@@ -357,10 +352,6 @@ actions!(
         ActivateLastItem,
         /// Switches to the alternate file.
         AlternateFile,
-        /// Navigates back in history.
-        GoBack,
-        /// Navigates forward in history.
-        GoForward,
         /// Navigates back in the tag stack.
         GoToOlderTag,
         /// Navigates forward in the tag stack.
@@ -393,6 +384,28 @@ actions!(
 );
 
 const MAX_NAVIGATION_HISTORY_LEN: usize = 1024;
+const TAB_DROP_MARKER_WIDTH: Pixels = px(2.);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabDropSide {
+    Before,
+    After,
+}
+
+/// Splitting a pane with its own only tab would just move the pane, so it offers no split zones.
+const fn drags_out_only_tab(from_this_pane: bool, items_len: usize) -> bool {
+    from_this_pane && items_len <= 1
+}
+
+/// Which side of the tab at `ix` a drop lands on; `dragged_ix` is the dragged tab's index when it
+/// comes from the same pane. `None` when the tab would stay where it is.
+fn tab_drop_side(dragged_ix: Option<usize>, ix: usize) -> Option<TabDropSide> {
+    match dragged_ix.map(|dragged_ix| dragged_ix.cmp(&ix)) {
+        None | Some(cmp::Ordering::Greater) => Some(TabDropSide::Before),
+        Some(cmp::Ordering::Less) => Some(TabDropSide::After),
+        Some(cmp::Ordering::Equal) => None,
+    }
+}
 
 pub enum Event {
     AddItem { item: Box<dyn ItemHandle> },
@@ -467,13 +480,22 @@ pub struct Pane {
     /// Whether the last render showed the tab bar strip above the card.
     tab_bar_displayed: bool,
     tab_style: TabStyle,
-    should_display_welcome_page: bool,
     #[allow(clippy::type_complexity)]
     render_tab_bar_buttons:
         Rc<dyn Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> (Option<AnyElement>, Option<AnyElement>)>,
     #[allow(clippy::type_complexity)]
     render_tab_bar: Rc<dyn Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> AnyElement>,
     show_tab_bar_buttons: bool,
+    /// Window chrome the workspace puts at the start of this pane's tab bar
+    /// (traffic light room, project name, back/forward), if this is the pane
+    /// whose tab bar starts the window's top row.
+    tab_bar_header: Option<AnyView>,
+    /// Whether the tab bar is part of the window's top row, so its empty space
+    /// moves the window like a titlebar.
+    tab_bar_is_titlebar: bool,
+    /// Room kept at the start of the tab bar for the part of the window header
+    /// that overhangs a narrow sidebar, so tabs never slide under it.
+    tab_bar_header_room: Pixels,
     max_tabs: Option<NonZeroUsize>,
     use_max_tabs: bool,
     _subscriptions: Vec<Subscription>,
@@ -481,14 +503,12 @@ pub struct Pane {
     /// This is set to true if a user scroll has occurred more recently than a system scroll
     /// We want to suppress certain system scrolls when the user has intentionally scrolled
     suppress_scroll: bool,
-    /// Is None if navigation buttons are permanently turned off (and should not react to setting changes).
-    /// Otherwise, when `display_nav_history_buttons` is Some, it determines whether nav buttons should be displayed.
-    display_nav_history_buttons: Option<bool>,
     double_click_dispatch_action: Box<dyn Action>,
     save_modals_spawned: HashSet<EntityId>,
     close_pane_if_empty: bool,
-    pub new_item_context_menu_handle: PopoverMenuHandle<ContextMenu>,
-    pub split_item_context_menu_handle: PopoverMenuHandle<ContextMenu>,
+    /// Every tab is read-only, so the tab menu leaves out entries about
+    /// saving or editing.
+    read_only_tabs: bool,
     pinned_tab_count: usize,
     diagnostics: HashMap<ProjectPath, DiagnosticSeverity>,
     zoom_out_on_close: bool,
@@ -496,7 +516,6 @@ pub struct Pane {
     diagnostic_summary_update: Task<()>,
     /// If a certain project item wants to get recreated with specific data, it can persist its data before the recreation here.
     pub project_item_restoration_data: HashMap<ProjectItemKind, Box<dyn Any + Send>>,
-    welcome_page: Option<Entity<crate::welcome::WelcomePage>>,
 
     pub in_center_group: bool,
 }
@@ -524,9 +543,10 @@ struct NavHistoryState {
     tag_stack: VecDeque<TagStackEntry>,
     tag_stack_pos: usize,
     paths_by_item: HashMap<EntityId, (ProjectPath, Option<PathBuf>)>,
-    pane: WeakEntity<Pane>,
+    workspace: WeakEntity<Workspace>,
     next_timestamp: Arc<AtomicUsize>,
-    preview_item_id: Option<EntityId>,
+    /// The preview tab of every pane sharing this history.
+    preview_item_ids: HashSet<EntityId>,
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -601,15 +621,15 @@ impl Pane {
         let focus_handle = cx.focus_handle();
         let max_tabs = if use_max_tabs { WorkspaceSettings::get_global(cx).max_tabs } else { None };
 
+        let toolbar = cx.new(|_| Toolbar::new());
         let subscriptions = vec![
+            cx.observe(&toolbar, |_, _, cx| cx.notify()),
             cx.on_focus(&focus_handle, window, Pane::focus_in),
             cx.on_focus_in(&focus_handle, window, Pane::focus_in),
             cx.on_focus_out(&focus_handle, window, Pane::focus_out),
             cx.observe_global_in::<SettingsStore>(window, Self::settings_changed),
             cx.subscribe(&project, Self::project_events),
         ];
-
-        let handle = cx.entity().downgrade();
 
         Self {
             alternate_file_items: (None, None),
@@ -624,19 +644,8 @@ impl Pane {
             max_tabs,
             use_max_tabs,
             last_focus_handle_by_item: HashMap::default(),
-            nav_history: NavHistory(Arc::new(Mutex::new(NavHistoryState {
-                mode: NavigationMode::Normal,
-                backward_stack: VecDeque::default(),
-                forward_stack: VecDeque::default(),
-                closed_stack: VecDeque::default(),
-                tag_stack: VecDeque::default(),
-                tag_stack_pos: Default::default(),
-                paths_by_item: HashMap::default(),
-                pane: handle,
-                next_timestamp,
-                preview_item_id: None,
-            }))),
-            toolbar: cx.new(|_| Toolbar::new()),
+            nav_history: NavHistory::new(workspace.clone(), next_timestamp),
+            toolbar,
             tab_bar_scroll_handle: ScrollHandle::new(),
             suppress_scroll: false,
             drag_split_direction: None,
@@ -648,24 +657,23 @@ impl Pane {
             should_display_tab_bar: Rc::new(|_, cx| TabBarSettings::get_global(cx).show),
             tab_bar_displayed: false,
             tab_style: TabStyle::Folder,
-            should_display_welcome_page: false,
             render_tab_bar_buttons: Rc::new(default_render_tab_bar_buttons),
             render_tab_bar: Rc::new(Self::render_tab_bar),
             show_tab_bar_buttons: TabBarSettings::get_global(cx).show_tab_bar_buttons,
-            display_nav_history_buttons: Some(TabBarSettings::get_global(cx).show_nav_history_buttons),
+            tab_bar_header: None,
+            tab_bar_is_titlebar: false,
+            tab_bar_header_room: px(0.),
             _subscriptions: subscriptions,
             double_click_dispatch_action,
             save_modals_spawned: HashSet::default(),
             close_pane_if_empty: true,
-            split_item_context_menu_handle: PopoverMenuHandle::default(),
-            new_item_context_menu_handle: PopoverMenuHandle::default(),
+            read_only_tabs: false,
             pinned_tab_count: 0,
             diagnostics: HashMap::default(),
             zoom_out_on_close: true,
             focus_follows_mouse: WorkspaceSettings::get_global(cx).focus_follows_mouse,
             diagnostic_summary_update: Task::ready(()),
             project_item_restoration_data: HashMap::default(),
-            welcome_page: None,
             in_center_group: false,
         }
     }
@@ -720,10 +728,6 @@ impl Pane {
             cx.notify();
         }
 
-        self.toolbar.update(cx, |toolbar, cx| {
-            toolbar.focus_changed(true, window, cx);
-        });
-
         if let Some(active_item) = self.active_item() {
             if self.focus_handle.is_focused(window) {
                 // Schedule a redraw next frame, so that the focus changes below take effect
@@ -741,30 +745,14 @@ impl Pane {
                 }
 
                 active_item.item_focus_handle(cx).focus(window, cx);
-            } else if let Some(focused) = window.focused(cx)
-                && !self.context_menu_focused(window, cx)
-            {
+            } else if let Some(focused) = window.focused(cx) {
                 self.last_focus_handle_by_item.insert(active_item.item_id(), focused.downgrade());
             }
-        } else if self.should_display_welcome_page
-            && let Some(welcome_page) = self.welcome_page.as_ref()
-            && self.focus_handle.is_focused(window)
-        {
-            welcome_page.read(cx).focus_handle(cx).focus(window, cx);
         }
     }
 
-    pub fn context_menu_focused(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        self.new_item_context_menu_handle.is_focused(window, cx)
-            || self.split_item_context_menu_handle.is_focused(window, cx)
-    }
-
-    fn focus_out(&mut self, _event: FocusOutEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn focus_out(&mut self, _event: FocusOutEvent, _window: &mut Window, cx: &mut Context<Self>) {
         self.was_focused = false;
-        self.toolbar.update(cx, |toolbar, cx| {
-            toolbar.focus_changed(false, window, cx);
-        });
-
         cx.notify();
     }
 
@@ -813,15 +801,10 @@ impl Pane {
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let tab_bar_settings = TabBarSettings::get_global(cx);
 
-        if let Some(display_nav_history_buttons) = self.display_nav_history_buttons.as_mut() {
-            *display_nav_history_buttons = tab_bar_settings.show_nav_history_buttons;
-        }
-
         self.show_tab_bar_buttons = tab_bar_settings.show_tab_bar_buttons;
 
         if !PreviewTabsSettings::get_global(cx).enabled {
-            self.preview_item_id = None;
-            self.nav_history.0.lock().preview_item_id = None;
+            self.set_preview_item_id(None, cx);
         }
 
         let workspace_settings = WorkspaceSettings::get_global(cx);
@@ -851,6 +834,42 @@ impl Pane {
         &self.activation_history
     }
 
+    /// Sets the window chrome at the start of the tab bar, whether the tab bar
+    /// is part of the window's top row, and the room kept before the tabs for
+    /// a window header overhanging the sidebar. Redraws only when one changes.
+    pub fn set_tab_bar_chrome(
+        &mut self,
+        header: Option<AnyView>,
+        is_titlebar: bool,
+        header_room: Pixels,
+        cx: &mut Context<Self>,
+    ) {
+        let header_changed =
+            self.tab_bar_header.as_ref().map(AnyView::entity_id) != header.as_ref().map(AnyView::entity_id);
+        if header_changed || self.tab_bar_is_titlebar != is_titlebar || self.tab_bar_header_room != header_room {
+            self.tab_bar_header = header;
+            self.tab_bar_is_titlebar = is_titlebar;
+            self.tab_bar_header_room = header_room;
+            cx.notify();
+        }
+    }
+
+    /// Puts the header room before `tab_bar`. The room moves the window like
+    /// the rest of a top-row tab bar's empty space.
+    fn with_tab_bar_header_room(&self, tab_bar: AnyElement) -> AnyElement {
+        if self.tab_bar_header_room <= px(0.) {
+            return tab_bar;
+        }
+        // Stretched to the tab bar's height.
+        div()
+            .flex()
+            .flex_none()
+            .w_full()
+            .child(ui::utils::window_drag_area(div().id("tab-bar-header-room")).flex_none().w(self.tab_bar_header_room))
+            .child(div().flex_1().min_w_0().child(tab_bar))
+            .into_any_element()
+    }
+
     pub fn set_should_display_tab_bar<F>(&mut self, should_display_tab_bar: F)
     where
         F: 'static + Fn(&Window, &mut Context<Pane>) -> bool,
@@ -862,13 +881,15 @@ impl Pane {
         self.tab_bar_displayed
     }
 
+    /// Height of everything above the card: the tab bar, plus the gap above it
+    /// that a tab bar in the window's top row keeps from the window edge.
+    pub fn tab_strip_height(&self, cx: &App) -> Pixels {
+        tab_strip_height(self.tab_bar_displayed, self.tab_bar_is_titlebar, Tab::container_height(cx))
+    }
+
     /// Pill tabs sit inside the card instead of on the chrome above it.
     pub const fn set_tab_style(&mut self, tab_style: TabStyle) {
         self.tab_style = tab_style;
-    }
-
-    pub const fn set_should_display_welcome_page(&mut self, should_display_welcome_page: bool) {
-        self.should_display_welcome_page = should_display_welcome_page;
     }
 
     #[allow(clippy::type_complexity)]
@@ -881,28 +902,10 @@ impl Pane {
         self.can_split_predicate = can_split_predicate;
     }
 
-    pub fn set_can_toggle_zoom(&mut self, can_toggle_zoom: bool, cx: &mut Context<Self>) {
-        self.can_toggle_zoom = can_toggle_zoom;
-        cx.notify();
-    }
-
-    pub fn set_close_pane_if_empty(&mut self, close_pane_if_empty: bool, cx: &mut Context<Self>) {
-        self.close_pane_if_empty = close_pane_if_empty;
-        cx.notify();
-    }
-
     pub fn set_can_navigate(&mut self, can_navigate: bool, cx: &mut Context<Self>) {
         self.toolbar.update(cx, |toolbar, cx| {
             toolbar.set_can_navigate(can_navigate, cx);
         });
-        cx.notify();
-    }
-
-    pub fn set_render_tab_bar<F>(&mut self, cx: &mut Context<Self>, render: F)
-    where
-        F: 'static + Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> AnyElement,
-    {
-        self.render_tab_bar = Rc::new(render);
         cx.notify();
     }
 
@@ -926,14 +929,9 @@ impl Pane {
         &mut self.nav_history
     }
 
-    pub fn fork_nav_history(&self) -> NavHistory {
-        let history = self.nav_history.0.lock().clone();
-        NavHistory(Arc::new(Mutex::new(history)))
-    }
-
-    pub fn set_nav_history(&mut self, history: NavHistory, cx: &Context<Self>) {
+    /// Makes the pane record into `history`, shared with the workspace's other content panes.
+    pub fn set_nav_history(&mut self, history: NavHistory) {
         self.nav_history = history;
-        self.nav_history().0.lock().pane = cx.entity().downgrade();
     }
 
     pub fn disable_history(&mut self) {
@@ -944,38 +942,11 @@ impl Pane {
         self.nav_history.enable();
     }
 
-    pub fn can_navigate_backward(&self) -> bool {
-        !self.nav_history.0.lock().backward_stack.is_empty()
-    }
-
-    pub fn can_navigate_forward(&self) -> bool {
-        !self.nav_history.0.lock().forward_stack.is_empty()
-    }
-
-    pub fn navigate_backward(&mut self, _: &GoBack, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            let pane = cx.entity().downgrade();
-            window.defer(cx, move |window, cx| {
-                workspace.update(cx, |workspace, cx| workspace.go_back(pane, window, cx).detach_and_log_err(cx))
-            })
-        }
-    }
-
-    fn navigate_forward(&mut self, _: &GoForward, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            let pane = cx.entity().downgrade();
-            window.defer(cx, move |window, cx| {
-                workspace.update(cx, |workspace, cx| workspace.go_forward(pane, window, cx).detach_and_log_err(cx))
-            })
-        }
-    }
-
     pub fn go_to_older_tag(&mut self, _: &GoToOlderTag, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(workspace) = self.workspace.upgrade() {
-            let pane = cx.entity().downgrade();
             window.defer(cx, move |window, cx| {
                 workspace.update(cx, |workspace, cx| {
-                    workspace.navigate_tag_history(pane, TagNavigationMode::Older, window, cx).detach_and_log_err(cx)
+                    workspace.navigate_tag_history(TagNavigationMode::Older, window, cx).detach_and_log_err(cx)
                 })
             })
         }
@@ -983,17 +954,12 @@ impl Pane {
 
     pub fn go_to_newer_tag(&mut self, _: &GoToNewerTag, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(workspace) = self.workspace.upgrade() {
-            let pane = cx.entity().downgrade();
             window.defer(cx, move |window, cx| {
                 workspace.update(cx, |workspace, cx| {
-                    workspace.navigate_tag_history(pane, TagNavigationMode::Newer, window, cx).detach_and_log_err(cx)
+                    workspace.navigate_tag_history(TagNavigationMode::Newer, window, cx).detach_and_log_err(cx)
                 })
             })
         }
-    }
-
-    fn history_updated(&self, cx: &mut Context<Self>) {
-        self.toolbar.update(cx, |_, cx| cx.notify());
     }
 
     pub const fn preview_item_id(&self) -> Option<EntityId> {
@@ -1020,8 +986,7 @@ impl Pane {
     /// This does nothing if it wasn't already a preview item.
     pub fn unpreview_item_if_preview(&mut self, item_id: EntityId) {
         if self.is_active_preview_item(item_id) {
-            self.preview_item_id = None;
-            self.nav_history.0.lock().preview_item_id = None;
+            self.nav_history.set_preview_item(self.preview_item_id.take(), None);
         }
     }
 
@@ -1046,9 +1011,13 @@ impl Pane {
     /// This is a low-level method. Prefer `unpreview_item_if_preview()` or `set_new_preview_item()`.
     pub(crate) fn set_preview_item_id(&mut self, item_id: Option<EntityId>, cx: &App) {
         if item_id.is_none() || PreviewTabsSettings::get_global(cx).enabled {
-            self.preview_item_id = item_id;
-            self.nav_history.0.lock().preview_item_id = item_id;
+            let old_item_id = mem::replace(&mut self.preview_item_id, item_id);
+            self.nav_history.set_preview_item(old_item_id, item_id);
         }
+    }
+
+    pub const fn set_read_only_tabs(&mut self, read_only_tabs: bool) {
+        self.read_only_tabs = read_only_tabs;
     }
 
     /// Should only be used when deserializing a pane.
@@ -1196,7 +1165,7 @@ impl Pane {
         if item_idx < prev_active_item_index {
             self.active_item_index -= 1;
         }
-        self.nav_history.0.lock().preview_item_id = None;
+        self.nav_history.set_preview_item(Some(id), None);
 
         if item_idx < self.items.len() { Some(item_idx) } else { None }
     }
@@ -1776,7 +1745,7 @@ impl Pane {
                 continue;
             }
 
-            if self.is_tab_pinned(index) {
+            if self.is_tab_pinned(index) || self.items[index].is_permanent(cx) {
                 continue;
             }
 
@@ -1846,7 +1815,7 @@ impl Pane {
         // Find the items to close.
         let mut items_to_close = Vec::new();
         for item in &self.items {
-            if should_close(item.item_id()) {
+            if should_close(item.item_id()) && !item.is_permanent(cx) {
                 items_to_close.push(item.boxed_clone());
             }
         }
@@ -2340,6 +2309,20 @@ impl Pane {
         }
     }
 
+    /// Opens `item`'s preview in this pane or beside it. Deferred, since opening
+    /// one updates this pane.
+    fn open_preview(&self, item: Box<dyn ItemHandle>, to_the_side: bool, window: &Window, cx: &mut Context<Pane>) {
+        let workspace = self.workspace.clone();
+        let pane = cx.entity();
+        window.defer(cx, move |window, cx| {
+            workspace
+                .update(cx, |workspace, cx| {
+                    crate::preview::open_preview(workspace, item.as_ref(), pane, to_the_side, window, cx);
+                })
+                .ok();
+        });
+    }
+
     pub const fn toolbar(&self) -> &Entity<Toolbar> {
         &self.toolbar
     }
@@ -2356,7 +2339,7 @@ impl Pane {
             return;
         }
         self.nav_history.remove_items(&item_ids);
-        self.history_updated(cx);
+        self.nav_history.0.lock().did_update(cx);
     }
 
     pub fn handle_deleted_project_item(
@@ -2586,6 +2569,7 @@ impl Pane {
         let is_first_item = ix == 0;
         let is_last_item = ix == self.items.len() - 1;
         let is_pinned = self.is_tab_pinned(ix);
+        let is_permanent = item.is_permanent(cx);
         let position_relative_to_active_item = ix.cmp(&self.active_item_index);
 
         let read_only_toggle = |toggleable: bool| {
@@ -2654,25 +2638,12 @@ impl Pane {
                 pane.close_item_by_id(item_id, SaveIntent::Close, window, cx).detach_and_log_err(cx);
                 cx.stop_propagation();
             }))
+            .overlay(self.render_tab_drop_marker(TabDropSide::Before, Some(ix), cx))
+            .overlay(self.render_tab_drop_marker(TabDropSide::After, Some(ix), cx))
             .on_drag(
                 DraggedTab { item: item.boxed_clone(), pane: cx.entity(), detail, is_active, ix },
                 |tab, _, _, cx| cx.new(|_| tab.clone()),
             )
-            .drag_over::<DraggedTab>(move |tab, dragged_tab: &DraggedTab, _, cx| {
-                let mut styled_tab = tab
-                    .bg(cx.theme().colors().drop_target_background)
-                    .border_color(cx.theme().colors().drop_target_border)
-                    .border_0();
-
-                if ix < dragged_tab.ix {
-                    styled_tab = styled_tab.border_l_2();
-                } else if ix > dragged_tab.ix {
-                    styled_tab = styled_tab.border_r_2();
-                }
-
-                styled_tab
-            })
-            .drag_over::<DraggedSelection>(|tab, _, _, cx| tab.bg(cx.theme().colors().drop_target_background))
             .when_some(self.can_drop_predicate.clone(), |this, p| this.can_drop(move |a, window, cx| p(a, window, cx)))
             .on_drop(cx.listener(move |this, dragged_tab: &DraggedTab, window, cx| {
                 this.drag_split_direction = None;
@@ -2687,12 +2658,8 @@ impl Pane {
                 this.handle_external_paths_drop(paths, window, cx)
             }))
             .start_slot::<Indicator>(indicator)
-            .map(|this| {
-                let end_slot_action: &'static dyn Action;
-                let end_slot_tooltip_text: &'static str;
+            .when(!is_permanent, |this| {
                 let end_slot = if is_pinned {
-                    end_slot_action = &TogglePinTab;
-                    end_slot_tooltip_text = "Unpin Tab";
                     IconButton::new("unpin tab", IconName::Pin)
                         .shape(IconButtonShape::Square)
                         .icon_color(Color::Muted)
@@ -2701,37 +2668,39 @@ impl Pane {
                         .on_click(cx.listener(move |pane, _, window, cx| {
                             pane.unpin_tab_at(ix, window, cx);
                         }))
+                        .map(|this| {
+                            if is_active {
+                                let focus_handle = focus_handle.clone();
+                                this.tooltip(move |window, cx| {
+                                    Tooltip::for_action_in(
+                                        "Unpin Tab",
+                                        &TogglePinTab,
+                                        &window.focused(cx).unwrap_or_else(|| focus_handle.clone()),
+                                        cx,
+                                    )
+                                })
+                            } else {
+                                this.tooltip(Tooltip::text("Unpin Tab"))
+                            }
+                        })
                 } else {
-                    end_slot_action = &CloseActiveItem { save_intent: None, close_pinned: false };
-                    end_slot_tooltip_text = "Close Tab";
+                    // Quiet close button: no fill and no tooltip, only the icon
+                    // brightening on hover.
                     match show_close_button {
                         ShowCloseButton::Always => IconButton::new("close tab", IconName::Close),
                         ShowCloseButton::Hover => IconButton::new("close tab", IconName::Close).visible_on_hover(""),
                         ShowCloseButton::Hidden => return this,
                     }
                     .shape(IconButtonShape::Square)
+                    .style(ButtonStyle::Transparent)
                     .icon_color(Color::Muted)
+                    .hover_color(Color::Default)
                     .size(ButtonSize::None)
                     .icon_size(IconSize::Small)
                     .on_click(cx.listener(move |pane, _, window, cx| {
                         pane.close_item_by_id(item_id, SaveIntent::Close, window, cx).detach_and_log_err(cx);
                     }))
-                }
-                .map(|this| {
-                    if is_active {
-                        let focus_handle = focus_handle.clone();
-                        this.tooltip(move |window, cx| {
-                            Tooltip::for_action_in(
-                                end_slot_tooltip_text,
-                                end_slot_action,
-                                &window.focused(cx).unwrap_or_else(|| focus_handle.clone()),
-                                cx,
-                            )
-                        })
-                    } else {
-                        this.tooltip(Tooltip::text(end_slot_tooltip_text))
-                    }
-                });
+                };
                 this.end_slot(end_slot)
             })
             .child(
@@ -2777,6 +2746,7 @@ impl Pane {
         let has_items_to_right = ix < total_items - 1;
         let has_clean_items = self.items.iter().any(|item| !item.is_dirty(cx));
         let is_pinned = self.is_tab_pinned(ix);
+        let read_only_tabs = self.read_only_tabs;
 
         let pane = cx.entity().downgrade();
         let menu_context = item.item_focus_handle(cx);
@@ -2786,6 +2756,8 @@ impl Pane {
             let pane = pane.clone();
             let menu_context = menu_context.clone();
             let extra_actions = item_handle.tab_extra_context_menu_actions(window, cx);
+            let has_preview = crate::preview::has_preview(item_handle.as_ref(), cx);
+            let item_handle = item_handle.boxed_clone();
             ContextMenu::build(window, cx, move |mut menu, window, cx| {
                 let close_active_item_action = CloseActiveItem { save_intent: None, close_pinned: true };
                 let close_inactive_items_action = CloseOtherItems { save_intent: None, close_pinned: false };
@@ -2796,13 +2768,15 @@ impl Pane {
                 let close_all_items_action = CloseAllItems { save_intent: None, close_pinned: false };
                 if let Some(pane) = pane.upgrade() {
                     menu = menu
-                        .entry(
-                            "Close",
-                            Some(Box::new(close_active_item_action)),
-                            window.handler_for(&pane, move |pane, window, cx| {
-                                pane.close_item_by_id(item_id, SaveIntent::Close, window, cx).detach_and_log_err(cx);
-                            }),
-                        )
+                        .item(ContextMenuItem::Entry(
+                            ContextMenuEntry::new("Close")
+                                .action(Box::new(close_active_item_action))
+                                .disabled(is_permanent)
+                                .handler(window.handler_for(&pane, move |pane, window, cx| {
+                                    pane.close_item_by_id(item_id, SaveIntent::Close, window, cx)
+                                        .detach_and_log_err(cx);
+                                })),
+                        ))
                         .item(ContextMenuItem::Entry(
                             ContextMenuEntry::new("Close Others")
                                 .action(Box::new(close_inactive_items_action.clone()))
@@ -2813,7 +2787,7 @@ impl Pane {
                                 })),
                         ))
                         // We make this optional, instead of using disabled as to not overwhelm the context menu unnecessarily
-                        .extend(has_multibuffer_items.then(|| {
+                        .extend((has_multibuffer_items && !read_only_tabs).then(|| {
                             ContextMenuItem::Entry(
                                 ContextMenuEntry::new("Close Multibuffers")
                                     .action(Box::new(close_multibuffers_action.clone()))
@@ -2853,14 +2827,17 @@ impl Pane {
                                 })),
                         ))
                         .separator()
-                        .item(ContextMenuItem::Entry(
-                            ContextMenuEntry::new("Close Clean")
-                                .action(Box::new(close_clean_items_action.clone()))
-                                .disabled(!has_clean_items)
-                                .handler(window.handler_for(&pane, move |pane, window, cx| {
-                                    pane.close_clean_items(&close_clean_items_action, window, cx).detach_and_log_err(cx)
-                                })),
-                        ))
+                        .extend((!read_only_tabs).then(|| {
+                            ContextMenuItem::Entry(
+                                ContextMenuEntry::new("Close Clean")
+                                    .action(Box::new(close_clean_items_action.clone()))
+                                    .disabled(!has_clean_items)
+                                    .handler(window.handler_for(&pane, move |pane, window, cx| {
+                                        pane.close_clean_items(&close_clean_items_action, window, cx)
+                                            .detach_and_log_err(cx)
+                                    })),
+                            )
+                        }))
                         .entry(
                             "Close All",
                             Some(Box::new(close_all_items_action.clone())),
@@ -2870,6 +2847,9 @@ impl Pane {
                         );
 
                     let pin_tab_entries = |menu: ContextMenu| {
+                        if is_permanent {
+                            return menu;
+                        }
                         menu.separator().map(|this| {
                             if is_pinned {
                                 this.entry(
@@ -2891,7 +2871,7 @@ impl Pane {
                         })
                     };
 
-                    if capability != Capability::ReadOnly {
+                    if capability != Capability::ReadOnly && !read_only_tabs {
                         let read_only_label =
                             if capability.editable() { "Make Tab Read-Only" } else { "Make Tab Editable" };
                         menu = menu.separator().entry(
@@ -3015,16 +2995,72 @@ impl Pane {
                 };
 
                 // Add custom item-specific actions
-                if !extra_actions.is_empty() {
+                if !extra_actions.is_empty() || has_preview {
                     menu = menu.separator();
-                    for (label, action) in extra_actions {
-                        menu = menu.action(label, action);
-                    }
+                }
+                if has_preview && let Some(pane) = pane.upgrade() {
+                    let item_handle = item_handle.boxed_clone();
+                    menu = menu.entry(
+                        "Open Preview",
+                        Some(Box::new(crate::preview::OpenPreview)),
+                        window.handler_for(&pane, move |pane, window, cx| {
+                            pane.open_preview(item_handle.boxed_clone(), false, window, cx);
+                        }),
+                    );
+                }
+                for (label, action) in extra_actions {
+                    menu = menu.action(label, action);
                 }
 
                 menu.context(menu_context)
             })
         })
+    }
+
+    /// A thin accent bar in the gap on `side` of a tab (or tab-bar strip), shown while a drag that
+    /// would land there is over it. With `target_ix`, a dragged tab only shows the side it lands on.
+    fn render_tab_drop_marker(&self, side: TabDropSide, target_ix: Option<usize>, cx: &Context<Pane>) -> Div {
+        let pane_id = cx.entity_id();
+        let offset = -(Tab::spacing(self.tab_style, cx) + TAB_DROP_MARKER_WIDTH) / 2.;
+        div()
+            .absolute()
+            .inset_0()
+            .invisible()
+            .when_some(self.can_drop_predicate.clone(), |this, p| this.can_drop(move |a, window, cx| p(a, window, cx)))
+            .drag_over::<DraggedTab>(move |style, dragged_tab: &DraggedTab, _, _| {
+                let lands_here = match target_ix {
+                    Some(ix) => {
+                        let dragged_ix = (dragged_tab.pane.entity_id() == pane_id).then_some(dragged_tab.ix);
+                        tab_drop_side(dragged_ix, ix) == Some(side)
+                    }
+                    None => true,
+                };
+                if lands_here { style.visible() } else { style }
+            })
+            .drag_over::<DraggedSelection>(
+                move |style, _, _, _| {
+                    if side == TabDropSide::Before { style.visible() } else { style }
+                },
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(relative(0.2))
+                    .bottom(relative(0.2))
+                    .w(TAB_DROP_MARKER_WIDTH)
+                    .rounded_full()
+                    .bg(cx.theme().colors().drop_target_border())
+                    .map(|bar| match side {
+                        TabDropSide::Before => bar.left(offset),
+                        TabDropSide::After => bar.right(offset),
+                    }),
+            )
+    }
+
+    /// Outlined, filled box marking a drop target area; callers set the corner radius.
+    fn drop_target_style<E: Styled>(colors: &ThemeColors) -> impl FnOnce(E) -> E + use<E> {
+        let (border, background) = (colors.drop_target_border(), colors.drop_target_background());
+        move |el| el.border_1().border_color(border).bg(background)
     }
 
     /// The floating card: rounded, card-coloured, with square content corners kept inside.
@@ -3033,50 +3069,22 @@ impl Pane {
         move |el| el.rounded(crate::CARD_RADIUS).bg(bg).p(crate::CARD_INSET)
     }
 
+    /// Painted over the card's content: a card-coloured ring filling the
+    /// `CARD_INSET` padding whose inner edge is rounded concentric with the
+    /// card, so content painted into a corner (active line, minimap thumb, diff
+    /// backgrounds) is trimmed to the card's curve. The ring's outer radius
+    /// covers the content corners because `CARD_INSET >= radius * (1 - 1/sqrt 2)`.
+    fn card_corner_mask_style<E: Styled>(colors: &ThemeColors) -> impl FnOnce(E) -> E + use<E> {
+        let bg = colors.editor_background;
+        move |el| el.absolute().inset_0().rounded(crate::CARD_RADIUS).border(crate::CARD_INSET).border_color(bg)
+    }
+
     fn render_tab_bar(&mut self, window: &mut Window, cx: &mut Context<Pane>) -> AnyElement {
         if self.workspace.upgrade().is_none() {
             return gpui::Empty.into_any();
         }
 
         let focus_handle = self.focus_handle.clone();
-
-        let navigate_backward = IconButton::new("navigate_backward", IconName::ArrowLeft)
-            .icon_size(IconSize::Small)
-            .on_click({
-                let entity = cx.entity();
-                move |_, window, cx| entity.update(cx, |pane, cx| pane.navigate_backward(&GoBack, window, cx))
-            })
-            .disabled(!self.can_navigate_backward())
-            .tooltip({
-                let focus_handle = focus_handle.clone();
-                move |window, cx| {
-                    Tooltip::for_action_in(
-                        "Go Back",
-                        &GoBack,
-                        &window.focused(cx).unwrap_or_else(|| focus_handle.clone()),
-                        cx,
-                    )
-                }
-            });
-
-        let navigate_forward = IconButton::new("navigate_forward", IconName::ArrowRight)
-            .icon_size(IconSize::Small)
-            .on_click({
-                let entity = cx.entity();
-                move |_, window, cx| entity.update(cx, |pane, cx| pane.navigate_forward(&GoForward, window, cx))
-            })
-            .disabled(!self.can_navigate_forward())
-            .tooltip({
-                let focus_handle = focus_handle.clone();
-                move |window, cx| {
-                    Tooltip::for_action_in(
-                        "Go Forward",
-                        &GoForward,
-                        &window.focused(cx).unwrap_or_else(|| focus_handle.clone()),
-                        cx,
-                    )
-                }
-            });
 
         let mut tab_items = self
             .items
@@ -3105,49 +3113,21 @@ impl Pane {
         let use_separate_rows = tab_bar_settings.show_pinned_tabs_in_separate_row;
 
         if use_separate_rows && !pinned_tabs.is_empty() && !unpinned_tabs.is_empty() {
-            self.render_two_row_tab_bar(
-                pinned_tabs,
-                unpinned_tabs,
-                tab_count,
-                navigate_backward,
-                navigate_forward,
-                window,
-                cx,
-            )
+            self.render_two_row_tab_bar(pinned_tabs, unpinned_tabs, tab_count, window, cx)
         } else {
-            self.render_single_row_tab_bar(
-                pinned_tabs,
-                unpinned_tabs,
-                tab_count,
-                navigate_backward,
-                navigate_forward,
-                window,
-                cx,
-            )
+            self.render_single_row_tab_bar(pinned_tabs, unpinned_tabs, tab_count, window, cx)
         }
     }
 
-    fn configure_tab_bar_start(
-        &mut self,
-        tab_bar: TabBar,
-        navigate_backward: IconButton,
-        navigate_forward: IconButton,
-        window: &mut Window,
-        cx: &mut Context<Pane>,
-    ) -> TabBar {
-        tab_bar
-            .when(self.display_nav_history_buttons.unwrap_or_default(), |tab_bar| {
-                tab_bar.start_child(navigate_backward).start_child(navigate_forward)
-            })
-            .map(|tab_bar| {
-                if self.show_tab_bar_buttons {
-                    let render_tab_buttons = self.render_tab_bar_buttons.clone();
-                    let (left_children, right_children) = render_tab_buttons(self, window, cx);
-                    tab_bar.start_children(left_children).end_children(right_children)
-                } else {
-                    tab_bar
-                }
-            })
+    fn configure_tab_bar_start(&mut self, tab_bar: TabBar, window: &mut Window, cx: &mut Context<Pane>) -> TabBar {
+        let tab_bar = tab_bar.start_children(self.tab_bar_header.clone());
+        if self.show_tab_bar_buttons {
+            let render_tab_buttons = self.render_tab_bar_buttons.clone();
+            let (left_children, right_children) = render_tab_buttons(self, window, cx);
+            tab_bar.start_children(left_children).end_children(right_children)
+        } else {
+            tab_bar
+        }
     }
 
     fn render_single_row_tab_bar(
@@ -3155,19 +3135,11 @@ impl Pane {
         pinned_tabs: Vec<AnyElement>,
         unpinned_tabs: Vec<AnyElement>,
         tab_count: usize,
-        navigate_backward: IconButton,
-        navigate_forward: IconButton,
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> AnyElement {
         let tab_bar = self
-            .configure_tab_bar_start(
-                TabBar::new("tab_bar").style(self.tab_style),
-                navigate_backward,
-                navigate_forward,
-                window,
-                cx,
-            )
+            .configure_tab_bar_start(TabBar::new("tab_bar").style(self.tab_style), window, cx)
             .children(pinned_tabs.len().ne(&0).then(|| {
                 let max_scroll = self.tab_bar_scroll_handle.max_offset().x;
                 // We need to check both because offset returns delta values even when the scroll handle is not scrollable
@@ -3191,20 +3163,11 @@ impl Pane {
         pinned_tabs: Vec<AnyElement>,
         unpinned_tabs: Vec<AnyElement>,
         tab_count: usize,
-        navigate_backward: IconButton,
-        navigate_forward: IconButton,
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> AnyElement {
-        let pinned_tab_bar = self
-            .configure_tab_bar_start(
-                TabBar::new("pinned_tab_bar").style(self.tab_style),
-                navigate_backward,
-                navigate_forward,
-                window,
-                cx,
-            )
-            .child(
+        let pinned_tab_bar =
+            self.configure_tab_bar_start(TabBar::new("pinned_tab_bar").style(self.tab_style), window, cx).child(
                 h_flex()
                     .id("pinned_tabs_row")
                     .overflow_x_scroll()
@@ -3251,8 +3214,8 @@ impl Pane {
             // HACK: This empty child is currently necessary to force the drop target to appear
             // despite us setting a min width above.
             .child("")
-            .drag_over::<DraggedTab>(|bar, _, _, cx| bar.bg(cx.theme().colors().drop_target_background))
-            .drag_over::<DraggedSelection>(|bar, _, _, cx| bar.bg(cx.theme().colors().drop_target_background))
+            .relative()
+            .child(self.render_tab_drop_marker(TabDropSide::Before, None, cx))
             .on_drop(cx.listener(move |this, dragged_tab: &DraggedTab, window, cx| {
                 this.drag_split_direction = None;
                 this.handle_tab_drop(dragged_tab, this.items.len(), false, window, cx)
@@ -3265,11 +3228,7 @@ impl Pane {
                 this.drag_split_direction = None;
                 this.handle_external_paths_drop(paths, window, cx)
             }))
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if event.click_count() == 2 {
-                    window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
-                }
-            }))
+            .map(|this| self.tab_bar_empty_space_behaviour(this, cx))
     }
 
     fn render_pinned_tab_bar_drop_target(&self, cx: &Context<Pane>) -> impl IntoElement {
@@ -3283,8 +3242,8 @@ impl Pane {
             // HACK: This empty child is currently necessary to force the drop target to appear
             // despite us setting a min width above.
             .child("")
-            .drag_over::<DraggedTab>(|bar, _, _, cx| bar.bg(cx.theme().colors().drop_target_background))
-            .drag_over::<DraggedSelection>(|bar, _, _, cx| bar.bg(cx.theme().colors().drop_target_background))
+            .relative()
+            .child(self.render_tab_drop_marker(TabDropSide::Before, None, cx))
             .on_drop(cx.listener(move |this, dragged_tab: &DraggedTab, window, cx| {
                 this.drag_split_direction = None;
                 this.handle_pinned_tab_bar_drop(dragged_tab, window, cx)
@@ -3302,46 +3261,31 @@ impl Pane {
                 this.drag_split_direction = None;
                 this.handle_external_paths_drop(paths, window, cx)
             }))
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if event.click_count() == 2 {
-                    window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
-                }
-            }))
+            .map(|this| self.tab_bar_empty_space_behaviour(this, cx))
+    }
+
+    /// Empty tab bar space in the window's top row moves and zooms the window
+    /// like a titlebar; elsewhere a double click runs the pane's double-click action.
+    fn tab_bar_empty_space_behaviour(&self, element: Stateful<Div>, cx: &Context<Pane>) -> Stateful<Div> {
+        if self.tab_bar_is_titlebar {
+            return ui::utils::window_drag_area(element);
+        }
+        element.on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+            if event.click_count() == 2 {
+                window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
+            }
+        }))
     }
 
     /// Keybinding hints shown in an empty pane, styled like the project search landing page.
     fn render_empty_pane_hints(&self, cx: &App) -> impl IntoElement {
         let focus_handle = self.focus_handle.clone();
-        let hint = |id: &'static str, label: &'static str, icon: IconName, action: Box<dyn Action>| {
+        v_flex().gap_1().children(empty_pane_hints().into_iter().map(|(id, label, icon, action)| {
             Button::new(id, label)
                 .start_icon(Icon::new(icon).size(IconSize::Small))
                 .key_binding(KeyBinding::for_action_in(action.as_ref(), &focus_handle, cx))
                 .on_click(move |_event, window, cx| window.dispatch_action(action.boxed_clone(), cx))
-        };
-        v_flex()
-            .gap_1()
-            .child(hint("empty-pane-open-file", "Open File", IconName::FolderOpen, Open::DEFAULT.boxed_clone()))
-            .child(hint(
-                "empty-pane-go-to-file",
-                "Go to File",
-                IconName::MagnifyingGlass,
-                ToggleFileFinder::default().boxed_clone(),
-            ))
-            .child(hint(
-                "empty-pane-command-palette",
-                "Command Palette",
-                IconName::Command,
-                ed_actions::command_palette::Toggle.boxed_clone(),
-            ))
-    }
-
-    pub fn render_menu_overlay(menu: &Entity<ContextMenu>) -> Div {
-        div()
-            .absolute()
-            .bottom_0()
-            .right_0()
-            .size_0()
-            .child(deferred(anchored().anchor(Anchor::TopRight).child(menu.clone())).with_priority(1))
+        }))
     }
 
     pub fn set_zoomed(&mut self, zoomed: bool, cx: &mut Context<Self>) {
@@ -3360,7 +3304,10 @@ impl Pane {
             None => false,
         };
         self.can_split_predicate = can_split_predicate;
-        if !can_split {
+        let from_this_pane =
+            event.dragged_item().downcast_ref::<DraggedTab>().is_some_and(|tab| tab.pane == cx.entity());
+        if !can_split || drags_out_only_tab(from_this_pane, self.items_len()) {
+            self.drag_split_direction = None;
             return;
         }
 
@@ -3416,8 +3363,6 @@ impl Pane {
         let item_id = dragged_tab.item.item_id();
         self.unpreview_item_if_preview(item_id);
 
-        let is_clone = true && window.modifiers().alt || false && window.modifiers().control;
-
         let from_pane = dragged_tab.pane.clone();
 
         self.workspace
@@ -3426,35 +3371,11 @@ impl Pane {
                     if let Some(split_direction) = split_direction {
                         to_pane = workspace.split_pane(to_pane, split_direction, window, cx);
                     }
-                    let database_id = workspace.database_id();
                     let was_pinned_in_from_pane = from_pane.read_with(cx, |pane, _| {
                         pane.index_for_item_id(item_id).is_some_and(|ix| pane.is_tab_pinned(ix))
                     });
                     let to_pane_old_length = to_pane.read(cx).items.len();
-                    if is_clone {
-                        let Some(item) = from_pane.read(cx).items().find(|item| item.item_id() == item_id).cloned()
-                        else {
-                            return;
-                        };
-                        if item.can_split(cx) {
-                            let task = item.clone_on_split(database_id, window, cx);
-                            let to_pane = to_pane.downgrade();
-                            cx.spawn_in(window, async move |_, cx| {
-                                if let Some(item) = task.await {
-                                    to_pane
-                                        .update_in(cx, |pane, window, cx| {
-                                            pane.add_item(item, true, true, None, window, cx)
-                                        })
-                                        .ok();
-                                }
-                            })
-                            .detach();
-                        } else {
-                            move_item(&from_pane, &to_pane, item_id, ix, true, window, cx);
-                        }
-                    } else {
-                        move_item(&from_pane, &to_pane, item_id, ix, true, window, cx);
-                    }
+                    move_item(&from_pane, &to_pane, item_id, ix, true, window, cx);
                     to_pane.update(cx, |this, _| {
                         if to_pane == from_pane {
                             let actual_ix = this.items.iter().position(|item| item.item_id() == item_id).unwrap_or(0);
@@ -3694,10 +3615,6 @@ impl Pane {
             .log_err();
     }
 
-    pub const fn display_nav_history_buttons(&mut self, display: Option<bool>) {
-        self.display_nav_history_buttons = display;
-    }
-
     fn pinned_item_ids(&self) -> Vec<EntityId> {
         self.items
             .iter()
@@ -3751,86 +3668,82 @@ impl Pane {
     }
 }
 
+/// The preview and Zoom buttons, shared by every pane tab bar so they look and
+/// behave the same everywhere. Zoom stays rightmost, so a hidden preview button
+/// doesn't move it. There are no split buttons: panes split by dragging a tab to an edge.
+pub fn render_tab_bar_pane_buttons(pane: &Pane, cx: &mut Context<Pane>) -> Vec<AnyElement> {
+    let mut buttons: Vec<AnyElement> = crate::preview::render_tab_bar_preview_button(pane, cx).into_iter().collect();
+    buttons.push(render_tab_bar_zoom_button(pane, cx));
+    buttons
+}
+
+/// The Zoom button alone, for panes that can zoom but never split.
+pub fn render_tab_bar_zoom_button(pane: &Pane, cx: &mut Context<Pane>) -> AnyElement {
+    let zoomed = pane.is_zoomed();
+    IconButton::new("toggle_zoom", IconName::Maximize)
+        .icon_size(IconSize::Small)
+        .toggle_state(zoomed)
+        .selected_icon(IconName::Minimize)
+        .on_click(cx.listener(|pane, _, window, cx| {
+            pane.toggle_zoom(&ToggleZoom, window, cx);
+        }))
+        .tooltip(move |_window, cx| Tooltip::for_action(if zoomed { "Zoom Out" } else { "Zoom In" }, &ToggleZoom, cx))
+        .into_any_element()
+}
+
+/// Rows of the empty pane's hints, top to bottom: id, label, icon, action.
+/// New File leads because a double click on a titlebar tab bar can't create one.
+fn empty_pane_hints() -> [(&'static str, &'static str, IconName, Box<dyn Action>); 4] {
+    [
+        ("empty-pane-new-file", "New File", IconName::Plus, NewFile.boxed_clone()),
+        ("empty-pane-open-file", "Open File", IconName::FolderOpen, Open::DEFAULT.boxed_clone()),
+        ("empty-pane-go-to-file", "Go to File", IconName::MagnifyingGlass, ToggleFileFinder::default().boxed_clone()),
+        (
+            "empty-pane-command-palette",
+            "Command Palette",
+            IconName::Command,
+            ed_actions::command_palette::Toggle.boxed_clone(),
+        ),
+    ]
+}
+
+/// Center (editor) panes get a "+" left of the shared buttons that opens an
+/// untitled file in the pane: a top-row tab bar's empty space acts as a
+/// titlebar, so a double click there can't create one.
+pub fn set_editor_tab_bar_buttons(pane: &mut Pane, cx: &mut Context<Pane>) {
+    pane.set_render_tab_bar_buttons(cx, |pane, window, cx| {
+        if !pane.has_focus(window, cx) {
+            return (None, None);
+        }
+        let right_children = h_flex()
+            .gap(DynamicSpacing::Base02.rems())
+            .child(
+                IconButton::new("new_file", IconName::Plus)
+                    .icon_size(IconSize::Small)
+                    .on_click(|_, window, cx| window.dispatch_action(NewFile.boxed_clone(), cx))
+                    .tooltip(Tooltip::for_action_title("New File", &NewFile)),
+            )
+            .children(render_tab_bar_pane_buttons(pane, cx))
+            .into_any_element()
+            .into();
+        (None, right_children)
+    });
+}
+
 fn default_render_tab_bar_buttons(
     pane: &mut Pane,
     window: &mut Window,
     cx: &mut Context<Pane>,
 ) -> (Option<AnyElement>, Option<AnyElement>) {
-    if !pane.has_focus(window, cx) && !pane.context_menu_focused(window, cx) {
+    if !pane.has_focus(window, cx) {
         return (None, None);
     }
-    let (can_clone, can_split_move) = match pane.active_item() {
-        Some(active_item) if active_item.can_split(cx) => (true, false),
-        Some(_) => (false, pane.items_len() > 1),
-        None => (false, false),
-    };
     // Ideally we would return a vec of elements here to pass directly to the [TabBar]'s
     // `end_slot`, but due to needing a view here that isn't possible.
     let right_children = h_flex()
         // Instead we need to replicate the spacing from the [TabBar]'s `end_slot` here.
         .gap(DynamicSpacing::Base04.rems())
-        .child(
-            PopoverMenu::new("pane-tab-bar-popover-menu")
-                .trigger_with_tooltip(
-                    IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
-                    Tooltip::text("New…"),
-                )
-                .anchor(Anchor::TopRight)
-                .with_handle(pane.new_item_context_menu_handle.clone())
-                .menu(move |window, cx| {
-                    Some(ContextMenu::build(window, cx, |menu, _, _| {
-                        menu.action("New File", NewFile.boxed_clone())
-                            .action("Open File", ToggleFileFinder::default().boxed_clone())
-                            .separator()
-                            .action("Search Project", DeploySearch::default().boxed_clone())
-                            .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
-                            .separator()
-                            .action("New Terminal", NewTerminal::default().boxed_clone())
-                            .action("New Center Terminal", NewCenterTerminal::default().boxed_clone())
-                    }))
-                }),
-        )
-        .child(
-            PopoverMenu::new("pane-tab-bar-split")
-                .trigger_with_tooltip(
-                    IconButton::new("split", IconName::Split)
-                        .icon_size(IconSize::Small)
-                        .disabled(!can_clone && !can_split_move),
-                    Tooltip::text("Split Pane"),
-                )
-                .anchor(Anchor::TopRight)
-                .with_handle(pane.split_item_context_menu_handle.clone())
-                .menu(move |window, cx| {
-                    ContextMenu::build(window, cx, |menu, _, _| {
-                        let mode = SplitMode::MovePane;
-                        if can_split_move {
-                            menu.action("Split Right", SplitRight { mode }.boxed_clone())
-                                .action("Split Left", SplitLeft { mode }.boxed_clone())
-                                .action("Split Up", SplitUp { mode }.boxed_clone())
-                                .action("Split Down", SplitDown { mode }.boxed_clone())
-                        } else {
-                            menu.action("Split Right", SplitRight::default().boxed_clone())
-                                .action("Split Left", SplitLeft::default().boxed_clone())
-                                .action("Split Up", SplitUp::default().boxed_clone())
-                                .action("Split Down", SplitDown::default().boxed_clone())
-                        }
-                    })
-                    .into()
-                }),
-        )
-        .child({
-            let zoomed = pane.is_zoomed();
-            IconButton::new("toggle_zoom", IconName::Maximize)
-                .icon_size(IconSize::Small)
-                .toggle_state(zoomed)
-                .selected_icon(IconName::Minimize)
-                .on_click(cx.listener(|pane, _, window, cx| {
-                    pane.toggle_zoom(&crate::ToggleZoom, window, cx);
-                }))
-                .tooltip(move |_window, cx| {
-                    Tooltip::for_action(if zoomed { "Zoom Out" } else { "Zoom In" }, &ToggleZoom, cx)
-                })
-        })
+        .children(render_tab_bar_pane_buttons(pane, cx))
         .into_any_element()
         .into();
     (None, right_children)
@@ -3850,10 +3763,9 @@ impl Render for Pane {
             key_context.add("EmptyPane");
         }
 
-        self.toolbar.read(cx).contribute_context(&mut key_context, cx);
-
         let should_display_tab_bar = self.should_display_tab_bar.clone();
-        let display_tab_bar = should_display_tab_bar(window, cx);
+        // The window chrome lives in the tab bar, so a pane holding it always shows one.
+        let display_tab_bar = should_display_tab_bar(window, cx) || self.tab_bar_header.is_some();
         let pill_tabs = self.tab_style == TabStyle::Pill;
         self.tab_bar_displayed = display_tab_bar && !pill_tabs;
         let Some(project) = self.project.upgrade() else {
@@ -3864,12 +3776,28 @@ impl Render for Pane {
             project.is_local()
         };
 
+        let has_preview = self.active_item().is_some_and(|item| crate::preview::has_preview(item.as_ref(), cx));
+
         v_flex()
             .key_context(key_context)
             .track_focus(&self.focus_handle(cx))
             .size_full()
             .flex_none()
             .overflow_hidden()
+            .when(has_preview, |this| {
+                this.on_action(cx.listener(|pane, _: &crate::preview::OpenPreview, window, cx| {
+                    if let Some(item) = pane.active_item() {
+                        pane.open_preview(item, false, window, cx);
+                    }
+                }))
+                .on_action(cx.listener(
+                    |pane, _: &crate::preview::OpenPreviewToTheSide, window, cx| {
+                        if let Some(item) = pane.active_item() {
+                            pane.open_preview(item, true, window, cx);
+                        }
+                    },
+                ))
+            })
             .on_action(cx.listener(|pane, split: &SplitLeft, window, cx| {
                 pane.split(SplitDirection::Left, split.mode, window, cx)
             }))
@@ -3909,8 +3837,6 @@ impl Render for Pane {
             .on_action(cx.listener(Pane::toggle_zoom))
             .on_action(cx.listener(Pane::zoom_in))
             .on_action(cx.listener(Pane::zoom_out))
-            .on_action(cx.listener(Self::navigate_backward))
-            .on_action(cx.listener(Self::navigate_forward))
             .on_action(cx.listener(Self::go_to_older_tag))
             .on_action(cx.listener(Self::go_to_newer_tag))
             .on_action(cx.listener(|pane: &mut Pane, action: &ActivateItem, window, cx| {
@@ -3992,16 +3918,30 @@ impl Render for Pane {
                     cx.propagate();
                 }
             }))
+            // A top-row tab bar keeps the card gap from the window edge; the gap moves the window.
+            .when(display_tab_bar && !pill_tabs && self.tab_bar_is_titlebar, |pane| {
+                pane.child(
+                    ui::utils::window_drag_area(div().id("tab-bar-top-gap")).flex_none().w_full().h(crate::CARD_GAP),
+                )
+            })
             .when(display_tab_bar && !pill_tabs, |pane| {
                 if self.active_item().is_some() {
-                    pane.child((self.render_tab_bar.clone())(self, window, cx))
+                    let tab_bar = (self.render_tab_bar.clone())(self, window, cx);
+                    pane.child(self.with_tab_bar_header_room(tab_bar))
+                } else if self.tab_bar_header.is_some() || self.tab_bar_is_titlebar {
+                    // Still window chrome: keep the header and the space that moves the window.
+                    let tab_bar = TabBar::new("tab_bar")
+                        .style(self.tab_style)
+                        .start_children(self.tab_bar_header.clone())
+                        .child(self.render_tab_bar_drop_target(0, cx))
+                        .into_any_element();
+                    pane.child(self.with_tab_bar_header_room(tab_bar))
                 } else {
                     // Keep the card's top edge where it sits when tabs are open.
                     pane.child(div().flex_none().h(Tab::container_height(cx)))
                 }
             })
             .child({
-                let has_worktrees = project.read(cx).visible_worktrees(cx).next().is_some();
                 // main content
                 let content = div()
                     .flex_1()
@@ -4025,34 +3965,31 @@ impl Render for Pane {
                                 .child(self.toolbar.clone())
                                 .child(item.to_any_view())
                         } else {
-                            let placeholder =
-                                div.id("pane_placeholder").h_flex().size_full().justify_center().on_click(cx.listener(
-                                    move |this, event: &ClickEvent, window, cx| {
-                                        if event.click_count() == 2 {
-                                            window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
-                                        }
-                                    },
-                                ));
-                            if has_worktrees || !self.should_display_welcome_page {
-                                placeholder.items_center().child(self.render_empty_pane_hints(cx))
-                            } else {
-                                if self.welcome_page.is_none() {
-                                    let workspace = self.workspace.clone();
-                                    self.welcome_page = Some(
-                                        cx.new(|cx| crate::welcome::WelcomePage::new(workspace, true, window, cx)),
-                                    );
-                                }
-                                placeholder.child(self.welcome_page.clone().unwrap())
-                            }
+                            div.id("pane_placeholder")
+                                .h_flex()
+                                .size_full()
+                                .justify_center()
+                                .items_center()
+                                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                    if event.click_count() == 2 {
+                                        window.dispatch_action(this.double_click_dispatch_action.boxed_clone(), cx);
+                                    }
+                                }))
+                                .child(self.render_empty_pane_hints(cx))
                         }
                         .focus_follows_mouse(self.focus_follows_mouse, cx)
+                    })
+                    // Below the drag target, whose border runs along the card edge.
+                    .when(!pill_tabs, |content| {
+                        content.child(div().map(Self::card_corner_mask_style(cx.theme().colors())))
                     })
                     .child(
                         // drag target
                         div()
                             .invisible()
                             .absolute()
-                            .bg(cx.theme().colors().drop_target_background)
+                            .rounded(crate::CARD_RADIUS)
+                            .map(Self::drop_target_style(cx.theme().colors()))
                             .group_drag_over::<DraggedTab>("", |style| style.visible())
                             .group_drag_over::<DraggedSelection>("", |style| style.visible())
                             .when(accepts_external_paths, |div| {
@@ -4092,6 +4029,7 @@ impl Render for Pane {
                             card.child((self.render_tab_bar.clone())(self, window, cx))
                         })
                         .child(content)
+                        .child(div().map(Self::card_corner_mask_style(cx.theme().colors())))
                         .into_any_element()
                 } else {
                     content.into_any_element()
@@ -4101,10 +4039,8 @@ impl Render for Pane {
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|pane, _, window, cx| {
                     if let Some(workspace) = pane.workspace.upgrade() {
-                        let pane = cx.entity().downgrade();
                         window.defer(cx, move |window, cx| {
-                            workspace
-                                .update(cx, |workspace, cx| workspace.go_back(pane, window, cx).detach_and_log_err(cx))
+                            workspace.update(cx, |workspace, cx| workspace.go_back(window, cx).detach_and_log_err(cx))
                         })
                     }
                 }),
@@ -4113,11 +4049,9 @@ impl Render for Pane {
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|pane, _, window, cx| {
                     if let Some(workspace) = pane.workspace.upgrade() {
-                        let pane = cx.entity().downgrade();
                         window.defer(cx, move |window, cx| {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.go_forward(pane, window, cx).detach_and_log_err(cx)
-                            })
+                            workspace
+                                .update(cx, |workspace, cx| workspace.go_forward(window, cx).detach_and_log_err(cx))
                         })
                     }
                 }),
@@ -4127,7 +4061,7 @@ impl Render for Pane {
 
 impl ItemNavHistory {
     pub fn is_preview_item(&self) -> bool {
-        self.history.0.lock().preview_item_id == Some(self.item.id())
+        self.history.0.lock().preview_item_ids.contains(&self.item.id())
     }
 
     pub fn push<D: 'static + Any + Send + Sync>(&mut self, data: Option<D>, row: Option<u32>, cx: &mut App) {
@@ -4146,17 +4080,44 @@ impl ItemNavHistory {
             self.history.push_tag(origin_entry, target_entry);
         }
     }
-
-    pub fn pop_backward(&mut self, cx: &mut App) -> Option<NavigationEntry> {
-        self.history.pop(NavigationMode::GoingBack, cx)
-    }
-
-    pub fn pop_forward(&mut self, cx: &mut App) -> Option<NavigationEntry> {
-        self.history.pop(NavigationMode::GoingForward, cx)
-    }
 }
 
 impl NavHistory {
+    pub fn new(workspace: WeakEntity<Workspace>, next_timestamp: Arc<AtomicUsize>) -> NavHistory {
+        NavHistory(Arc::new(Mutex::new(NavHistoryState {
+            mode: NavigationMode::Normal,
+            backward_stack: VecDeque::default(),
+            forward_stack: VecDeque::default(),
+            closed_stack: VecDeque::default(),
+            tag_stack: VecDeque::default(),
+            tag_stack_pos: Default::default(),
+            paths_by_item: HashMap::default(),
+            workspace,
+            next_timestamp,
+            preview_item_ids: HashSet::default(),
+        })))
+    }
+
+    pub fn can_go_back(&self) -> bool {
+        !self.0.lock().backward_stack.is_empty()
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        !self.0.lock().forward_stack.is_empty()
+    }
+
+    /// Replaces one pane's preview tab, `old` with `new`, among the preview tabs of all
+    /// panes sharing this history.
+    fn set_preview_item(&self, old: Option<EntityId>, new: Option<EntityId>) {
+        let mut state = self.0.lock();
+        if let Some(old) = old {
+            state.preview_item_ids.remove(&old);
+        }
+        if let Some(new) = new {
+            state.preview_item_ids.insert(new);
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn for_each_entry(&self, cx: &App, f: &mut dyn FnMut(&NavigationEntry, (ProjectPath, Option<PathBuf>))) {
         let borrowed_history = self.0.lock();
@@ -4364,11 +4325,10 @@ impl NavHistory {
 }
 
 impl NavHistoryState {
+    /// Redraws the workspace, whose title bar shows whether back and forward can go anywhere.
     pub fn did_update(&self, cx: &mut App) {
-        if let Some(pane) = self.pane.upgrade() {
-            cx.defer(move |cx| {
-                pane.update(cx, |pane, cx| pane.history_updated(cx));
-            });
+        if let Some(workspace) = self.workspace.upgrade() {
+            cx.defer(move |cx| workspace.update(cx, |_, cx| cx.notify()));
         }
     }
 
@@ -4434,6 +4394,126 @@ impl Render for DraggedTab {
             cx,
         );
         let icon = self.pane.read(cx).tab_icon_element(self.item.as_ref(), self.is_active, window, cx);
-        Tab::new("").toggle_state(self.is_active).children(icon).child(label).render(window, cx).font(ui_font)
+        Tab::new("")
+            .floating()
+            .toggle_state(self.is_active)
+            .children(icon)
+            .child(label)
+            .render(window, cx)
+            .font(ui_font)
+    }
+}
+
+fn tab_strip_height(tab_bar_displayed: bool, is_titlebar: bool, tab_bar_height: Pixels) -> Pixels {
+    match (tab_bar_displayed, is_titlebar) {
+        (false, _) => px(0.),
+        (true, false) => tab_bar_height,
+        (true, true) => tab_bar_height + crate::CARD_GAP,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+
+    use gpui::EntityId;
+    use gpui::StyleRefinement;
+    use gpui::Styled;
+    use gpui::WeakEntity;
+    use gpui::px;
+    use theme::ThemeColors;
+
+    use super::NavHistory;
+    use super::Pane;
+    use super::TabDropSide;
+    use super::drags_out_only_tab;
+    use super::empty_pane_hints;
+    use super::tab_drop_side;
+    use super::tab_strip_height;
+
+    #[test]
+    fn test_tab_strip_height() {
+        assert_eq!(tab_strip_height(false, true, px(36.)), px(0.));
+        assert_eq!(tab_strip_height(true, false, px(36.)), px(36.));
+        assert_eq!(tab_strip_height(true, true, px(36.)), px(36.) + crate::CARD_GAP);
+    }
+
+    #[test]
+    fn card_inset_covers_square_content_corners() {
+        // The corner mask's ring (outer radius CARD_RADIUS) must reach the
+        // content's square corner, which is (CARD_RADIUS - CARD_INSET) * sqrt 2
+        // from the shared curve centre.
+        let inner = f32::from(crate::CARD_RADIUS - crate::CARD_INSET);
+        assert!(inner * std::f32::consts::SQRT_2 <= f32::from(crate::CARD_RADIUS));
+    }
+
+    #[test]
+    fn test_card_corner_mask_style() {
+        let colors = ThemeColors::dark();
+        let style = Pane::card_corner_mask_style(&colors)(StyleRefinement::default());
+
+        assert_eq!(style.border_color, Some(colors.editor_background));
+        assert_eq!(style.background, None);
+        assert_eq!(style.border_widths.top, Some(crate::CARD_INSET.into()));
+        assert_eq!(style.border_widths.left, Some(crate::CARD_INSET.into()));
+        assert_eq!(style.corner_radii.top_left, Some(crate::CARD_RADIUS.into()));
+    }
+
+    #[test]
+    fn test_drags_out_only_tab() {
+        assert!(drags_out_only_tab(true, 1));
+        assert!(!drags_out_only_tab(true, 2));
+        assert!(!drags_out_only_tab(false, 1));
+        assert!(!drags_out_only_tab(false, 0));
+    }
+
+    #[test]
+    fn test_empty_pane_hints() {
+        let hints = empty_pane_hints();
+        let labels: Vec<_> = hints.iter().map(|(_, label, _, _)| *label).collect();
+        assert_eq!(labels, ["New File", "Open File", "Go to File", "Command Palette"]);
+        assert!(hints[0].3.partial_eq(&crate::NewFile));
+    }
+
+    #[test]
+    fn test_tab_drop_side() {
+        assert_eq!(tab_drop_side(None, 2), Some(TabDropSide::Before));
+        assert_eq!(tab_drop_side(Some(4), 2), Some(TabDropSide::Before));
+        assert_eq!(tab_drop_side(Some(0), 2), Some(TabDropSide::After));
+        assert_eq!(tab_drop_side(Some(2), 2), None);
+    }
+
+    #[test]
+    fn test_shared_nav_history_tracks_each_panes_preview() {
+        let history = NavHistory::new(WeakEntity::new_invalid(), Arc::new(AtomicUsize::new(0)));
+        assert!(!history.can_go_back());
+        assert!(!history.can_go_forward());
+
+        let (left_preview, right_preview, next_left_preview) =
+            (EntityId::from(1), EntityId::from(2), EntityId::from(3));
+        history.set_preview_item(None, Some(left_preview));
+        history.set_preview_item(None, Some(right_preview));
+        // Replacing one pane's preview leaves the other pane's alone.
+        history.set_preview_item(Some(left_preview), Some(next_left_preview));
+        let preview_item_ids = history.0.lock().preview_item_ids.clone();
+        assert!(!preview_item_ids.contains(&left_preview));
+        assert!(preview_item_ids.contains(&right_preview));
+        assert!(preview_item_ids.contains(&next_left_preview));
+
+        history.set_preview_item(Some(right_preview), None);
+        assert!(!history.0.lock().preview_item_ids.contains(&right_preview));
+    }
+
+    #[test]
+    fn test_drop_target_style() {
+        let colors = ThemeColors::dark();
+        let style = Pane::drop_target_style(&colors)(StyleRefinement::default().rounded(px(8.)));
+
+        assert_eq!(style.border_color, Some(colors.drop_target_border()));
+        assert_eq!(style.background, Some(colors.drop_target_background().into()));
+        assert_eq!(style.border_widths.top, Some(px(1.).into()));
+        assert_eq!(style.border_widths.left, Some(px(1.).into()));
+        assert_eq!(style.corner_radii.top_left, Some(px(8.).into()));
     }
 }

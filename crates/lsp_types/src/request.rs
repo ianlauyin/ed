@@ -3,12 +3,6 @@ use serde::de::DeserializeOwned;
 
 use super::ApplyWorkspaceEditParams;
 use super::ApplyWorkspaceEditResponse;
-use super::CallHierarchyIncomingCall;
-use super::CallHierarchyIncomingCallsParams;
-use super::CallHierarchyItem;
-use super::CallHierarchyOutgoingCall;
-use super::CallHierarchyOutgoingCallsParams;
-use super::CallHierarchyPrepareParams;
 use super::CodeAction;
 use super::CodeActionParams;
 use super::CodeActionResponse;
@@ -218,20 +212,11 @@ macro_rules! lsp_request {
     ("window/workDoneProgress/create") => {
         $crate::request::WorkDoneProgressCreate
     };
-    ("callHierarchy/incomingCalls") => {
-        $crate::request::CallHierarchyIncomingCalls
-    };
-    ("callHierarchy/outgoingCalls") => {
-        $crate::request::CallHierarchyOutgoingCalls
-    };
     ("textDocument/moniker") => {
         $crate::request::MonikerRequest
     };
     ("textDocument/linkedEditingRange") => {
         $crate::request::LinkedEditingRange
-    };
-    ("textDocument/prepareCallHierarchy") => {
-        $crate::request::CallHierarchyPrepare
     };
     ("textDocument/prepareTypeHierarchy") => {
         $crate::request::TypeHierarchyPrepare
@@ -789,30 +774,6 @@ impl Request for SelectionRangeRequest {
     const METHOD: &'static str = "textDocument/selectionRange";
 }
 
-pub enum CallHierarchyPrepare {}
-
-impl Request for CallHierarchyPrepare {
-    type Params = CallHierarchyPrepareParams;
-    type Result = Option<Vec<CallHierarchyItem>>;
-    const METHOD: &'static str = "textDocument/prepareCallHierarchy";
-}
-
-pub enum CallHierarchyIncomingCalls {}
-
-impl Request for CallHierarchyIncomingCalls {
-    type Params = CallHierarchyIncomingCallsParams;
-    type Result = Option<Vec<CallHierarchyIncomingCall>>;
-    const METHOD: &'static str = "callHierarchy/incomingCalls";
-}
-
-pub enum CallHierarchyOutgoingCalls {}
-
-impl Request for CallHierarchyOutgoingCalls {
-    type Params = CallHierarchyOutgoingCallsParams;
-    type Result = Option<Vec<CallHierarchyOutgoingCall>>;
-    const METHOD: &'static str = "callHierarchy/outgoingCalls";
-}
-
 pub enum SemanticTokensFullRequest {}
 
 impl Request for SemanticTokensFullRequest {
@@ -1104,7 +1065,6 @@ mod test {
         check_macro!("textDocument/typeDefinition");
         check_macro!("textDocument/moniker");
         check_macro!("textDocument/linkedEditingRange");
-        check_macro!("textDocument/prepareCallHierarchy");
         check_macro!("textDocument/prepareTypeHierarchy");
         check_macro!("textDocument/semanticTokens/full");
         check_macro!("textDocument/semanticTokens/full/delta");
@@ -1128,8 +1088,6 @@ mod test {
         check_macro!("workspace/inlayHint/refresh");
         check_macro!("workspace/inlineValue/refresh");
 
-        check_macro!("callHierarchy/incomingCalls");
-        check_macro!("callHierarchy/outgoingCalls");
         check_macro!("codeAction/resolve");
         check_macro!("codeLens/resolve");
         check_macro!("completionItem/resolve");

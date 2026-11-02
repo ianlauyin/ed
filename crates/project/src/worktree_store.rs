@@ -71,33 +71,8 @@ impl PartialEq for WorktreePaths {
 }
 
 impl WorktreePaths {
-    /// Build from two parallel `PathList`s that already share the same
-    /// insertion order. Used for deserialization from DB.
-    ///
-    /// Returns an error if the two lists have different lengths, which
-    /// indicates corrupted data from a prior migration bug.
-    pub fn from_path_lists(main_worktree_paths: PathList, folder_paths: PathList) -> anyhow::Result<Self> {
-        anyhow::ensure!(
-            main_worktree_paths.paths().len() == folder_paths.paths().len(),
-            "main_worktree_paths has {} entries but folder_paths has {}",
-            main_worktree_paths.paths().len(),
-            folder_paths.paths().len(),
-        );
-        Ok(Self { paths: folder_paths, main_paths: main_worktree_paths })
-    }
-
-    /// Build for non-linked worktrees where main == folder for every path.
-    pub fn from_folder_paths(folder_paths: &PathList) -> Self {
-        Self { paths: folder_paths.clone(), main_paths: folder_paths.clone() }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.paths.is_empty()
-    }
-
-    /// The folder paths (for workspace matching / `threads_by_paths` index).
-    pub const fn folder_path_list(&self) -> &PathList {
-        &self.paths
     }
 
     /// The main worktree paths (for group key / `threads_by_main_paths` index).
@@ -131,18 +106,6 @@ impl WorktreePaths {
     pub fn remove_main_path(&mut self, main_path: &Path) {
         let (mains, folders): (Vec<PathBuf>, Vec<PathBuf>) =
             self.ordered_pairs().filter(|(m, _)| m.as_path() != main_path).map(|(m, f)| (m.clone(), f.clone())).unzip();
-        self.main_paths = PathList::new(&mains);
-        self.paths = PathList::new(&folders);
-    }
-
-    /// Remove all pairs whose folder path matches the given path.
-    /// This removes the corresponding entries from both lists.
-    pub fn remove_folder_path(&mut self, folder_path: &Path) {
-        let (mains, folders): (Vec<PathBuf>, Vec<PathBuf>) = self
-            .ordered_pairs()
-            .filter(|(_, f)| f.as_path() != folder_path)
-            .map(|(m, f)| (m.clone(), f.clone()))
-            .unzip();
         self.main_paths = PathList::new(&mains);
         self.paths = PathList::new(&folders);
     }
@@ -223,7 +186,6 @@ pub enum WorktreeStoreEvent {
     WorktreeUpdatedEntries(WorktreeId, UpdatedEntriesSet),
     WorktreeUpdatedGitRepositories(WorktreeId, UpdatedGitRepositoriesSet),
     WorktreeDeletedEntry(WorktreeId, ProjectEntryId),
-    WorktreeUpdatedRootRepoCommonDir(WorktreeId),
 }
 
 impl EventEmitter<WorktreeStoreEvent> for WorktreeStore {}
@@ -305,11 +267,6 @@ impl WorktreeStore {
             }
             .map(WorktreeId::from_proto)
         }
-    }
-
-    pub fn disable_scanner(&mut self) {
-        self.scanning_enabled = false;
-        self.initial_scan_complete.0.send(true).ok();
     }
 
     /// Returns a future that resolves when all visible worktrees have completed
@@ -913,9 +870,6 @@ impl WorktreeStore {
                     // The worktree root itself has been deleted (for single-file worktrees)
                     // The worktree will be removed via the observe_release callback
                 }
-                worktree::Event::UpdatedRootRepoCommonDir { .. } => {
-                    cx.emit(WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(worktree_id));
-                }
             }
         })
         .detach();
@@ -977,17 +931,6 @@ impl WorktreeStore {
         }
         self.update_initial_scan_state(cx);
         self.send_project_updates(cx);
-    }
-
-    pub fn worktree_for_main_worktree_path(&self, path: &Path, cx: &App) -> Option<Entity<Worktree>> {
-        self.visible_worktrees(cx).find(|worktree| {
-            let worktree = worktree.read(cx);
-            if let Some(common_dir) = worktree.root_repo_common_dir() {
-                common_dir.parent() == Some(path)
-            } else {
-                worktree.abs_path().as_ref() == path
-            }
-        })
     }
 
     fn upstream_client(&self) -> Option<(AnyProtoClient, u64)> {

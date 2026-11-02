@@ -1,7 +1,6 @@
 use std::any::TypeId;
 use std::borrow::Cow;
 use std::cmp::min;
-use std::collections::HashSet;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
@@ -23,15 +22,14 @@ use editor::items::open_resolved_target;
 use editor::scroll::Autoscroll;
 use gpui::Action;
 use gpui::AnyElement;
+use gpui::AnyView;
 use gpui::App;
 use gpui::ClipboardItem;
 use gpui::Context;
 use gpui::Entity;
-use gpui::EntityId;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
-use gpui::Global;
 use gpui::ImageSource;
 use gpui::InteractiveElement;
 use gpui::IntoElement;
@@ -59,10 +57,6 @@ use project::image_store;
 use project::search::SearchQuery;
 use settings::SeedQuerySetting;
 use settings::Settings;
-use settings::update_settings_file;
-use theme::SystemAppearance;
-use theme::Theme;
-use theme::ThemeRegistry;
 use theme_settings::ThemeSettings;
 use ui::ContextMenu;
 use ui::LinkPreview;
@@ -104,8 +98,6 @@ use workspace::searchable::SearchableItemHandle;
 
 use crate::CloseAndReturnToEditor;
 use crate::OpenFollowingPreview;
-use crate::OpenPreview;
-use crate::OpenPreviewToTheSide;
 use crate::ScrollDown;
 use crate::ScrollDownByItem;
 use crate::ScrollPageDown;
@@ -114,19 +106,14 @@ use crate::ScrollToBottom;
 use crate::ScrollToTop;
 use crate::ScrollUp;
 use crate::ScrollUpByItem;
-use crate::markdown_preview_settings::MarkdownPreviewSettings;
 use crate::markdown_preview_style::preview_markdown_style;
 use crate::mermaid_diagrams::MermaidDiagrams;
 
 /// Languages the preview renders.
 const PREVIEW_LANGUAGES: [&str; 2] = ["Markdown", "HTML"];
 const REPARSE_DEBOUNCE: Duration = Duration::from_millis(200);
-
-const fn reset_persisted_font_size(settings: &mut settings::SettingsContent) {
-    if let Some(markdown_preview) = settings.markdown_preview.as_mut() {
-        markdown_preview.font_size = None;
-    }
-}
+/// The rendered content is centered and capped at this width, for readability.
+const MAX_CONTENT_WIDTH: Pixels = px(1200.);
 
 pub struct MarkdownPreviewView {
     workspace: WeakEntity<Workspace>,
@@ -182,11 +169,6 @@ struct EditorState {
     _subscription: Subscription,
 }
 
-#[derive(Default)]
-struct SuppressedAutoPreviews(HashSet<EntityId>);
-
-impl Global for SuppressedAutoPreviews {}
-
 #[derive(Clone, Copy, Debug)]
 pub enum MarkdownPreviewEvent {
     SourceEditorChanged,
@@ -199,69 +181,12 @@ enum PreviewLinkTarget {
 }
 
 impl MarkdownPreviewView {
-    pub fn register(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
-        cx.default_global::<SuppressedAutoPreviews>();
-        let workspace_entity = cx.entity();
-        cx.subscribe_in(&workspace_entity, window, |workspace, _, event: &workspace::Event, window, cx| {
-            let workspace::Event::ItemAdded { item } = event else {
-                return;
-            };
-            if cx.global_mut::<SuppressedAutoPreviews>().0.contains(&item.item_id()) {
-                return;
-            }
-            if !MarkdownPreviewSettings::get_global(cx).open_markdown_files_in_preview || workspace.is_restoring() {
-                return;
-            }
-            let Some(editor) = item.downcast::<Editor>() else {
-                return;
-            };
-            if !Self::is_markdown_editor(workspace, &editor, cx) {
-                return;
-            }
-            let Some(pane) = workspace.pane_for_item_id(item.item_id()) else {
-                return;
-            };
-            let replaces_editor = !item.is_dirty(cx);
-            let replaces_temporary_editor = replaces_editor && pane.read(cx).is_active_preview_item(item.item_id());
-            let activate = workspace.active_pane() == &pane
-                && pane.read(cx).active_item().is_some_and(|active_item| active_item.item_id() == item.item_id());
-            let focus = editor.focus_handle(cx).contains_focused(window, cx);
-            let preview = Self::activate_or_add_preview(workspace, editor, pane.clone(), activate, focus, window, cx);
-            if !replaces_editor {
-                return;
-            }
-            pane.update(cx, |pane, cx| {
-                if replaces_temporary_editor {
-                    pane.replace_preview_item_id(preview.entity_id(), window, cx);
-                } else {
-                    pane.remove_item(item.item_id(), false, false, window, cx);
-                }
-            });
-        })
-        .detach();
-
-        workspace.register_action(move |workspace, _: &OpenPreview, window, cx| {
-            if let Some(item) = workspace.item_for_action(window, cx)
-                && let Some(editor) = item.act_as::<Editor>(cx)
-                && Self::is_previewable_file(&editor, cx)
-                && let Some(pane) = workspace.pane_for_item_id(item.item_id())
-            {
-                Self::open_preview_in_pane(workspace, editor, pane, window, cx);
-            }
-        });
-
-        workspace.register_action(move |workspace, _: &OpenPreviewToTheSide, window, cx| {
-            if let Some(editor) = Self::resolve_active_item_as_markdown_editor(workspace, cx) {
-                let pane = workspace.active_pane().clone();
-                Self::open_preview_to_the_side_of_pane(workspace, editor, pane, window, cx);
-            }
-        });
-
+    pub fn register(workspace: &mut Workspace) {
         workspace.register_action(move |workspace, _: &OpenFollowingPreview, window, cx| {
             if let Some(editor) = Self::resolve_active_item_as_markdown_editor(workspace, cx) {
                 // Check if there's already a following preview
                 let existing_follow_view_idx = {
-                    let active_pane = workspace.active_pane().read(cx);
+                    let active_pane = workspace.shown_pane().read(cx);
                     active_pane
                         .items_of_type::<MarkdownPreviewView>()
                         .find(|view| view.read(cx).mode == MarkdownPreviewMode::Follow)
@@ -269,13 +194,13 @@ impl MarkdownPreviewView {
                 };
 
                 if let Some(existing_follow_view_idx) = existing_follow_view_idx {
-                    workspace.active_pane().update(cx, |pane, cx| {
+                    workspace.shown_pane().update(cx, |pane, cx| {
                         pane.activate_item(existing_follow_view_idx, true, true, window, cx);
                     });
                 } else {
                     let view = Self::create_following_markdown_view(workspace, editor, window, cx);
                     workspace
-                        .active_pane()
+                        .shown_pane()
                         .update(cx, |pane, cx| pane.add_item(Box::new(view.clone()), true, true, None, window, cx));
                 }
                 cx.notify();
@@ -290,7 +215,7 @@ impl MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        Self::activate_or_add_preview(workspace, editor, pane, true, true, window, cx);
+        Self::activate_or_add_preview(workspace, editor, pane, true, window, cx);
     }
 
     pub fn open_preview_to_the_side_of_pane(
@@ -301,7 +226,7 @@ impl MarkdownPreviewView {
         cx: &mut Context<Workspace>,
     ) {
         let target_pane = workspace.adjacent_pane_of(&origin_pane, window, cx);
-        Self::activate_or_add_preview(workspace, editor.clone(), target_pane, false, false, window, cx);
+        Self::activate_or_add_preview(workspace, editor.clone(), target_pane, false, window, cx);
         editor.focus_handle(cx).focus(window, cx);
     }
 
@@ -310,30 +235,19 @@ impl MarkdownPreviewView {
         editor: Entity<Editor>,
         pane: Entity<Pane>,
         activate: bool,
-        focus: bool,
         window: &mut Window,
         cx: &mut Context<Workspace>,
-    ) -> Entity<MarkdownPreviewView> {
-        let existing_view = Self::find_existing_independent_preview_item_idx(pane.read(cx), &editor, cx);
-        let view = if let Some((existing_view, existing_view_idx)) = existing_view {
-            pane.update(cx, |pane, cx| {
-                pane.activate_item(existing_view_idx, activate, focus, window, cx);
-            });
-            existing_view
+    ) {
+        if let Some(existing_view_idx) = Self::find_existing_independent_preview_item_idx(pane.read(cx), &editor, cx) {
+            pane.update(cx, |pane, cx| pane.activate_item(existing_view_idx, activate, activate, window, cx));
         } else {
             let view = Self::create_markdown_view(workspace, editor, window, cx);
-            pane.update(cx, |pane, cx| pane.add_item(Box::new(view.clone()), activate, focus, None, window, cx));
-            view
-        };
+            pane.update(cx, |pane, cx| pane.add_item(Box::new(view), activate, activate, None, window, cx));
+        }
         cx.notify();
-        view
     }
 
-    fn find_existing_independent_preview_item_idx(
-        pane: &Pane,
-        editor: &Entity<Editor>,
-        cx: &App,
-    ) -> Option<(Entity<MarkdownPreviewView>, usize)> {
+    fn find_existing_independent_preview_item_idx(pane: &Pane, editor: &Entity<Editor>, cx: &App) -> Option<usize> {
         let target_buffer = editor.read(cx).buffer().read(cx).as_singleton()?;
         let view = pane.items_of_type::<MarkdownPreviewView>().find(|view| {
             // Only look for independent (Default mode) previews, not Follow previews.
@@ -343,8 +257,7 @@ impl MarkdownPreviewView {
             // wrap the same source buffer.
             view.read(cx).mode == MarkdownPreviewMode::Default && view.read(cx).is_previewing(&target_buffer, cx)
         })?;
-        let index = pane.index_for_item(&view)?;
-        Some((view, index))
+        pane.index_for_item(&view)
     }
 
     fn is_previewing(&self, buffer: &Entity<Buffer>, cx: &App) -> bool {
@@ -357,7 +270,7 @@ impl MarkdownPreviewView {
         workspace: &Workspace,
         cx: &mut Context<Workspace>,
     ) -> Option<Entity<Editor>> {
-        if let Some(editor) = workspace.active_item(cx).and_then(|item| item.act_as::<Editor>(cx))
+        if let Some(editor) = workspace.shown_pane().read(cx).active_item().and_then(|item| item.act_as::<Editor>(cx))
             && Self::is_previewable_file(&editor, cx)
         {
             return Some(editor);
@@ -517,7 +430,7 @@ impl MarkdownPreviewView {
                     let project = workspace.project().clone();
                     let editor = cx.new(|cx| Editor::for_buffer(buffer, Some(project), window, cx));
                     let preview = Self::create_markdown_view(workspace, editor, window, cx);
-                    workspace.active_pane().update(cx, |pane, cx| {
+                    workspace.shown_pane().update(cx, |pane, cx| {
                         pane.add_item(Box::new(preview), true, true, None, window, cx);
                     });
                 })
@@ -541,24 +454,6 @@ impl MarkdownPreviewView {
             .as_singleton()
             .and_then(|buffer| buffer.read(cx).language().map(|language| language.name()))
             .is_some_and(|language| names.iter().any(|name| language == *name))
-    }
-
-    fn is_markdown_editor(workspace: &Workspace, editor: &Entity<Editor>, cx: &App) -> bool {
-        let Some(buffer) = editor.read(cx).buffer().read(cx).as_singleton() else {
-            return false;
-        };
-        let buffer = buffer.read(cx);
-        if let Some(language) = buffer.language() {
-            return language.name() == "Markdown";
-        }
-        let Some(file) = buffer.file() else {
-            return false;
-        };
-        let languages = workspace.project().read(cx).languages().clone();
-        let Some(markdown) = languages.available_language_for_name("Markdown") else {
-            return false;
-        };
-        languages.language_for_file(file, None, cx) == Some(markdown.id())
     }
 
     fn set_editor(&mut self, editor: Entity<Editor>, window: &Window, cx: &mut Context<Self>) {
@@ -800,40 +695,17 @@ impl MarkdownPreviewView {
         settings.markdown_preview_font_size(cx) * settings.buffer_line_height.value()
     }
 
-    fn increase_font_size(&mut self, action: &IncreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        self.adjust_font_size(action.persist, px(1.0), cx);
+    // The preview has no font size setting, so zoom is always in-memory, even for persisting actions.
+    fn increase_font_size(&mut self, _: &IncreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
+        theme_settings::adjust_markdown_preview_font_size(cx, |size| size + px(1.0));
     }
 
-    fn decrease_font_size(&mut self, action: &DecreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        self.adjust_font_size(action.persist, px(-1.0), cx);
+    fn decrease_font_size(&mut self, _: &DecreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
+        theme_settings::adjust_markdown_preview_font_size(cx, |size| size - px(1.0));
     }
 
-    fn adjust_font_size(&self, persist: bool, delta: Pixels, cx: &mut Context<Self>) {
-        if persist {
-            let Ok(fs) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone()) else {
-                return;
-            };
-            update_settings_file(fs, cx, move |settings, cx| {
-                let size = ThemeSettings::get_global(cx).markdown_preview_font_size(cx) + delta;
-                settings.markdown_preview.get_or_insert_default().font_size =
-                    Some(f32::from(theme_settings::clamp_font_size(size)).into());
-            });
-        } else {
-            theme_settings::adjust_markdown_preview_font_size(cx, |size| size + delta);
-        }
-    }
-
-    fn reset_font_size(&mut self, action: &ResetBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
-        if action.persist {
-            let Ok(fs) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone()) else {
-                return;
-            };
-            update_settings_file(fs, cx, move |settings, _| {
-                reset_persisted_font_size(settings);
-            });
-        } else {
-            theme_settings::reset_markdown_preview_font_size(cx);
-        }
+    fn reset_font_size(&mut self, _: &ResetBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
+        theme_settings::reset_markdown_preview_font_size(cx);
     }
 
     fn scroll_by_amount(&self, distance: Pixels) {
@@ -919,13 +791,6 @@ impl MarkdownPreviewView {
                     return;
                 };
                 if !workspace.activate_item(&editor, true, true, window, cx) {
-                    let editor_entity_id = editor.entity_id();
-                    // Re-adding the source emits `ItemAdded`; suppress its automatic preview for the editor's lifetime.
-                    cx.global_mut::<SuppressedAutoPreviews>().0.insert(editor_entity_id);
-                    App::observe_release(cx, &editor, move |_, cx| {
-                        cx.global_mut::<SuppressedAutoPreviews>().0.remove(&editor_entity_id);
-                    })
-                    .detach();
                     workspace.add_item(pane.clone(), Box::new(editor), None, true, true, window, cx);
                 }
 
@@ -935,21 +800,7 @@ impl MarkdownPreviewView {
         });
     }
 
-    /// Returns the theme chosen in `markdown_preview.theme`, or `None` if the
-    /// user hasn't set one or it can't be resolved.
-    fn resolve_preview_theme(&self, cx: &App) -> Option<Arc<Theme>> {
-        let theme_settings = ThemeSettings::get_global(cx);
-        let theme_selection = theme_settings.markdown_preview_theme.as_ref()?;
-        let theme_name = theme_selection.name(SystemAppearance::global(cx).0);
-        ThemeRegistry::global(cx).get(&theme_name.0).ok()
-    }
-
-    fn render_markdown_element(
-        &self,
-        preview_theme: &Option<Arc<Theme>>,
-        window: &Window,
-        cx: &Context<Self>,
-    ) -> MarkdownElement {
+    fn render_markdown_element(&self, window: &Window, cx: &Context<Self>) -> MarkdownElement {
         let active_editor = self.active_editor.as_ref().map(|state| state.editor.clone());
         let source_project_path =
             active_editor.as_ref().and_then(|editor| Self::project_path_for_active_editor(editor.read(cx), cx));
@@ -964,11 +815,7 @@ impl MarkdownPreviewView {
             project = Some(project_entity);
         }
 
-        let mut markdown_style = if let Some(theme) = preview_theme {
-            preview_markdown_style(theme.colors(), theme.syntax(), window, cx)
-        } else {
-            preview_markdown_style(cx.theme().colors(), cx.theme().syntax(), window, cx)
-        };
+        let mut markdown_style = preview_markdown_style(cx.theme().colors(), cx.theme().syntax(), window, cx);
         markdown_style.minimum_highlight_contrast = EditorSettings::get_global(cx).minimum_contrast_for_highlights;
 
         let mut markdown_element = MarkdownElement::new(self.markdown.clone(), markdown_style)
@@ -1267,7 +1114,7 @@ fn open_markdown_link_in_preview(
                 .as_ref()
                 .and_then(|view| view.upgrade())
                 .and_then(|view| workspace.pane_for(&view))
-                .unwrap_or_else(|| workspace.active_pane().clone());
+                .unwrap_or_else(|| workspace.shown_pane().clone());
             pane.update(cx, |pane, cx| {
                 pane.add_item(Box::new(preview.clone()), true, true, None, window, cx);
             });
@@ -1410,6 +1257,11 @@ impl Item for MarkdownPreviewView {
         }
     }
 
+    /// A preview of a Git History revision keeps that commit's sidebar.
+    fn side_card(&self, cx: &App) -> Option<AnyView> {
+        Item::side_card(self.active_editor.as_ref()?.editor.read(cx), cx)
+    }
+
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<Icon> {
         Some(Icon::new(IconName::FileDoc))
     }
@@ -1546,7 +1398,7 @@ impl Item for MarkdownPreviewView {
         match event {
             MarkdownPreviewEvent::SourceEditorChanged | MarkdownPreviewEvent::SourceFileHandleChanged => {
                 f(workspace::item::ItemEvent::UpdateTab);
-                f(workspace::item::ItemEvent::UpdateBreadcrumbs);
+                f(workspace::item::ItemEvent::UpdateActivePath);
             }
         }
     }
@@ -1605,11 +1457,7 @@ impl Item for MarkdownPreviewView {
 
 impl Render for MarkdownPreviewView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let preview_theme = self.resolve_preview_theme(cx);
-        let bg_color = preview_theme
-            .as_ref()
-            .map(|theme| theme.colors().editor_background)
-            .unwrap_or_else(|| cx.theme().colors().editor_background);
+        let bg_color = cx.theme().colors().editor_background;
         let preview_font_size = ThemeSettings::get_global(cx).markdown_preview_font_size(cx);
         let hovered_url = self.hovered_url.clone();
         div()
@@ -1640,13 +1488,9 @@ impl Render for MarkdownPreviewView {
             .relative()
             .bg(bg_color)
             .child(WithRemSize::new(preview_font_size).size_full().child(div().size_full().child({
-                let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
                 // Styles each block; the vertical padding pads the list.
-                let markdown_element = self
-                    .render_markdown_element(&preview_theme, window, cx)
-                    .w_full()
-                    .p_4()
-                    .when_some(max_width, |this, max_width| this.max_w(max_width).mx_auto());
+                let markdown_element =
+                    self.render_markdown_element(window, cx).w_full().p_4().max_w(MAX_CONTENT_WIDTH).mx_auto();
                 let markdown = self.markdown.clone();
                 right_click_menu("markdown-preview-context-menu")
                     .size_full()

@@ -24,6 +24,7 @@ use editor::actions::Backtab;
 use editor::actions::FoldAll;
 use editor::actions::SelectAll;
 use editor::actions::Tab;
+use editor::actions::ToggleFoldAll;
 use editor::actions::UnfoldAll;
 use editor::items::active_match_index;
 use editor::multibuffer_context_lines;
@@ -123,7 +124,6 @@ use crate::buffer_search::Deploy;
 use crate::highlight_query_as_regex;
 use crate::search_bar::ActionButtonState;
 use crate::search_bar::HistoryNavigationDirection;
-use crate::search_bar::alignment_element;
 use crate::search_bar::input_base_styles;
 use crate::search_bar::render_action_button;
 use crate::search_bar::render_text_input;
@@ -1140,7 +1140,7 @@ impl Item for ProjectSearchView {
     fn to_item_events(event: &Self::Event, f: &mut dyn FnMut(ItemEvent)) {
         match event {
             ViewEvent::UpdateTab => {
-                f(ItemEvent::UpdateBreadcrumbs);
+                f(ItemEvent::UpdateActivePath);
                 f(ItemEvent::UpdateTab);
             }
             ViewEvent::EditorEvent(editor_event) => {
@@ -1270,9 +1270,9 @@ impl ProjectSearchView {
     }
 
     fn update_results_visibility(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let has_any_folded = self.results_editor.read(cx).has_any_buffer_folded(cx);
+        let all_folded = self.results_editor.read(cx).are_all_buffers_folded(cx);
         self.results_editor.update(cx, |editor, cx| {
-            if has_any_folded {
+            if all_folded {
                 editor.unfold_all(&UnfoldAll, window, cx);
             } else {
                 editor.fold_all(&FoldAll, window, cx);
@@ -2262,6 +2262,27 @@ impl ProjectSearchBar {
         self.cycle_field(Direction::Prev, window, cx);
     }
 
+    // The query and filter inputs would otherwise fold themselves, so relay
+    // the fold-all actions to the results.
+    fn toggle_fold_all(&mut self, action: &ToggleFoldAll, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_results_editor(cx, |editor, cx| editor.toggle_fold_all(action, window, cx));
+    }
+
+    fn fold_all(&mut self, action: &FoldAll, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_results_editor(cx, |editor, cx| editor.fold_all(action, window, cx));
+    }
+
+    fn unfold_all(&mut self, action: &UnfoldAll, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_results_editor(cx, |editor, cx| editor.unfold_all(action, window, cx));
+    }
+
+    fn update_results_editor(&self, cx: &mut Context<Self>, f: impl FnOnce(&mut Editor, &mut Context<Editor>)) {
+        if let Some(search_view) = &self.active_project_search {
+            let results_editor = search_view.read(cx).results_editor.clone();
+            results_editor.update(cx, f);
+        }
+    }
+
     fn focus_search(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(search_view) = self.active_project_search.as_ref() {
             search_view.update(cx, |search_view, cx| {
@@ -2622,7 +2643,7 @@ impl Render for ProjectSearchBar {
                 search.active_match_index.is_none().then_some(ActionButtonState::Disabled),
                 "Select Next Match",
                 &SelectNextMatch,
-                query_focus.clone(),
+                query_focus,
             ))
             .child(
                 div()
@@ -2686,29 +2707,7 @@ impl Render for ProjectSearchBar {
             ))
             .child(matches_column);
 
-        let is_collapsed = search.results_editor.read(cx).has_any_buffer_folded(cx);
-
-        let (icon, tooltip_label) = if is_collapsed {
-            (IconName::ChevronUpDown, "Expand All Search Results")
-        } else {
-            (IconName::ChevronDownUp, "Collapse All Search Results")
-        };
-
-        let expand_button = IconButton::new("project-search-collapse-expand", icon)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_, cx| {
-                Tooltip::for_action_in(tooltip_label, &ToggleAllSearchResults, &query_focus.clone(), cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                if let Some(active_view) = &this.active_project_search {
-                    active_view.update(cx, |active_view, cx| {
-                        active_view.toggle_all_search_results(&ToggleAllSearchResults, window, cx);
-                    })
-                }
-            }));
-
-        let search_line =
-            h_flex().pl_0p5().w_full().gap_2().child(expand_button).child(query_column).child(mode_column);
+        let search_line = h_flex().w_full().gap_2().child(query_column).child(mode_column);
 
         let replace_line = search.replace_enabled.then(|| {
             let replace_column = input_base_styles(InputPanel::Replacement)
@@ -2735,7 +2734,7 @@ impl Render for ProjectSearchBar {
                     focus_handle,
                 ));
 
-            h_flex().w_full().gap_2().child(alignment_element()).child(replace_column).child(replace_actions)
+            h_flex().w_full().gap_2().child(replace_column).child(replace_actions)
         });
 
         let filter_line = search.filters_enabled.then(|| {
@@ -2768,7 +2767,6 @@ impl Render for ProjectSearchBar {
             h_flex()
                 .w_full()
                 .gap_2()
-                .child(alignment_element())
                 .child(h_flex().w(input_width).gap_2().child(include).child(exclude))
                 .child(mode_column)
         });
@@ -2800,6 +2798,9 @@ impl Render for ProjectSearchBar {
             }))
             .capture_action(cx.listener(Self::tab))
             .capture_action(cx.listener(Self::backtab))
+            .capture_action(cx.listener(Self::toggle_fold_all))
+            .capture_action(cx.listener(Self::fold_all))
+            .capture_action(cx.listener(Self::unfold_all))
             .on_action(cx.listener(|this, action, window, cx| this.confirm(action, window, cx)))
             .on_action(cx.listener(|this, action, window, cx| {
                 this.toggle_replace(action, window, cx);

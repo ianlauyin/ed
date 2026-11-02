@@ -3,6 +3,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use anyhow::anyhow;
 use collections::HashSet;
 use ed_actions::NewWorktreeBranchTarget;
@@ -28,7 +29,7 @@ use remote::RemoteConnectionOptions;
 use settings::Settings;
 use ui::prelude::*;
 use util::ResultExt as _;
-use workspace::MultiWorkspace;
+use workspace::CloseIntent;
 use workspace::OpenMode;
 use workspace::PreviousWorkspaceState;
 use workspace::ToastView;
@@ -616,7 +617,7 @@ fn create_worktree_workspace_inner(
 
     let previous_state = workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
     let workspace_handle = workspace.weak_handle();
-    let window_handle = window.window_handle().downcast::<MultiWorkspace>();
+    let window_handle = window.window_handle().downcast::<Workspace>();
     let remote_connection_options = project.read(cx).remote_connection_options(cx);
 
     let (git_repos, non_git_paths) = classify_worktrees(project.read(cx), cx);
@@ -711,7 +712,7 @@ pub fn handle_switch_worktree(
 
     let previous_state = workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
     let workspace_handle = workspace.weak_handle();
-    let window_handle = window.window_handle().downcast::<MultiWorkspace>();
+    let window_handle = window.window_handle().downcast::<Workspace>();
     let remote_connection_options = project.read(cx).remote_connection_options(cx);
 
     let (git_repos, non_git_paths) = classify_worktrees(project.read(cx), cx);
@@ -761,7 +762,7 @@ async fn do_create_worktree(
     remote_branch_fetch_mode: RemoteBranchFetchMode,
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
-    window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
+    window_handle: Option<gpui::WindowHandle<Workspace>>,
     remote_connection_options: Option<RemoteConnectionOptions>,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Entity<Workspace>> {
@@ -862,7 +863,7 @@ async fn do_switch_worktree(
     non_git_paths: Vec<PathBuf>,
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
-    window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
+    window_handle: Option<gpui::WindowHandle<Workspace>>,
     remote_connection_options: Option<RemoteConnectionOptions>,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Entity<Workspace>> {
@@ -897,7 +898,7 @@ async fn open_worktree_workspace(
     has_non_git: bool,
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
-    window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
+    window_handle: Option<gpui::WindowHandle<Workspace>>,
     remote_connection_options: Option<RemoteConnectionOptions>,
     operation: WorktreeOperation,
     cx: &mut AsyncWindowContext,
@@ -912,17 +913,18 @@ async fn open_worktree_workspace(
     // files and dock layout.
     let transfer_state = is_creating_new_worktree;
 
-    let source_for_transfer = if transfer_state { Some(workspace.clone()) } else { None };
+    let source_workspace = workspace.upgrade().context("workspace was released")?;
+    let should_continue = source_workspace
+        .update_in(cx, |workspace, window, cx| workspace.prepare_to_close(CloseIntent::ReplaceWindow, window, cx))?
+        .await?;
+    if !should_continue {
+        source_workspace.update(cx, |workspace, cx| workspace.set_active_worktree_creation(None, false, cx));
+        return Ok(source_workspace);
+    }
 
-    let (workspace_task, modal_workspace) = window_handle.update(cx, |multi_workspace, window, cx| {
-        let path_list = util::path_list::PathList::new(&all_paths);
-        let active_workspace = multi_workspace.workspace().clone();
-        let modal_workspace = active_workspace.clone();
-
-        #[allow(clippy::type_complexity)]
-        let init: Option<
-            Box<dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>) + Send>,
-        > = if transfer_state {
+    #[allow(clippy::type_complexity)]
+    let init: Option<Box<dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>) + Send>> =
+        if transfer_state {
             let dock_structure = previous_state.dock_structure;
             Some(Box::new(
                 move |workspace: &mut Workspace, window: &mut gpui::Window, cx: &mut gpui::Context<Workspace>| {
@@ -933,25 +935,36 @@ async fn open_worktree_workspace(
             None
         };
 
-        let task = multi_workspace.find_or_create_workspace(
-            path_list,
-            remote_connection_options,
-            None,
-            move |connection_options, window, cx| {
-                remote_connection::connect_with_modal(&active_workspace, connection_options, window, cx)
-            },
-            init,
-            OpenMode::Add,
-            source_for_transfer.clone(),
-            window,
+    let app_state = source_workspace.read_with(cx, |workspace, _| workspace.app_state().clone());
+    let new_workspace = if let Some(connection_options) = remote_connection_options {
+        let connect_task = cx.update(|window, cx| {
+            remote_connection::connect_with_modal(&source_workspace, connection_options.clone(), window, cx)
+        })?;
+        let session = connect_task.await;
+        remote_connection::dismiss_connection_modal(&source_workspace, cx);
+        let session = session?.context("remote connection was cancelled")?;
+        let project =
+            cx.update(|_, cx| Project::remote(session, app_state.languages.clone(), app_state.fs.clone(), true, cx))?;
+        let (new_workspace, _) = workspace::open_remote_project_with_existing_connection(
+            connection_options,
+            project,
+            all_paths.clone(),
+            app_state,
+            window_handle,
             cx,
-        );
-        (task, modal_workspace)
-    })?;
-
-    let result = workspace_task.await;
-    remote_connection::dismiss_connection_modal(&modal_workspace, cx);
-    let new_workspace = result?;
+        )
+        .await?;
+        if let Some(init) = init {
+            new_workspace.update_in(cx, |workspace, window, cx| init(workspace, window, cx))?;
+        }
+        new_workspace
+    } else {
+        cx.update(|_, cx| {
+            Workspace::new_local(all_paths.clone(), app_state, Some(window_handle), init, OpenMode::Activate, cx)
+        })?
+        .await?
+        .workspace
+    };
 
     let panels_task = new_workspace.update(cx, |workspace, _cx| workspace.take_panels_task());
 
@@ -973,7 +986,7 @@ async fn open_worktree_workspace(
     maybe_propagate_worktree_trust(&workspace, &new_workspace, &all_paths, cx);
 
     if transfer_state {
-        window_handle.update(cx, |_multi_workspace, window, cx| {
+        cx.update(|window, cx| {
             new_workspace.update(cx, |workspace, cx| {
                 if has_non_git {
                     struct WorktreeCreationToast;
@@ -1065,9 +1078,7 @@ async fn open_worktree_workspace(
         })
         .ok();
 
-    window_handle.update(cx, |multi_workspace, window, cx| {
-        multi_workspace.activate(new_workspace.clone(), source_for_transfer, window, cx);
-
+    cx.update(|window, cx| {
         if is_creating_new_worktree && let Some(dock_position) = focused_dock {
             new_workspace.update(cx, |workspace, cx| {
                 let dock = workspace.dock_at_position(dock_position);

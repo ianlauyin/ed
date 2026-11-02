@@ -1758,24 +1758,9 @@ impl GitStore {
         diff_state.read(cx).unstaged_diff.as_ref()?.upgrade()
     }
 
-    pub fn get_staged_diff(&self, buffer_id: BufferId, cx: &App) -> Option<Entity<BufferDiff>> {
-        let diff_state = self.diffs.get(&buffer_id)?;
-        diff_state.read(cx).staged_diff()
-    }
-
     pub fn get_uncommitted_diff(&self, buffer_id: BufferId, cx: &App) -> Option<Entity<BufferDiff>> {
         let diff_state = self.diffs.get(&buffer_id)?;
         diff_state.read(cx).uncommitted_diff.as_ref()?.upgrade()
-    }
-
-    pub fn get_diff_since_oid(
-        &self,
-        buffer_id: BufferId,
-        oid: Option<git::Oid>,
-        cx: &App,
-    ) -> Option<Entity<BufferDiff>> {
-        let diff_state = self.diffs.get(&buffer_id)?;
-        diff_state.read(cx).oid_diff(oid)
     }
 
     pub fn open_conflict_set(&mut self, buffer: Entity<Buffer>, cx: &mut Context<Self>) -> Task<Entity<ConflictSet>> {
@@ -4747,17 +4732,6 @@ impl RepositorySnapshot {
         self.path_style.join_path(&directory, project_name)
     }
 
-    /// The main worktree is the original checkout that other worktrees were
-    /// created from.
-    ///
-    /// For example, if you had both `~/code/zed` and `~/code/worktrees/zed-2`,
-    /// then `~/code/zed` is the main worktree and `~/code/worktrees/zed-2` is a linked worktree.
-    ///
-    /// Submodules also return `true` here, since they are not linked worktrees.
-    pub fn is_main_worktree(&self) -> bool {
-        !self.is_linked_worktree()
-    }
-
     /// Returns true if this repository is a linked worktree, that is, one that
     /// was created from another worktree.
     ///
@@ -5324,10 +5298,6 @@ impl Repository {
         let worktree_store = git_store.read(cx).worktree_store.read(cx);
         let abs_path = worktree_store.absolutize(path, cx)?;
         self.snapshot.abs_path_to_repo_path(&abs_path)
-    }
-
-    pub fn contains_sub_repo(&self, other: &Entity<Self>, cx: &App) -> bool {
-        other.read(cx).snapshot.work_directory_abs_path.starts_with(&self.snapshot.work_directory_abs_path)
     }
 
     pub const fn commit_message_buffer(&self) -> Option<&Entity<Buffer>> {
@@ -7179,10 +7149,6 @@ impl Repository {
         })
     }
 
-    pub fn create_worktree_detached(&mut self, path: PathBuf, commit: String) -> oneshot::Receiver<Result<()>> {
-        self.create_worktree(CreateWorktreeTarget::Detached { base_sha: Some(commit) }, path)
-    }
-
     pub fn checkout_branch_in_worktree(
         &mut self,
         branch_name: String,
@@ -8156,10 +8122,6 @@ impl Repository {
                 },
             }
         })
-    }
-
-    pub fn default_remote_url(&self) -> Option<String> {
-        self.remote_upstream_url.clone().or(self.remote_origin_url.clone())
     }
 }
 

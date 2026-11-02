@@ -1,6 +1,8 @@
 - no support for hard click touchpad (lookup), add or put right click menu
 
-- rethink cmd+J, terminal/central terminal behavior
+# rethink pane left/right short key
+  - cmd+J, terminal/central terminal behavior
+  - always use cmd+B cmd+R, or 
 
 - add webkit tab to render html? still need markdown html preview? or just use webkit to open html, then how to open remote html? 
 
@@ -18,9 +20,7 @@
 
 - think about remote "download" vs local "open in default app", copy/paste file across local/remote
 
-- think about if we don't need external terminal, just do everything in ed?
-
-- append external crate file in project file tree, and make them readonly (not allow to edit)
+- think about if we need external terminal, just do everything in ed, introduce terminal mode?
 
 # should add low power mode? or my laptop is powerful enough
 - Frame pacing (#63477, #66237): large changes to window.rs, and the macOS Low Power Mode part drags in Linux and Windows power code. I’d skip them unless you’ve noticed stutter in Low Power Mode.

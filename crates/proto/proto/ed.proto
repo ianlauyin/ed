@@ -355,12 +355,6 @@ message Envelope {
     BlameBufferAtRevision blame_buffer_at_revision = 478;
     BlameBufferAtRevisionResponse blame_buffer_at_revision_response = 479;
 
-    PrepareCallHierarchy prepare_call_hierarchy = 482;
-    PrepareCallHierarchyResponse prepare_call_hierarchy_response = 483;
-    GetIncomingCalls get_incoming_calls = 484;
-    GetIncomingCallsResponse get_incoming_calls_response = 485;
-    GetOutgoingCalls get_outgoing_calls = 486;
-    GetOutgoingCallsResponse get_outgoing_calls_response = 487;
     LanguageServerShowDocumentRequest language_server_show_document_request = 490;
     ExecuteLspCommand execute_lsp_command = 491;
     ExecuteLspCommandResponse execute_lsp_command_response = 492;
@@ -378,6 +372,7 @@ message Envelope {
   reserved 411 to 412; // Removed context servers.
   reserved 433 to 439; // Removed git checkpoints.
   reserved 488, 489; // Removed emmet.
+  reserved 482 to 487; // Removed call hierarchy.
   reserved 444 to 446; // Removed git checkpoints.
   reserved 426 to 428; // Removed kernel execution.
   reserved 459; // Removed telemetry event.

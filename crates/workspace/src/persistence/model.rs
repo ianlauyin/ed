@@ -12,12 +12,10 @@ use gpui::Entity;
 use gpui::WeakEntity;
 use gpui::WindowId;
 use project::Project;
-use project::ProjectGroupKey;
 use remote::RemoteConnectionOptions;
 use serde::Deserialize;
 use serde::Serialize;
 use util::ResultExt;
-use util::path_list::SerializedPathList;
 use uuid::Uuid;
 
 use super::SerializedAxis;
@@ -29,7 +27,6 @@ use crate::SerializableItemRegistry;
 use crate::Workspace;
 use crate::WorkspaceId;
 use crate::item::ItemHandle;
-use crate::multi_workspace::SerializedProjectGroupState;
 use crate::path_list::PathList;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -46,81 +43,16 @@ pub enum SerializedWorkspaceLocation {
     Remote(RemoteConnectionOptions),
 }
 
-impl SerializedWorkspaceLocation {
-    /// Get sorted paths
-    pub fn sorted_paths(&self) -> Arc<Vec<PathBuf>> {
-        unimplemented!()
-    }
-}
+impl SerializedWorkspaceLocation {}
 
 /// A workspace entry from a previous session, containing all the info needed
-/// to restore it including which window it belonged to (for MultiWorkspace grouping).
+/// to restore it including which window it belonged to.
 #[derive(Debug, PartialEq, Clone)]
 pub struct SessionWorkspace {
     pub workspace_id: WorkspaceId,
     pub location: SerializedWorkspaceLocation,
     pub paths: PathList,
     pub window_id: Option<WindowId>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SerializedProjectGroup {
-    pub path_list: SerializedPathList,
-    pub(crate) location: SerializedWorkspaceLocation,
-    #[serde(default = "default_expanded")]
-    pub expanded: bool,
-}
-
-const fn default_expanded() -> bool {
-    true
-}
-
-impl SerializedProjectGroup {
-    pub fn from_group(key: &ProjectGroupKey, expanded: bool) -> Self {
-        Self {
-            path_list: key.path_list().serialize(),
-            location: match key.host() {
-                Some(host) => SerializedWorkspaceLocation::Remote(host),
-                None => SerializedWorkspaceLocation::Local,
-            },
-            expanded,
-        }
-    }
-
-    pub fn into_restored_state(self) -> SerializedProjectGroupState {
-        let path_list = PathList::deserialize(&self.path_list);
-        let host = match self.location {
-            SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(opts) => Some(opts),
-        };
-        SerializedProjectGroupState { key: ProjectGroupKey::new(host, path_list), expanded: self.expanded }
-    }
-}
-
-impl From<SerializedProjectGroup> for ProjectGroupKey {
-    fn from(value: SerializedProjectGroup) -> Self {
-        value.into_restored_state().key
-    }
-}
-
-/// Per-window state for a MultiWorkspace, persisted to KVP.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct MultiWorkspaceState {
-    pub active_workspace_id: Option<WorkspaceId>,
-    pub sidebar_open: bool,
-    #[serde(alias = "project_group_keys")]
-    pub project_groups: Vec<SerializedProjectGroup>,
-    #[serde(default)]
-    pub sidebar_state: Option<String>,
-}
-
-/// The serialized state of a single MultiWorkspace window from a previous session:
-/// the active workspace to restore plus window-level state (project group keys,
-/// sidebar).
-#[derive(Debug, Clone)]
-pub struct SerializedMultiWorkspace {
-    pub active_workspace: SessionWorkspace,
-    pub state: MultiWorkspaceState,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -137,7 +69,6 @@ pub(crate) struct SerializedWorkspace {
     pub(crate) identity_paths: Option<PathList>,
     pub(crate) center_group: SerializedPaneGroup,
     pub(crate) window_bounds: Option<SerializedWindowBounds>,
-    pub(crate) centered_layout: bool,
     pub(crate) display: Option<Uuid>,
     pub(crate) docks: DockStructure,
     pub(crate) session_id: Option<String>,

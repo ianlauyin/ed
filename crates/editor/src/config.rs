@@ -16,11 +16,6 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_hard_wrap(&mut self, hard_wrap: Option<usize>, cx: &mut Context<Self>) {
-        self.hard_wrap = hard_wrap;
-        cx.notify();
-    }
-
     pub fn set_text_style_refinement(&mut self, style: TextStyleRefinement) {
         self.text_style_refinement = Some(style);
     }
@@ -43,10 +38,6 @@ impl Editor {
         self.style = Some(style);
     }
 
-    pub const fn set_soft_wrap(&mut self) {
-        self.soft_wrap_mode_override = Some(language_settings::SoftWrap::EditorWidth)
-    }
-
     pub fn set_show_wrap_guides(&mut self, show_wrap_guides: bool, cx: &mut Context<Self>) {
         self.show_wrap_guides = Some(show_wrap_guides);
         cx.notify();
@@ -54,11 +45,6 @@ impl Editor {
 
     pub fn set_show_indent_guides(&mut self, show_indent_guides: bool, cx: &mut Context<Self>) {
         self.show_indent_guides = Some(show_indent_guides);
-        cx.notify();
-    }
-
-    pub fn disable_indent_guides_for_buffer(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
-        self.buffers_with_disabled_indent_guides.insert(buffer_id);
         cx.notify();
     }
 
@@ -83,22 +69,6 @@ impl Editor {
         }
     }
 
-    pub const fn breadcrumbs_visible(&self) -> bool {
-        self.breadcrumbs_visibility.visible()
-    }
-
-    fn set_breadcrumbs_visibility(&mut self, breadcrumbs_visibility: BreadcrumbsVisibility, cx: &mut Context<Self>) {
-        if self.breadcrumbs_visibility != breadcrumbs_visibility {
-            self.breadcrumbs_visibility = breadcrumbs_visibility;
-            cx.emit(EditorEvent::BreadcrumbsChanged);
-            cx.notify();
-        }
-    }
-
-    pub fn toggle_breadcrumb(&mut self, _: &ToggleBreadcrumb, _: &mut Window, cx: &mut Context<Self>) {
-        self.set_breadcrumbs_visibility(self.breadcrumbs_visibility.toggle_visibility(), cx);
-    }
-
     pub fn disable_scrollbars_and_minimap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_horizontal_scrollbar = false;
         self.set_minimap_visibility(MinimapVisibility::Disabled, window, cx);
@@ -106,17 +76,6 @@ impl Editor {
 
     pub fn hide_minimap_by_default(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.set_minimap_visibility(self.minimap_visibility.hidden(), window, cx);
-    }
-
-    /// Normally the text in full mode and auto height editors is padded on the
-    /// left side by roughly half a character width for improved hit testing.
-    ///
-    /// Use this method to disable this for cases where this is not wanted (e.g.
-    /// if you want to align the editor text with some other text above or below)
-    /// or if you want to add this padding to single-line editors.
-    pub fn set_offset_content(&mut self, offset_content: bool, cx: &mut Context<Self>) {
-        self.offset_content = offset_content;
-        cx.notify();
     }
 
     pub fn set_show_line_numbers(&mut self, show_line_numbers: bool, cx: &mut Context<Self>) {

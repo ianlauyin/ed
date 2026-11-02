@@ -38,7 +38,6 @@ pub struct EditorSettings {
     pub hover_popover_delay: DelayMs,
     pub hover_popover_sticky: bool,
     pub hover_popover_hiding_delay: DelayMs,
-    pub toolbar: Toolbar,
     pub minimap: Minimap,
     pub scroll_beyond_last_line: ScrollBeyondLastLine,
     pub vertical_scroll_margin: f64,
@@ -86,13 +85,6 @@ pub struct FileDiffSettings {
     ///
     /// Default: true
     pub show_full_file: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Toolbar {
-    pub breadcrumbs: bool,
-    pub quick_actions: bool,
-    pub code_actions: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -158,7 +150,6 @@ impl Settings for EditorSettings {
         let editor = content.editor.clone();
         let cursor_animation = editor.cursor_animation.unwrap();
         let minimap = editor.minimap.unwrap();
-        let toolbar = editor.toolbar.unwrap();
         let search = editor.search.unwrap();
         let drag_and_drop_selection = editor.drag_and_drop_selection.unwrap();
         let file_diff = content.git.as_ref().unwrap().file_diff.unwrap();
@@ -174,12 +165,6 @@ impl Settings for EditorSettings {
             hover_popover_delay: editor.hover_popover_delay.unwrap(),
             hover_popover_sticky: editor.hover_popover_sticky.unwrap(),
             hover_popover_hiding_delay: editor.hover_popover_hiding_delay.unwrap(),
-            toolbar: Toolbar {
-                breadcrumbs: toolbar.breadcrumbs.unwrap(),
-                quick_actions: toolbar.quick_actions.unwrap(),
-
-                code_actions: toolbar.code_actions.unwrap(),
-            },
             minimap: Minimap {
                 show: minimap.show.unwrap(),
                 display_in: minimap.display_in.unwrap(),

@@ -263,10 +263,6 @@ impl RemoteBufferStore {
         Ok(None)
     }
 
-    pub fn incomplete_buffer_ids(&self) -> Vec<BufferId> {
-        self.loading_remote_buffers_by_id.keys().copied().collect::<Vec<_>>()
-    }
-
     pub fn deserialize_project_transaction(
         &self,
         message: proto::ProjectTransaction,
@@ -1003,21 +999,6 @@ impl BufferStore {
         })
     }
 
-    pub fn buffer_version_info(&self, cx: &App) -> (Vec<proto::BufferVersion>, Vec<BufferId>) {
-        let buffers = self
-            .buffers()
-            .map(|buffer| {
-                let buffer = buffer.read(cx);
-                proto::BufferVersion {
-                    id: buffer.remote_id().into(),
-                    version: language::proto::serialize_version(&buffer.version),
-                }
-            })
-            .collect();
-        let incomplete_buffer_ids = self.as_remote().map(|remote| remote.incomplete_buffer_ids()).unwrap_or_default();
-        (buffers, incomplete_buffer_ids)
-    }
-
     pub fn disconnected_from_host(&mut self, cx: &mut App) {
         for open_buffer in self.opened_buffers.values_mut() {
             if let Some(buffer) = open_buffer.upgrade() {
@@ -1038,10 +1019,6 @@ impl BufferStore {
 
     pub fn shared(&mut self, remote_id: u64, downstream_client: AnyProtoClient, _cx: &mut App) {
         self.downstream_client = Some((downstream_client, remote_id));
-    }
-
-    pub fn discard_incomplete(&mut self) {
-        self.opened_buffers.retain(|_, buffer| !matches!(buffer, OpenBuffer::Operations(_)));
     }
 
     fn buffer_changed_file(&mut self, buffer: Entity<Buffer>, cx: &App) -> Option<()> {
@@ -1436,10 +1413,6 @@ impl BufferStore {
 
     pub fn is_shared(&self, buffer_id: BufferId, _cx: &App) -> bool {
         self.shared_buffers.values().any(|buffers| buffers.contains_key(&buffer_id))
-    }
-
-    pub fn has_shared_buffers(&self) -> bool {
-        !self.shared_buffers.is_empty()
     }
 
     pub fn create_local_buffer(

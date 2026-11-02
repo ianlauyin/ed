@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use editor::Editor;
 use editor::EditorEvent;
-use editor::EditorSettings;
 use editor::RevealInFileManager;
 use editor::actions::SelectAll;
 use editor::items::entry_git_aware_label_color;
@@ -23,7 +22,6 @@ use gpui::Entity;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
-use gpui::Font;
 use gpui::GlobalElementId;
 use gpui::InteractiveElement;
 use gpui::IntoElement;
@@ -60,7 +58,6 @@ use project::Project;
 use project::ProjectPath;
 use project::image_store::ImageItemEvent;
 use settings::Settings;
-use theme_settings::ThemeSettings;
 use ui::Tooltip;
 use ui::prelude::*;
 use util::ResultExt as _;
@@ -75,7 +72,6 @@ use workspace::Workspace;
 use workspace::WorkspaceId;
 use workspace::delete_unloaded_items;
 use workspace::invalid_item_view::InvalidItemView;
-use workspace::item::HighlightedText;
 use workspace::item::Item;
 use workspace::item::ItemHandle;
 use workspace::item::ProjectItem;
@@ -514,7 +510,7 @@ impl Item for ImageView {
         match event {
             ImageViewEvent::TitleChanged => {
                 f(workspace::item::ItemEvent::UpdateTab);
-                f(workspace::item::ItemEvent::UpdateBreadcrumbs);
+                f(workspace::item::ItemEvent::UpdateActivePath);
             }
         }
     }
@@ -567,18 +563,6 @@ impl Item for ImageView {
         ItemSettings::get_global(cx).file_icons.then(|| FileIcons::get_icon(&path, cx)).flatten().map(Icon::from_path)
     }
 
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        let show_breadcrumb = EditorSettings::get_global(cx).toolbar.breadcrumbs;
-        if show_breadcrumb { ToolbarItemLocation::PrimaryLeft } else { ToolbarItemLocation::Hidden }
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        let text = breadcrumbs_text_for_image(self.project.read(cx), self.image_item.read(cx), cx);
-        let font = ThemeSettings::get_global(cx).buffer_font.clone();
-
-        Some((vec![HighlightedText { text: text.into(), highlights: vec![] }], Some(font)))
-    }
-
     fn can_split(&self) -> bool {
         true
     }
@@ -612,17 +596,6 @@ impl Item for ImageView {
     fn buffer_kind(&self, _: &App) -> workspace::item::ItemBufferKind {
         workspace::item::ItemBufferKind::Singleton
     }
-}
-
-fn breadcrumbs_text_for_image(project: &Project, image: &ImageItem, cx: &App) -> String {
-    let mut path = image.file.path().to_rel_path_buf();
-    if project.visible_worktrees(cx).count() > 1
-        && let Some(worktree) = project.worktree_for_id(image.project_path(cx).worktree_id, cx)
-    {
-        path = worktree.read(cx).root_name().join(&path);
-    }
-
-    path.display(project.path_style(cx)).to_string()
 }
 
 impl SerializableItem for ImageView {

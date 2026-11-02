@@ -2,13 +2,10 @@ use gpui::App;
 use gpui::actions;
 use workspace::Workspace;
 
-pub mod markdown_preview_settings;
 mod markdown_preview_style;
 pub mod markdown_preview_view;
 mod mermaid_diagrams;
-
-pub use ed_actions::preview::markdown::OpenPreview;
-pub use ed_actions::preview::markdown::OpenPreviewToTheSide;
+mod preview_provider;
 
 use crate::markdown_preview_view::MarkdownPreviewView;
 
@@ -40,12 +37,8 @@ actions!(
 
 pub fn init(cx: &mut App) {
     workspace::register_serializable_item::<MarkdownPreviewView>(cx);
+    workspace::preview::register_preview_provider(preview_provider::PROVIDER, cx);
 
-    cx.observe_new(|workspace: &mut Workspace, window, cx| {
-        let Some(window) = window else {
-            return;
-        };
-        markdown_preview_view::MarkdownPreviewView::register(workspace, window, cx);
-    })
-    .detach();
+    cx.observe_new(|workspace: &mut Workspace, _, _| markdown_preview_view::MarkdownPreviewView::register(workspace))
+        .detach();
 }

@@ -4,6 +4,7 @@ use gpui::AbsoluteLength;
 use gpui::BorderStyle;
 use gpui::DefiniteLength;
 use gpui::EdgesRefinement;
+use gpui::FontWeight;
 use gpui::Length;
 use gpui::StyleRefinement;
 use gpui::TextStyleRefinement;
@@ -34,13 +35,12 @@ pub(crate) fn preview_markdown_style(
     let theme_settings = ThemeSettings::get_global(cx);
     let buffer_font_weight = theme_settings.buffer_font.weight;
     let buffer_font_size = theme_settings.markdown_preview_font_size(cx);
-    let code_font_family = theme_settings.markdown_preview_code_font_family().clone();
-    let heading_font_weight = theme_settings.markdown_preview_heading_font_weight();
+    let code_font_family = theme_settings.buffer_font.family.clone();
 
     let body_font_size = rems(1.0);
     let mut base_text_style = window.text_style();
     base_text_style.refine(&TextStyleRefinement {
-        font_family: Some(theme_settings.markdown_preview_font_family().clone()),
+        font_family: Some(theme_settings.ui_font.family.clone()),
         font_fallbacks: theme_settings.ui_font.fallbacks.clone(),
         font_features: Some(theme_settings.ui_font.features.clone()),
         font_size: Some(body_font_size.into()),
@@ -97,7 +97,7 @@ pub(crate) fn preview_markdown_style(
 
     let heading_text_style = |font_size: Rems| TextStyleRefinement {
         font_size: Some(font_size.into()),
-        font_weight: Some(heading_font_weight),
+        font_weight: Some(FontWeight::SEMIBOLD),
         line_height: Some(relative(1.25)),
         ..Default::default()
     };

@@ -152,7 +152,7 @@ impl Platform for HeadlessPlatform {
     fn quit(&self) {
         let _ = self.sender.send(MainEvent::Quit);
     }
-    fn restart(&self, _binary: Option<PathBuf>, _arguments: Vec<OsString>) {
+    fn restart(&self, _arguments: Vec<OsString>) {
         self.quit();
     }
     fn activate(&self, _ignoring_other_apps: bool) {}

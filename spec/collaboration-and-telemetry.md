@@ -11,7 +11,7 @@ GPUI has no screen-capture API or `screen-capture` feature, and the app does not
 link ScreenCaptureKit or ReplayKit.
 GPUI has no video `surface` element or CoreVideo pixel-buffer render path.
 
-The title bar retains project, worktree, Git, and platform window controls.
+The window header and status bar retain project, worktree, Git, and platform window controls.
 These controls initialize independently of collaboration. Old collaboration and
 account visibility settings no longer expose or enable features.
 

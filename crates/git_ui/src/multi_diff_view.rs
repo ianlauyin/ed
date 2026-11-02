@@ -22,7 +22,6 @@ use gpui::Entity;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
-use gpui::Font;
 use gpui::IntoElement;
 use gpui::Render;
 use gpui::SharedString;
@@ -31,7 +30,6 @@ use gpui::Task;
 use gpui::Window;
 use language::Buffer;
 use language::Capability;
-use language::HighlightedText;
 use language::OffsetRangeExt;
 use multi_buffer::PathKey;
 use project::Project;
@@ -45,7 +43,6 @@ use util::rel_path::RelPath;
 use workspace::Item;
 use workspace::ItemHandle as _;
 use workspace::ItemNavHistory;
-use workspace::ToolbarItemLocation;
 use workspace::Workspace;
 use workspace::item::ItemEvent;
 use workspace::item::SaveOptions;
@@ -317,14 +314,6 @@ impl Item for MultiDiffView {
 
     fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.editor.update(cx, |editor, cx| editor.navigate(data, window, cx))
-    }
-
-    fn breadcrumb_location(&self, _: &App) -> ToolbarItemLocation {
-        ToolbarItemLocation::PrimaryLeft
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        self.editor.breadcrumbs(cx)
     }
 
     fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {

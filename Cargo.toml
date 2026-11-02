@@ -9,9 +9,7 @@ edition = "2024"
 [workspace.dependencies]
 activity_indicator = { path = "crates/activity_indicator" }
 assets = { path = "crates/assets" }
-breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
-call_hierarchy = { path = "crates/call_hierarchy" }
 clock = { path = "crates/clock" }
 collections = { path = "crates/collections" }
 command_palette = { path = "crates/command_palette" }
@@ -60,7 +58,7 @@ mermaid = { path = "crates/mermaid" }
 multi_buffer = { path = "crates/multi_buffer" }
 notifications = { path = "crates/notifications" }
 open_path_prompt = { path = "crates/open_path_prompt" }
-outline = { path = "crates/outline" }
+outline_panel = { path = "crates/outline_panel" }
 path = { path = "crates/path" }
 paths = { path = "crates/paths" }
 picker = { path = "crates/picker" }
@@ -362,7 +360,6 @@ syn = { opt-level = 3 }
 # Build single-source-file crates with cg=1 as it helps make `cargo build` of a whole workspace a bit faster
 activity_indicator = { codegen-units = 1 }
 assets = { codegen-units = 1 }
-breadcrumbs = { codegen-units = 1 }
 collections = { codegen-units = 1 }
 command_palette = { codegen-units = 1 }
 ed_actions = { codegen-units = 1 }
@@ -372,7 +369,6 @@ image_viewer = { codegen-units = 1 }
 json_schema_store = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }
-outline = { codegen-units = 1 }
 paths = { codegen-units = 1 }
 project_symbols = { codegen-units = 1 }
 refineable = { codegen-units = 1 }
@@ -390,7 +386,5 @@ debug = "line-tables-only"
 split-debuginfo = "packed"
 strip = true
 lto = "thin"
+panic = "abort"  # The panic hook logs and exits anyway, so unwinding buys nothing.
 codegen-units = 1
-
-[profile.release.package]
-ed = { codegen-units = 16 }

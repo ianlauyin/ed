@@ -60,14 +60,14 @@ use theme::GlobalTheme;
 use util::ResultExt;
 use uuid::Uuid;
 use workspace::AppState;
-use workspace::MultiWorkspace;
 use workspace::SerializedWorkspaceLocation;
 use workspace::SessionWorkspace;
 use workspace::Toast;
+use workspace::Workspace;
 use workspace::WorkspaceSettings;
 use workspace::WorkspaceStore;
 use workspace::notifications::NotificationId;
-use workspace::restore_multiworkspace;
+use workspace::restore_workspace;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -260,8 +260,6 @@ fn main() {
 
         ed::init(cx);
 
-        ed::move_to_applications::init(cx);
-
         let session = cx.foreground_executor().block_on(session);
 
         let app_session = cx.new(|cx| AppSession::new(session, cx));
@@ -290,10 +288,9 @@ fn main() {
         go_to_line::init(cx);
         file_finder::init(cx);
         tab_switcher::init(cx);
-        outline::init(cx);
-        call_hierarchy::init(cx);
         project_symbols::init(cx);
         project_panel::init(cx);
+        outline_panel::init(cx);
         search::init(cx);
         lsp_locations::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
@@ -385,7 +382,7 @@ fn main() {
 
         let (first_window_tx, first_window_rx) = oneshot::channel::<()>();
         let first_window_tx = Rc::new(RefCell::new(Some(first_window_tx)));
-        let _first_window_subscription = cx.observe_new::<MultiWorkspace>(move |_, _, _| {
+        let _first_window_subscription = cx.observe_new::<Workspace>(move |_, _, _| {
             if let Some(tx) = first_window_tx.borrow_mut().take() {
                 tx.send(()).ok();
             }
@@ -473,34 +470,28 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &App)
 }
 
 pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &mut AsyncApp) -> Result<()> {
-    if let Some(multi_workspaces) = restorable_workspaces(cx, &app_state).await {
+    if let Some(session_workspaces) = restorable_workspaces(cx, &app_state).await {
         let mut error_count = 0;
-        for multi_workspace in multi_workspaces {
-            let result = match &multi_workspace.active_workspace.location {
+        for session_workspace in session_workspaces {
+            let result = match &session_workspace.location {
                 SerializedWorkspaceLocation::Local => {
-                    restore_multiworkspace(multi_workspace, app_state.clone(), cx).await.map(|_| ())
+                    restore_workspace(session_workspace, app_state.clone(), cx).await.map(|_| ())
                 }
                 SerializedWorkspaceLocation::Remote(connection_options) => {
                     let mut connection_options = connection_options.clone();
                     let RemoteConnectionOptions::Ssh(options) = &mut connection_options;
                     cx.update(|cx| RemoteSettings::get_global(cx).fill_connection_options_from_settings(options));
 
-                    let paths =
-                        multi_workspace.active_workspace.paths.paths().iter().map(PathBuf::from).collect::<Vec<_>>();
-                    let state = multi_workspace.state.clone();
-                    async {
-                        let window = open_remote_project(
-                            connection_options,
-                            paths,
-                            app_state.clone(),
-                            workspace::OpenOptions::default(),
-                            cx,
-                        )
-                        .await?;
-                        workspace::apply_restored_multiworkspace_state(window, &state, app_state.fs.clone(), cx).await;
-                        Ok::<(), anyhow::Error>(())
-                    }
+                    let paths = session_workspace.paths.paths().iter().map(PathBuf::from).collect::<Vec<_>>();
+                    open_remote_project(
+                        connection_options,
+                        paths,
+                        app_state.clone(),
+                        workspace::OpenOptions::default(),
+                        cx,
+                    )
                     .await
+                    .map(|_| ())
                 }
             };
 
@@ -520,13 +511,11 @@ pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &m
             // Try to find an active workspace to show the toast
             let toast_shown = cx.update(|cx| {
                 if let Some(window) = cx.active_window()
-                    && let Some(multi_workspace) = window.downcast::<MultiWorkspace>()
+                    && let Some(workspace) = window.downcast::<Workspace>()
                 {
-                    multi_workspace
-                        .update(cx, |multi_workspace, _, cx| {
-                            multi_workspace.workspace().update(cx, |workspace, cx| {
-                                workspace.show_toast(Toast::new(NotificationId::unique::<()>(), message.clone()), cx)
-                            });
+                    workspace
+                        .update(cx, |workspace, _, cx| {
+                            workspace.show_toast(Toast::new(NotificationId::unique::<()>(), message.clone()), cx)
                         })
                         .ok();
                     return true;
@@ -593,12 +582,9 @@ pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &m
     Ok(())
 }
 
-async fn restorable_workspaces(
-    cx: &AsyncApp,
-    app_state: &Arc<AppState>,
-) -> Option<Vec<workspace::SerializedMultiWorkspace>> {
+async fn restorable_workspaces(cx: &AsyncApp, app_state: &Arc<AppState>) -> Option<Vec<workspace::SessionWorkspace>> {
     let locations = restorable_workspace_locations(cx, app_state).await?;
-    Some(cx.update(|cx| workspace::read_serialized_multi_workspaces(locations, cx)))
+    Some(workspace::read_session_workspaces(locations))
 }
 
 pub(crate) async fn restorable_workspace_locations(

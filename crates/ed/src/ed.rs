@@ -3,9 +3,7 @@ pub(crate) mod control_server;
 
 pub(crate) mod mac_only_instance;
 
-pub(crate) mod move_to_applications;
 mod open_listener;
-mod quick_action_bar;
 
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -15,7 +13,6 @@ use std::sync::atomic::{self};
 
 use anyhow::Context as _;
 pub use app_menus::*;
-use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
 use ed_actions::About;
 use ed_actions::OpenBrowser;
@@ -64,8 +61,8 @@ use language_tools::lsp_button::{self};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 pub use open_listener::*;
 use project::DirectoryLister;
+use outline_panel::OutlinePanel;
 use project_panel::ProjectPanel;
-use quick_action_bar::QuickActionBar;
 use recent_projects::open_remote_project;
 use search::project_search::ProjectSearchBar;
 use settings::DefaultOpenBehavior;
@@ -81,25 +78,20 @@ use ui::prelude::*;
 use util::ResultExt;
 use uuid::Uuid;
 use workspace::AppState;
+use workspace::CloseIntent;
 use workspace::CloseProject;
 use workspace::CloseWindow;
-use workspace::MultiWorkspace;
 use workspace::NewFile;
 use workspace::NewWindow;
 use workspace::OpenLog;
 use workspace::Pane;
+use workspace::StatusItemModes;
 use workspace::Workspace;
 use workspace::WorkspaceSettings;
 use workspace::notifications::NotificationId;
 use workspace::notifications::simple_message_notification::MessageNotification;
 use workspace::open_new;
 use workspace::with_active_or_new_workspace;
-#[cfg(debug_assertions)]
-use workspace::workspace_error::ErrorAction;
-#[cfg(debug_assertions)]
-use workspace::workspace_error::ErrorSeverity;
-#[cfg(debug_assertions)]
-use workspace::workspace_error::WorkspaceError;
 
 actions!(
     ed,
@@ -118,15 +110,6 @@ actions!(
         ToggleFullScreen,
         /// Zooms the window.
         Zoom,
-    ]
-);
-
-#[cfg(debug_assertions)]
-actions!(
-    dev,
-    [
-        /// Show an error on the workspace level.
-        ShowWorkspaceError
     ]
 );
 
@@ -174,7 +157,10 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
         titlebar: Some(TitlebarOptions {
             title: None,
             appears_transparent: true,
-            traffic_light_position: Some(point(px(9.0), px(9.0))),
+            traffic_light_position: Some(point(
+                px(ui::utils::TRAFFIC_LIGHT_POSITION.0),
+                px(ui::utils::TRAFFIC_LIGHT_POSITION.1),
+            )),
         }),
         window_bounds: None,
         focus: false,
@@ -202,20 +188,20 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     init_cursor_hide_mode(cx);
     init_app_appearance(cx);
 
-    cx.observe_new(|_: &mut MultiWorkspace, window, cx| {
+    cx.observe_new(|_: &mut Workspace, window, cx| {
         let Some(window) = window else {
             return;
         };
 
-        let multi_workspace_handle = cx.entity().downgrade();
+        // The window's workspace can be replaced, so look up the current root
+        // when the window is asked to close.
         window.on_window_should_close(cx, move |window, cx| {
-            multi_workspace_handle
-                .update(cx, |multi_workspace, cx| {
-                    // We'll handle closing asynchronously
-                    multi_workspace.close_window(&CloseWindow, window, cx);
-                    false
-                })
-                .unwrap_or(true)
+            let Some(workspace) = window.root::<Workspace>().flatten() else {
+                return true;
+            };
+            // We'll handle closing asynchronously
+            workspace.update(cx, |workspace, cx| workspace.close_window(&CloseWindow, window, cx));
+            false
         });
     })
     .detach();
@@ -228,6 +214,9 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         let workspace_handle = cx.entity();
         let center_pane = workspace.active_pane().clone();
         initialize_pane(workspace, &center_pane, window, cx);
+        // Created with the workspace too, before the `PaneAdded` subscription below.
+        let git_history_pane = workspace.git_history_pane().clone();
+        initialize_pane(workspace, &git_history_pane, window, cx);
 
         cx.subscribe_in(&workspace_handle, window, {
             move |workspace, _, event, window, cx| match event {
@@ -247,6 +236,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         }
 
         let search_button = cx.new(|_| search::search_status_button::SearchButton::new());
+        let git_history_button = cx.new(|_| git_ui::git_history_button::GitHistoryButton::new());
         let diagnostic_summary = cx.new(|cx| diagnostics::items::DiagnosticIndicator::new(workspace, cx));
         let activity_indicator = activity_indicator::ActivityIndicator::new(workspace, window, cx);
         let active_buffer_encoding = cx.new(|_| encoding_selector::ActiveBufferEncoding::new(workspace));
@@ -268,9 +258,10 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_left_item(diagnostic_summary, window, cx);
             status_bar.add_left_item(activity_indicator, window, cx);
             status_bar.add_right_item(active_buffer_encoding, window, cx);
-            status_bar.add_right_item(active_buffer_language, window, cx);
-            status_bar.add_right_item(cursor_position, window, cx);
+            status_bar.add_right_item_in(active_buffer_language, StatusItemModes::All, window, cx);
+            status_bar.add_right_item_in(cursor_position, StatusItemModes::All, window, cx);
             status_bar.add_right_item(image_info, window, cx);
+            status_bar.add_left_item_in(git_history_button, StatusItemModes::GitHistory, window, cx);
         });
 
         let panels_task = initialize_panels(window, cx);
@@ -287,6 +278,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 fn initialize_panels(window: &Window, cx: &Context<Workspace>) -> Task<anyhow::Result<()>> {
     cx.spawn_in(window, async move |workspace_handle, cx| {
         let project_panel = ProjectPanel::load(workspace_handle.clone(), cx.clone());
+        let outline_panel = OutlinePanel::load(workspace_handle.clone(), cx.clone());
         let terminal_panel = TerminalPanel::load(workspace_handle.clone(), cx.clone());
         let git_panel = GitPanel::load(workspace_handle.clone(), cx.clone());
 
@@ -306,6 +298,7 @@ fn initialize_panels(window: &Window, cx: &Context<Workspace>) -> Task<anyhow::R
 
         futures::join!(
             add_panel_when_ready(project_panel, workspace_handle.clone(), cx.clone()),
+            add_panel_when_ready(outline_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(terminal_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(git_panel, workspace_handle.clone(), cx.clone()),
         );
@@ -524,6 +517,14 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         )
         .register_action(
             |workspace: &mut Workspace,
+             _: &outline_panel::ToggleFocus,
+             window: &mut Window,
+             cx: &mut Context<Workspace>| {
+                workspace.toggle_panel_focus::<OutlinePanel>(window, cx);
+            },
+        )
+        .register_action(
+            |workspace: &mut Workspace,
              _: &terminal_panel::ToggleFocus,
              window: &mut Window,
              cx: &mut Context<Workspace>| {
@@ -542,15 +543,29 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         })
         .register_action({
             move |workspace, _: &CloseProject, window, cx| {
-                let Some(window_handle) = window.window_handle().downcast::<MultiWorkspace>() else {
+                let Some(window_handle) = window.window_handle().downcast::<Workspace>() else {
                     return;
                 };
-                let old_group_key = workspace.project_group_key(cx);
-                cx.spawn_in(window, async move |_, cx| {
-                    let task = window_handle.update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.remove_project_group(&old_group_key, window, cx)
-                    })?;
-                    task.await?;
+                let app_state = workspace.app_state().clone();
+                cx.spawn_in(window, async move |workspace, cx| {
+                    let should_continue = workspace
+                        .update_in(cx, |workspace, window, cx| {
+                            workspace.prepare_to_close(CloseIntent::ReplaceWindow, window, cx)
+                        })?
+                        .await?;
+                    if should_continue {
+                        cx.update(|_, cx| {
+                            Workspace::new_local(
+                                Vec::new(),
+                                app_state,
+                                Some(window_handle),
+                                None,
+                                workspace::OpenMode::Activate,
+                                cx,
+                            )
+                        })?
+                        .await?;
+                    }
                     anyhow::Ok(())
                 })
                 .detach_and_log_err(cx);
@@ -565,45 +580,6 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
                 .detach_and_log_err(cx);
             }
         });
-
-    #[cfg(debug_assertions)]
-    workspace.register_action(|workspace, _: &ShowWorkspaceError, _, cx| {
-        struct DebugError;
-        struct SecondDebugError;
-
-        impl WorkspaceError for DebugError {
-            fn primary_message(&self) -> SharedString {
-                SharedString::new_static(
-                    "Error: Prepare rename via rust-analyzer failed: No references found at position",
-                )
-            }
-
-            fn severity(&self) -> ErrorSeverity {
-                ErrorSeverity::Warning
-            }
-
-            fn primary_action(&self) -> ErrorAction {
-                ErrorAction::dismiss()
-            }
-        }
-
-        impl WorkspaceError for SecondDebugError {
-            fn primary_message(&self) -> SharedString {
-                SharedString::new_static("This is some error to ignore.")
-            }
-
-            fn severity(&self) -> ErrorSeverity {
-                ErrorSeverity::Error
-            }
-
-            fn primary_action(&self) -> ErrorAction {
-                ErrorAction::dismiss()
-            }
-        }
-
-        workspace.show_error(DebugError, cx);
-        workspace.show_error(SecondDebugError, cx);
-    });
 }
 
 fn initialize_pane(workspace: &Workspace, pane: &Entity<Pane>, window: &mut Window, cx: &mut Context<Workspace>) {
@@ -613,14 +589,8 @@ fn initialize_pane(workspace: &Workspace, pane: &Entity<Pane>, window: &mut Wind
             toolbar.add_item(solo_diff_style_toolbar, window, cx);
             let file_diff_style_toolbar = cx.new(FileDiffStyleToolbar::new);
             toolbar.add_item(file_diff_style_toolbar, window, cx);
-            let breadcrumbs = cx.new(|_| Breadcrumbs::new());
-            toolbar.add_item(breadcrumbs, window, cx);
             let buffer_search_bar = cx.new(|cx| search::BufferSearchBar::new(window, cx));
-            toolbar.add_item(buffer_search_bar.clone(), window, cx);
-            let quick_action_bar = cx.new(|cx| QuickActionBar::new(buffer_search_bar, workspace, cx));
-            toolbar.add_item(quick_action_bar, window, cx);
-            let diagnostic_editor_controls = cx.new(|_| diagnostics::ToolbarControls::new());
-            toolbar.add_item(diagnostic_editor_controls, window, cx);
+            toolbar.add_item(buffer_search_bar, window, cx);
             let project_search_bar = cx.new(|_| ProjectSearchBar::new());
             toolbar.add_item(project_search_bar, window, cx);
             let lsp_log_item = cx.new(|_| LspLogToolbarItemView::new());
@@ -759,8 +729,8 @@ fn quit(_: &Quit, cx: &mut App) {
 
     let should_confirm = WorkspaceSettings::get_global(cx).confirm_quit;
     cx.spawn(async move |cx| {
-        let mut workspace_windows: Vec<WindowHandle<MultiWorkspace>> = cx.update(|cx| {
-            cx.windows().into_iter().filter_map(|window| window.downcast::<MultiWorkspace>()).collect::<Vec<_>>()
+        let mut workspace_windows: Vec<WindowHandle<Workspace>> = cx.update(|cx| {
+            cx.windows().into_iter().filter_map(|window| window.downcast::<Workspace>()).collect::<Vec<_>>()
         });
 
         // If multiple windows have unsaved changes, and need a save prompt,
@@ -769,8 +739,8 @@ fn quit(_: &Quit, cx: &mut App) {
             workspace_windows.sort_by_key(|window| window.is_active(cx) == Some(false));
         });
 
-        if should_confirm && let Some(multi_workspace) = workspace_windows.first() {
-            let answer = multi_workspace
+        if should_confirm && let Some(workspace_window) = workspace_windows.first() {
+            let answer = workspace_window
                 .update(cx, |_, window, cx| {
                     window.prompt(PromptLevel::Info, "Are you sure you want to quit?", None, &["Quit", "Cancel"], cx)
                 })
@@ -863,11 +833,6 @@ fn open_log_file(workspace: &Workspace, window: &Window, cx: &Context<Workspace>
                 .new_window_entity(|window, cx| {
                     let mut editor = Editor::for_multibuffer(buffer, Some(project), window, cx);
                     editor.set_read_only(true);
-                    editor.set_breadcrumb_header(format!(
-                        "Last {} lines in {}",
-                        MAX_LINES,
-                        paths::log_file().display()
-                    ));
                     let last_multi_buffer_offset = editor.buffer().read(cx).len(cx);
                     editor.change_selections(editor::SelectionEffects::default(), window, cx, |s| {
                         s.select_ranges(Some(last_multi_buffer_offset..last_multi_buffer_offset));
@@ -963,7 +928,7 @@ pub fn open_new_ssh_project_from_project(
         return Task::ready(Err(anyhow::anyhow!("Not an ssh project")));
     };
     let connection_options = ssh_client.read(cx).connection_options();
-    let requesting_window = if create_new_window { None } else { window.window_handle().downcast::<MultiWorkspace>() };
+    let requesting_window = if create_new_window { None } else { window.window_handle().downcast::<Workspace>() };
     cx.spawn_in(window, async move |_, cx| {
         open_remote_project(
             connection_options,
@@ -1021,7 +986,6 @@ fn open_bundled_file(
                                 let mut editor = Editor::for_multibuffer(buffer, Some(project.clone()), window, cx);
                                 editor.set_read_only(true);
                                 editor.set_should_serialize(false, cx);
-                                editor.set_breadcrumb_header(title.into());
                                 editor
                             })),
                             None,

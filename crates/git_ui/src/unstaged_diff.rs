@@ -529,8 +529,6 @@ impl ToolbarItemView for UnstagedDiffToolbar {
             active_pane_item.and_then(|item| item.act_as::<UnstagedDiff>(cx)).map(|entity| entity.downgrade());
         if self.unstaged_diff.is_some() { ToolbarItemLocation::PrimaryRight } else { ToolbarItemLocation::Hidden }
     }
-
-    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for UnstagedDiffToolbar {

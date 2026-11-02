@@ -150,7 +150,7 @@ impl Editor {
             return None;
         }
 
-        let actions_menu = if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(window, cx)? {
+        let actions_menu = if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(cx)? {
             menu
         } else {
             return None;
@@ -220,10 +220,6 @@ impl Editor {
         let multibuffer_row = MultiBufferRow(DisplayPoint::new(display_row, 0).to_point(&snapshot).row);
         let (buffer_snapshot, range) = snapshot.buffer_snapshot().buffer_line_for_row(multibuffer_row)?;
         Some((buffer_snapshot.remote_id(), range.start.row))
-    }
-
-    pub fn code_actions_enabled_for_toolbar(&self, cx: &App) -> bool {
-        !self.code_action_providers.is_empty() && EditorSettings::get_global(cx).toolbar.code_actions
     }
 
     pub fn has_available_code_actions_for_selection(&self) -> bool {

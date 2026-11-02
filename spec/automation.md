@@ -48,6 +48,12 @@ Metal, so the OS sees no UI structure; the app reports what it painted itself.
   ambiguous matches fail and list candidates for `--nth`.
 - `wait` polls `tree` for an element or text to appear or disappear, or for
   focus to move to an id.
+- `state` lists the editor panes and, separately, the Git History panes, each
+  with whether it is the workspace's focused pane, the active pane of its
+  group, and whether it holds keyboard focus, plus the current mode.
+- GPUI only sends focus-in/out events while the window is active (frontmost),
+  so checks that depend on a pane becoming active on focus need the app in
+  front; a background window keeps keyboard focus but no pane activates.
 - `state` also lists the project's language servers with the progress work
   each reports in flight (local or forwarded from a remote host). `wait-lsp`
   polls it until a (named) server exists and has reported no work for 1s,

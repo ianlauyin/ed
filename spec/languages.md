@@ -25,10 +25,11 @@
     `keyword` + `controlFlow` to `keyword.control`, so language servers keep
     the tree-sitter distinction.
 - Markdown uses the upstream `tree-sitter-md` crate from crates.io (no fork).
-  Outlines and breadcrumbs use LSP document symbols by default
+  Outlines use LSP document symbols by default
   (`document_symbols: "on"`), but Markdown overrides this to tree-sitter
   (`"off"`) because there is no Markdown language server; headings make up the
-  outline.
+  outline. LSP symbols are fetched per buffer, so in a multibuffer refreshing one
+  file never cancels another file's pending fetch.
 - C, C++, Diff, Git Commit, Go Mod, Go Work and TOML are still registered
   languages (file matching, comments, brackets, gopls for Go Mod/Work, tombi
   for TOML, Diff's keep-trailing-whitespace settings, the Git Commit editor)
@@ -47,6 +48,9 @@
   line, modeline) or a manual pick in the language selector. Untitled buffers
   are never detected from their contents (no ML detection, no
   `language_detection` setting) and stay Plain Text until saved or picked.
+- The status bar language button and the language selector follow the buffer
+  under the cursor, including in multi-buffer views (diffs, commits), and act
+  on the pane shown in the current mode (the history pane in Git History).
 - Fallback highlighting: any buffer whose language has no tree-sitter grammar
   (including plain text) is highlighted with the Sublime/TextMate syntaxes
   bundled by `two-face` (syntect, Oniguruma regex). The syntax is picked by
@@ -160,6 +164,9 @@
 - No Tailwind CSS or Emmet support: the `tailwindcss-language-server` and
   `emmet-language-server` adapters, Emmet abbreviation actions and the
   editor's inline input block are removed.
+- No LSP call hierarchy: no Show Incoming/Outgoing Calls actions, menu items or
+  picker. The client does not advertise `callHierarchy` capability, so servers
+  never offer it.
 - Grammar configs cannot scope language servers to syntax regions
   (`scope_opt_in_language_servers` / `opt_into_language_servers` removed).
 - Which servers run for a language, and their order, is decided in code only:

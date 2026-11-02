@@ -81,7 +81,6 @@ pub use image_store::ImageItem;
 use image_store::ImageItemEvent;
 pub use image_store::ImageStore;
 use image_store::ImageStoreEvent;
-use itertools::Itertools;
 use language::Buffer;
 use language::BufferEditSource;
 use language::BufferEvent;
@@ -107,13 +106,10 @@ use lsp::LanguageServerId;
 use lsp::LanguageServerName;
 use lsp::LanguageServerSelector;
 use lsp::MessageActionItem;
-pub use lsp_command::CallHierarchyItem;
 use lsp_command::GetDocumentHighlights;
 use lsp_command::GetDocumentSymbols;
-pub use lsp_command::IncomingCall;
 use lsp_command::InlayHints;
 use lsp_command::LspCommand;
-pub use lsp_command::OutgoingCall;
 use lsp_command::PerformRename;
 use lsp_command::PrepareRename;
 use lsp_command::make_lsp_text_document_position;
@@ -141,7 +137,6 @@ pub use project_search::SearchResults;
 use project_settings::ProjectSettings;
 use remote::RemoteClient;
 use remote::RemoteConnectionOptions;
-use remote::same_remote_connection_identity;
 use rpc::AnyProtoClient;
 use rpc::ErrorCode;
 use rpc::ProjectId;
@@ -166,7 +161,6 @@ use text::Anchor;
 use text::BufferId;
 use text::Rope;
 use util::ResultExt as _;
-use util::path_list::PathList;
 use util::paths::PathStyle;
 use util::paths::SanitizedPath;
 use util::rel_path::RelPath;
@@ -220,13 +214,6 @@ pub trait ProjectItem: 'static {
     fn is_dirty(&self) -> bool;
 }
 
-#[derive(Clone)]
-pub enum OpenedBufferEvent {
-    Disconnected,
-    Ok(BufferId),
-    Err(BufferId, Arc<anyhow::Error>),
-}
-
 /// Semantics-aware entity that is relevant to one or more [`Worktree`] with the files.
 /// `Project` coordinates tasks, language servers, and local or remote worktrees.
 /// Maps [`Worktree`] entries with its own logic using [`ProjectEntryId`] and [`ProjectPath`] structs.
@@ -261,7 +248,6 @@ pub struct Project {
     search_excluded_history: SearchHistory,
     environment: Entity<ProjectEnvironment>,
     downloading_files: Arc<Mutex<HashMap<(WorktreeId, String), DownloadingFile>>>,
-    last_worktree_paths: WorktreePaths,
 }
 
 struct DownloadingFile {
@@ -340,10 +326,6 @@ pub enum Event {
     WorktreeOrderChanged,
     WorktreeRemoved(WorktreeId),
     WorktreeUpdatedEntries(WorktreeId, UpdatedEntriesSet),
-    WorktreeUpdatedRootRepoCommonDir(WorktreeId),
-    WorktreePathsChanged {
-        old_worktree_paths: WorktreePaths,
-    },
     DiskBasedDiagnosticsStarted {
         language_server_id: LanguageServerId,
     },
@@ -447,8 +429,6 @@ pub enum PrepareRenameResponse {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InlayId {
-    ReplResult(usize),
-    // LSP
     Hint(usize),
     Color(usize),
 }
@@ -458,7 +438,6 @@ impl InlayId {
         match self {
             Self::Hint(id) => *id,
             Self::Color(id) => *id,
-            Self::ReplResult(id) => *id,
         }
     }
 }
@@ -499,15 +478,7 @@ pub enum CompletionIntent {
     Compose,
 }
 
-impl CompletionIntent {
-    pub fn is_complete(&self) -> bool {
-        self == &Self::Complete
-    }
-
-    pub fn is_compose(&self) -> bool {
-        self == &Self::Compose
-    }
-}
+impl CompletionIntent {}
 
 /// Describes a visual group for a completion item in the menu.
 /// When the group changes between consecutive completions, the menu inserts a divider.
@@ -999,8 +970,6 @@ impl DirectoryLister {
     }
 }
 
-pub const CURRENT_PROJECT_FEATURES: &[&str] = &["new-style-anchors"];
-
 /// An LSP diagnostics associated with a certain language server.
 #[derive(Clone, Debug, Default)]
 pub enum LspPullDiagnostics {
@@ -1047,7 +1016,7 @@ impl Project {
 
             let weak_self = cx.weak_entity();
 
-            let environment = cx.new(|cx| ProjectEnvironment::new(worktree_store.downgrade(), None, false, cx));
+            let environment = cx.new(|cx| ProjectEnvironment::new(None, false, cx));
             let manifest_tree = ManifestTree::new(worktree_store.clone(), cx);
 
             let buffer_store = cx.new(|cx| BufferStore::local(worktree_store.clone(), cx));
@@ -1113,7 +1082,6 @@ impl Project {
                 search_excluded_history: Self::new_search_history(),
 
                 downloading_files: Arc::default(),
-                last_worktree_paths: WorktreePaths::default(),
             }
         })
     }
@@ -1164,8 +1132,7 @@ impl Project {
             });
             cx.subscribe(&buffer_store, Self::on_buffer_store_event).detach();
 
-            let environment =
-                cx.new(|cx| ProjectEnvironment::new(worktree_store.downgrade(), Some(remote.downgrade()), false, cx));
+            let environment = cx.new(|cx| ProjectEnvironment::new(Some(remote.downgrade()), false, cx));
 
             let lsp_store = cx.new(|cx| {
                 LspStore::new_remote(
@@ -1249,7 +1216,6 @@ impl Project {
                 search_excluded_history: Self::new_search_history(),
 
                 downloading_files: Arc::default(),
-                last_worktree_paths: WorktreePaths::default(),
             };
 
             // remote server -> local machine handlers
@@ -1427,46 +1393,6 @@ impl Project {
             self.worktrees(cx).filter(|worktree| worktree_store.is_library_shown(worktree.read(cx).id())).collect();
         worktrees.sort_by_cached_key(|worktree| worktree.read(cx).library_name().cloned());
         worktrees
-    }
-
-    pub(crate) fn default_visible_worktree_paths(worktree_store: &WorktreeStore, cx: &App) -> Vec<PathBuf> {
-        worktree_store
-            .visible_worktrees(cx)
-            .sorted_by(|left, right| left.read(cx).is_single_file().cmp(&right.read(cx).is_single_file()))
-            .filter_map(|worktree| {
-                let worktree = worktree.read(cx);
-                let path = worktree.abs_path();
-                if worktree.is_single_file() { Some(path.parent()?.to_path_buf()) } else { Some(path.to_path_buf()) }
-            })
-            .collect()
-    }
-
-    pub fn default_path_list(&self, cx: &App) -> PathList {
-        let worktree_roots = Self::default_visible_worktree_paths(self.worktree_store.read(cx), cx);
-
-        if worktree_roots.is_empty() {
-            PathList::new(&[paths::home_dir().as_path()])
-        } else {
-            PathList::new(&worktree_roots)
-        }
-    }
-
-    #[inline]
-    pub fn worktree_for_root_name(&self, root_name: &str, cx: &App) -> Option<Entity<Worktree>> {
-        self.visible_worktrees(cx).find(|tree| tree.read(cx).root_name() == root_name)
-    }
-
-    fn emit_group_key_changed_if_needed(&mut self, cx: &mut Context<Self>) {
-        let new_worktree_paths = self.worktree_paths(cx);
-        if new_worktree_paths != self.last_worktree_paths {
-            let old_worktree_paths = std::mem::replace(&mut self.last_worktree_paths, new_worktree_paths);
-            cx.emit(Event::WorktreePathsChanged { old_worktree_paths });
-        }
-    }
-
-    #[inline]
-    pub fn worktree_root_names<'a>(&'a self, cx: &'a App) -> impl Iterator<Item = &'a str> {
-        self.visible_worktrees(cx).map(|tree| tree.read(cx).root_name().as_unix_str())
     }
 
     #[inline]
@@ -1664,12 +1590,6 @@ impl Project {
     }
 
     #[inline]
-    pub fn delete_file(&mut self, path: ProjectPath, cx: &mut Context<Self>) -> Option<Task<Result<()>>> {
-        let entry = self.entry_for_path(&path, cx)?;
-        self.delete_entry(entry.id, cx)
-    }
-
-    #[inline]
     pub fn trash_entry(&mut self, entry_id: ProjectEntryId, cx: &mut Context<Self>) -> Option<Task<Result<TrashId>>> {
         let worktree = self.worktree_for_entry(entry_id, cx)?;
         if worktree.read(cx).library_name().is_some() {
@@ -1775,12 +1695,6 @@ impl Project {
     #[inline]
     pub const fn is_remote(&self) -> bool {
         self.remote_client.is_some()
-    }
-
-    pub fn disable_worktree_scanner(&mut self, cx: &mut Context<Self>) {
-        self.worktree_store.update(cx, |worktree_store, _cx| {
-            worktree_store.disable_scanner();
-        });
     }
 
     #[inline]
@@ -1985,10 +1899,6 @@ impl Project {
             return Err(anyhow!(ErrorCode::Disconnected));
         }
         self.git_store.update(cx, |git_store, cx| git_store.unstage_staged_hunks(staged_diff, index_ranges, cx))
-    }
-
-    pub fn open_buffer_by_id(&mut self, id: BufferId, cx: &mut Context<Self>) -> Task<Result<Entity<Buffer>>> {
-        Task::ready(self.buffer_for_id(id, cx).ok_or_else(|| anyhow!("buffer {id} does not exist")))
     }
 
     pub fn save_buffers(&self, buffers: HashSet<Entity<Buffer>>, cx: &mut Context<Self>) -> Task<Result<()>> {
@@ -2231,11 +2141,9 @@ impl Project {
             WorktreeStoreEvent::WorktreeAdded(worktree) => {
                 self.on_worktree_added(worktree, cx);
                 cx.emit(Event::WorktreeAdded(worktree.read(cx).id()));
-                self.emit_group_key_changed_if_needed(cx);
             }
             WorktreeStoreEvent::WorktreeRemoved(_, id) => {
                 cx.emit(Event::WorktreeRemoved(*id));
-                self.emit_group_key_changed_if_needed(cx);
             }
             WorktreeStoreEvent::WorktreeReleased(_, id) => {
                 self.on_worktree_released(*id, cx);
@@ -2254,10 +2162,6 @@ impl Project {
             }
             // Listen to the GitStore instead.
             WorktreeStoreEvent::WorktreeUpdatedGitRepositories(_, _) => {}
-            WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(worktree_id) => {
-                cx.emit(Event::WorktreeUpdatedRootRepoCommonDir(*worktree_id));
-                self.emit_group_key_changed_if_needed(cx);
-            }
         }
     }
 
@@ -2549,50 +2453,6 @@ impl Project {
         })
     }
 
-    pub fn prepare_call_hierarchy<T: ToPointUtf16>(
-        &mut self,
-        buffer: &Entity<Buffer>,
-        position: T,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Option<Vec<CallHierarchyItem>>>> {
-        let position = position.to_point_utf16(buffer.read(cx));
-        let guard = self.retain_remotely_created_models(cx);
-        let task = self.lsp_store.update(cx, |lsp_store, cx| lsp_store.prepare_call_hierarchy(buffer, position, cx));
-        cx.background_spawn(async move {
-            let result = task.await;
-            drop(guard);
-            result
-        })
-    }
-
-    pub fn incoming_calls(
-        &mut self,
-        item: CallHierarchyItem,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Option<Vec<IncomingCall>>>> {
-        let guard = self.retain_remotely_created_models(cx);
-        let task = self.lsp_store.update(cx, |lsp_store, cx| lsp_store.incoming_calls(item, cx));
-        cx.background_spawn(async move {
-            let result = task.await;
-            drop(guard);
-            result
-        })
-    }
-
-    pub fn outgoing_calls(
-        &mut self,
-        item: CallHierarchyItem,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Option<Vec<OutgoingCall>>>> {
-        let guard = self.retain_remotely_created_models(cx);
-        let task = self.lsp_store.update(cx, |lsp_store, cx| lsp_store.outgoing_calls(item, cx));
-        cx.background_spawn(async move {
-            let result = task.await;
-            drop(guard);
-            result
-        })
-    }
-
     pub fn document_highlights<T: ToPointUtf16>(
         &mut self,
         buffer: &Entity<Buffer>,
@@ -2846,88 +2706,6 @@ impl Project {
         })
     }
 
-    pub fn resolve_abs_file_link(&self, path: &str, cx: &mut Context<Self>) -> Task<Result<Option<ResolvedPath>>> {
-        let resolve_task = self.resolve_abs_file_path_canonical(path, cx);
-        let path = if self.is_local() { shellexpand::tilde(path).into_owned() } else { path.to_owned() };
-        cx.spawn(async move |project, cx| {
-            let Some(resolved_path) = resolve_task.await? else {
-                return Ok(None);
-            };
-            let path = if path.starts_with("~") {
-                let Ok(task) = project.update(cx, |project, cx| project.resolve_abs_path(&path, cx)) else {
-                    return Ok(None);
-                };
-                let Some(path) = task.await.and_then(ResolvedPath::into_abs_path) else {
-                    return Ok(Some(resolved_path));
-                };
-                path
-            } else {
-                path
-            };
-            let Ok(candidate) = project.update(cx, |project, cx| {
-                let lexical_path = project.path_style(cx).normalize(&path);
-                let project_path = project.project_path_for_absolute_path(Path::new(&lexical_path), cx)?;
-                let abs_path = project.absolute_path(&project_path, cx)?;
-                let task = project.resolve_abs_file_path_canonical(abs_path.to_str()?, cx);
-                Some((project_path, abs_path, task))
-            }) else {
-                return Ok(None);
-            };
-            let Some((project_path, abs_path, task)) = candidate else {
-                return Ok(Some(resolved_path));
-            };
-            let canonical_candidate =
-                task.await.with_context(|| format!("validating file link alias {abs_path:?}")).log_err().flatten();
-            let Ok(alias_unchanged) = project.read_with(cx, |project, cx| {
-                project.absolute_path(&project_path, cx).as_deref() == Some(abs_path.as_path())
-            }) else {
-                return Ok(None);
-            };
-            if alias_unchanged
-                && canonical_candidate.is_some_and(|candidate| candidate.abs_path() == resolved_path.abs_path())
-            {
-                Ok(Some(ResolvedPath::ProjectPath { project_path, is_dir: false }))
-            } else {
-                Ok(Some(resolved_path))
-            }
-        })
-    }
-
-    pub fn resolve_abs_file_path_canonical(
-        &self,
-        path: &str,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Option<ResolvedPath>>> {
-        if self.is_local() {
-            let expanded = PathBuf::from(shellexpand::tilde(path).into_owned());
-            let fs = self.fs.clone();
-            cx.background_spawn(async move {
-                if fs.metadata(&expanded).await?.is_none_or(|metadata| metadata.is_dir) {
-                    return Ok(None);
-                }
-                let path = fs.canonicalize(&expanded).await?;
-                let path = path.to_str().context("canonical file path is not valid UTF-8")?.to_owned();
-                Ok(Some(ResolvedPath::AbsPath { path, is_dir: false }))
-            })
-        } else if let Some(ssh_client) = self.remote_client.as_ref() {
-            let request = ssh_client.read(cx).proto_client().request(proto::GetPathMetadata {
-                project_id: REMOTE_SERVER_PROJECT_ID,
-                path: path.into(),
-                canonicalize: true,
-            });
-            cx.background_spawn(async move {
-                let response = request.await?;
-                if response.exists && !response.is_dir {
-                    Ok(Some(ResolvedPath::AbsPath { path: response.path, is_dir: false }))
-                } else {
-                    Ok(None)
-                }
-            })
-        } else {
-            Task::ready(Ok(None))
-        }
-    }
-
     pub fn resolve_abs_path(&self, path: &str, cx: &App) -> Task<Option<ResolvedPath>> {
         if self.is_local() {
             let expanded = PathBuf::from(shellexpand::tilde(&path).into_owned());
@@ -3054,49 +2832,9 @@ impl Project {
         self.worktree_store.update(cx, |worktree_store, cx| worktree_store.create_worktree(abs_path, visible, cx))
     }
 
-    /// Returns a task that resolves when the given worktree's `Entity` is
-    /// fully dropped (all strong references released), not merely when
-    /// `remove_worktree` is called. `remove_worktree` drops the store's
-    /// reference and emits `WorktreeRemoved`, but other code may still
-    /// hold a strong handle — the worktree isn't safe to delete from
-    /// disk until every handle is gone.
-    ///
-    /// We use `observe_release` on the specific entity rather than
-    /// listening for `WorktreeReleased` events because it's simpler at
-    /// the call site (one awaitable task, no subscription / channel /
-    /// ID filtering).
-    pub fn wait_for_worktree_release(&mut self, worktree_id: WorktreeId, cx: &mut Context<Self>) -> Task<Result<()>> {
-        let Some(worktree) = self.worktree_for_id(worktree_id, cx) else {
-            return Task::ready(Ok(()));
-        };
-
-        let (released_tx, released_rx) = futures::channel::oneshot::channel();
-        let released_tx = std::sync::Arc::new(Mutex::new(Some(released_tx)));
-        let release_subscription = cx.observe_release(&worktree, move |_project, _released_worktree, _cx| {
-            if let Some(released_tx) = released_tx.lock().take() {
-                let _ = released_tx.send(());
-            }
-        });
-
-        cx.spawn(async move |_project, _cx| {
-            let _release_subscription = release_subscription;
-            released_rx.await.map_err(|_| anyhow!("worktree release observer dropped before release"))?;
-            Ok(())
-        })
-    }
-
     pub fn remove_worktree(&mut self, id_to_remove: WorktreeId, cx: &mut Context<Self>) {
         self.worktree_store.update(cx, |worktree_store, cx| {
             worktree_store.remove_worktree(id_to_remove, cx);
-        });
-    }
-
-    pub fn remove_worktree_for_main_worktree_path(&mut self, path: impl AsRef<Path>, cx: &mut Context<Self>) {
-        let path = path.as_ref();
-        self.worktree_store.update(cx, |worktree_store, cx| {
-            if let Some(worktree) = worktree_store.worktree_for_main_worktree_path(path, cx) {
-                worktree_store.remove_worktree(worktree.read(cx).id(), cx);
-            }
         });
     }
 
@@ -3247,10 +2985,6 @@ impl Project {
 
     pub fn project_path_for_absolute_path(&self, abs_path: &Path, cx: &App) -> Option<ProjectPath> {
         self.worktree_store.read(cx).project_path_for_absolute_path(abs_path, cx)
-    }
-
-    pub fn get_workspace_root(&self, project_path: &ProjectPath, cx: &App) -> Option<PathBuf> {
-        Some(self.worktree_for_id(project_path.worktree_id, cx)?.read(cx).abs_path().to_path_buf())
     }
 
     pub fn blame_buffer(
@@ -3781,72 +3515,6 @@ impl Project {
 
     pub fn worktree_paths(&self, cx: &App) -> WorktreePaths {
         self.worktree_store.read(cx).paths(cx)
-    }
-
-    pub fn project_group_key(&self, cx: &App) -> ProjectGroupKey {
-        ProjectGroupKey::from_project(self, cx)
-    }
-}
-
-/// Identifies a project group by a set of paths the workspaces in this group
-/// have.
-///
-/// Paths are mapped to their main worktree path first so we can group
-/// workspaces by main repos.
-#[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
-pub struct ProjectGroupKey {
-    /// The paths of the main worktrees for this project group.
-    paths: PathList,
-    host: Option<RemoteConnectionOptions>,
-}
-
-impl ProjectGroupKey {
-    /// Creates a new `ProjectGroupKey` with the given path list.
-    ///
-    /// The path list should point to the git main worktree paths for a project.
-    pub const fn new(host: Option<RemoteConnectionOptions>, paths: PathList) -> Self {
-        Self { paths, host }
-    }
-
-    pub fn from_project(project: &Project, cx: &App) -> Self {
-        let paths = project.worktree_paths(cx);
-        let host = project.remote_connection_options(cx);
-        Self { paths: paths.main_worktree_path_list().clone(), host }
-    }
-
-    pub fn from_worktree_paths(paths: &WorktreePaths, host: Option<RemoteConnectionOptions>) -> Self {
-        Self { paths: paths.main_worktree_path_list().clone(), host }
-    }
-
-    pub const fn path_list(&self) -> &PathList {
-        &self.paths
-    }
-
-    pub fn display_name(&self, path_detail_map: &std::collections::HashMap<PathBuf, usize>) -> SharedString {
-        let mut names = Vec::with_capacity(self.paths.paths().len());
-        for abs_path in self.paths.ordered_paths() {
-            let detail = path_detail_map.get(abs_path).copied().unwrap_or(0);
-            // Strip a `.git` extension for display (bare clones like `foo.git`
-            // should display as `foo`, matching the titlebar).
-            let display_path = if abs_path.extension() == Some(std::ffi::OsStr::new("git")) {
-                std::borrow::Cow::Owned(abs_path.with_extension(""))
-            } else {
-                std::borrow::Cow::Borrowed(abs_path.as_path())
-            };
-            let suffix = path_suffix(&display_path, detail);
-            if !suffix.is_empty() {
-                names.push(suffix);
-            }
-        }
-        if names.is_empty() { "Empty Workspace".into() } else { names.join(", ").into() }
-    }
-
-    pub fn host(&self) -> Option<RemoteConnectionOptions> {
-        self.host.clone()
-    }
-
-    pub fn matches(&self, other: &ProjectGroupKey) -> bool {
-        self.paths == other.paths && same_remote_connection_identity(self.host.as_ref(), other.host.as_ref())
     }
 }
 

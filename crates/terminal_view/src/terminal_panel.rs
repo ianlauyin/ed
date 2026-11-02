@@ -6,13 +6,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use breadcrumbs::Breadcrumbs;
 use collections::HashMap;
 use db::kvp::KeyValueStore;
 use futures::channel::oneshot;
 use futures::future::join_all;
 use gpui::Action;
-use gpui::Anchor;
 use gpui::App;
 use gpui::AsyncApp;
 use gpui::AsyncWindowContext;
@@ -41,12 +39,7 @@ use task::SpawnInTerminal;
 use task::TaskId;
 use terminal::Terminal;
 use terminal::terminal_settings::TerminalSettings;
-use ui::Clickable;
 use ui::CommonAnimationExt;
-use ui::ContextMenu;
-use ui::FluentBuilder;
-use ui::PopoverMenu;
-use ui::Toggleable;
 use ui::Tooltip;
 use ui::prelude::*;
 use util::ResultExt;
@@ -70,16 +63,11 @@ use workspace::MovePaneUp;
 use workspace::Pane;
 use workspace::PaneGroup;
 use workspace::SplitDirection;
-use workspace::SplitDown;
-use workspace::SplitLeft;
 use workspace::SplitMode;
-use workspace::SplitRight;
-use workspace::SplitUp;
 use workspace::SwapPaneDown;
 use workspace::SwapPaneLeft;
 use workspace::SwapPaneRight;
 use workspace::SwapPaneUp;
-use workspace::ToggleZoom;
 use workspace::Workspace;
 use workspace::dock::DockPosition;
 use workspace::dock::Panel;
@@ -141,89 +129,11 @@ pub struct TerminalPanel {
 }
 
 impl TerminalPanel {
-    pub(crate) fn apply_tab_bar_buttons(&self, terminal_pane: &Entity<Pane>, cx: &mut Context<Self>) {
-        terminal_pane.update(cx, |pane, cx| {
-            pane.set_render_tab_bar_buttons(cx, move |pane, window, cx| {
-                let split_context = pane
-                    .active_item()
-                    .and_then(|item| item.downcast::<TerminalView>())
-                    .map(|terminal_view| terminal_view.read(cx).focus_handle.clone());
-                let has_focused_rename_editor = pane
-                    .active_item()
-                    .and_then(|item| item.downcast::<TerminalView>())
-                    .is_some_and(|view| view.read(cx).rename_editor_is_focused(window, cx));
-                if !pane.has_focus(window, cx) && !pane.context_menu_focused(window, cx) && !has_focused_rename_editor {
-                    return (None, None);
-                }
-                let focus_handle = pane.focus_handle(cx);
-                let right_children = h_flex()
-                    .gap(DynamicSpacing::Base02.rems())
-                    .child(
-                        PopoverMenu::new("terminal-tab-bar-popover-menu")
-                            .trigger_with_tooltip(
-                                IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
-                                Tooltip::text("New…"),
-                            )
-                            .anchor(Anchor::TopRight)
-                            .with_handle(pane.new_item_context_menu_handle.clone())
-                            .menu(move |window, cx| {
-                                let focus_handle = focus_handle.clone();
-                                let menu = ContextMenu::build(window, cx, |menu, _, _| {
-                                    menu.context(focus_handle.clone())
-                                        .action("New Terminal", workspace::NewTerminal::default().boxed_clone())
-                                });
-
-                                Some(menu)
-                            }),
-                    )
-                    .child(
-                        PopoverMenu::new("terminal-pane-tab-bar-split")
-                            .trigger_with_tooltip(
-                                IconButton::new("terminal-pane-split", IconName::Split).icon_size(IconSize::Small),
-                                Tooltip::text("Split Pane"),
-                            )
-                            .anchor(Anchor::TopRight)
-                            .with_handle(pane.split_item_context_menu_handle.clone())
-                            .menu({
-                                move |window, cx| {
-                                    ContextMenu::build(window, cx, |menu, _, _| {
-                                        menu.when_some(split_context.clone(), |menu, split_context| {
-                                            menu.context(split_context)
-                                        })
-                                        .action("Split Right", SplitRight::default().boxed_clone())
-                                        .action("Split Left", SplitLeft::default().boxed_clone())
-                                        .action("Split Up", SplitUp::default().boxed_clone())
-                                        .action("Split Down", SplitDown::default().boxed_clone())
-                                    })
-                                    .into()
-                                }
-                            }),
-                    )
-                    .child({
-                        let zoomed = pane.is_zoomed();
-                        IconButton::new("toggle_zoom", IconName::Maximize)
-                            .icon_size(IconSize::Small)
-                            .toggle_state(zoomed)
-                            .selected_icon(IconName::Minimize)
-                            .on_click(cx.listener(|pane, _, window, cx| {
-                                pane.toggle_zoom(&workspace::ToggleZoom, window, cx);
-                            }))
-                            .tooltip(move |_window, cx| {
-                                Tooltip::for_action(if zoomed { "Zoom Out" } else { "Zoom In" }, &ToggleZoom, cx)
-                            })
-                    })
-                    .into_any_element()
-                    .into();
-                (None, right_children)
-            });
-        });
-    }
-
     pub fn new(workspace: &Workspace, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let project = workspace.project();
         let pane = new_terminal_pane(workspace.weak_handle(), project.clone(), false, window, cx);
         let center = PaneGroup::new(pane.clone());
-        let terminal_panel = Self {
+        Self {
             center,
             active_pane: pane,
             focus_handle: cx.focus_handle(),
@@ -235,9 +145,7 @@ impl TerminalPanel {
             _restoration: Task::ready(()),
             deferred_tasks: HashMap::default(),
             active: false,
-        };
-        terminal_panel.apply_tab_bar_buttons(&terminal_panel.active_pane, cx);
-        terminal_panel
+        }
     }
 
     fn serialization_key(workspace: &Workspace) -> Option<String> {
@@ -542,7 +450,7 @@ impl TerminalPanel {
                 .log_err()?;
 
             panel
-                .update_in(cx, move |terminal_panel, window, cx| {
+                .update_in(cx, move |_, window, cx| {
                     let terminal_view = Box::new(cx.new(|cx| {
                         TerminalView::new(
                             terminal.clone(),
@@ -554,7 +462,6 @@ impl TerminalPanel {
                         )
                     }));
                     let pane = new_terminal_pane(weak_workspace, project, is_zoomed, window, cx);
-                    terminal_panel.apply_tab_bar_buttons(&pane, cx);
                     pane.update(cx, |pane, cx| {
                         pane.add_item(terminal_view, true, true, None, window, cx);
                     });
@@ -1058,6 +965,34 @@ fn is_enabled_in_workspace(workspace: &Workspace, cx: &App) -> bool {
     workspace.project().read(cx).supports_terminal(cx)
 }
 
+/// The "+" opens a terminal right away: every entry of the generic new-item
+/// menu other than "New Terminal" is unrelated to the terminal panel.
+fn set_terminal_tab_bar_buttons(pane: &mut Pane, cx: &mut Context<Pane>) {
+    pane.set_render_tab_bar_buttons(cx, move |pane, window, cx| {
+        let has_focused_rename_editor = pane
+            .active_item()
+            .and_then(|item| item.downcast::<TerminalView>())
+            .is_some_and(|view| view.read(cx).rename_editor_is_focused(window, cx));
+        if !pane.has_focus(window, cx) && !has_focused_rename_editor {
+            return (None, None);
+        }
+        let right_children = h_flex()
+            .gap(DynamicSpacing::Base02.rems())
+            .child(
+                IconButton::new("plus", IconName::Plus)
+                    .icon_size(IconSize::Small)
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(workspace::NewTerminal::default().boxed_clone(), cx);
+                    })
+                    .tooltip(Tooltip::for_action_title("New Terminal", &workspace::NewTerminal::default())),
+            )
+            .children(workspace::pane::render_tab_bar_pane_buttons(pane, cx))
+            .into_any_element()
+            .into();
+        (None, right_children)
+    });
+}
+
 pub fn new_terminal_pane(
     workspace: WeakEntity<Workspace>,
     project: Entity<Project>,
@@ -1079,10 +1014,10 @@ pub fn new_terminal_pane(
         );
         pane.set_zoomed(zoomed, cx);
         pane.set_can_navigate(false, cx);
-        pane.display_nav_history_buttons(None);
         pane.set_should_display_tab_bar(|_, _| true);
         pane.set_tab_style(ui::TabStyle::Pill);
         pane.set_zoom_out_on_close(false);
+        set_terminal_tab_bar_buttons(&mut pane, cx);
 
         let split_closure_terminal_panel = terminal_panel.downgrade();
         pane.set_can_split(Some(Arc::new(move |pane, dragged_item, _window, cx| {
@@ -1117,10 +1052,6 @@ pub fn new_terminal_pane(
         if let Some(callbacks) = cx.try_global::<workspace::PaneSearchBarCallbacks>() {
             (callbacks.setup_search_bar)(&toolbar, window, cx);
         }
-        let breadcrumbs = cx.new(|_| Breadcrumbs::new());
-        toolbar.update(cx, |toolbar, cx| {
-            toolbar.add_item(breadcrumbs, window, cx);
-        });
 
         pane
     });
@@ -1223,8 +1154,6 @@ impl Render for TerminalPanel {
                         None,
                         &workspace::PaneRenderContext {
                             active_pane: &self.active_pane,
-                            app_state: workspace.app_state(),
-                            project: workspace.project(),
                             workspace: &workspace.weak_handle(),
                         },
                         window,

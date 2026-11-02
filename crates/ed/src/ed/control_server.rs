@@ -20,6 +20,7 @@ use gpui::App;
 use gpui::AsyncApp;
 use gpui::Bounds;
 use gpui::ElementId;
+use gpui::Entity;
 use gpui::Keystroke;
 use gpui::Modifiers;
 use gpui::MouseButton;
@@ -42,7 +43,9 @@ use smol::io::BufReader;
 use smol::net::unix::UnixListener;
 use smol::net::unix::UnixStream;
 use util::ResultExt as _;
-use workspace::MultiWorkspace;
+use workspace::Pane;
+use workspace::Workspace;
+use workspace::WorkspaceMode;
 
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(1);
 const SETTLE_TICK: Duration = Duration::from_millis(16);
@@ -408,8 +411,7 @@ const fn rect(bounds: Bounds<Pixels>) -> control::Rect {
 
 fn state(window: &Window, cx: &mut App) -> control::State {
     let window_id = window.window_handle().window_id().as_u64();
-    let workspace =
-        window.root::<MultiWorkspace>().flatten().map(|multi_workspace| multi_workspace.read(cx).workspace().clone());
+    let workspace = window.root::<Workspace>().flatten();
     let Some(workspace) = workspace else {
         return control::State { window: window_id, workspace: None };
     };
@@ -421,26 +423,32 @@ fn state(window: &Window, cx: &mut App) -> control::State {
         item.project_path(cx).and_then(|project_path| project.absolute_path(&project_path, cx))
     };
 
-    let panes = workspace
-        .panes()
-        .iter()
-        .map(|pane_entity| {
-            let pane = pane_entity.read(cx);
-            let items: Vec<control::ItemState> = pane
-                .items()
-                .map(|item| control::ItemState {
-                    title: item.tab_content_text(0, cx).to_string(),
-                    path: item_path(item.as_ref()),
-                    dirty: item.is_dirty(cx),
-                })
-                .collect();
-            control::PaneState {
-                focused: *pane_entity == focused_pane,
-                active_item: (!items.is_empty()).then(|| pane.active_item_index()),
-                items,
-            }
-        })
-        .collect();
+    let pane_state = |pane_entity: &Entity<Pane>, active_pane: &Entity<Pane>| {
+        let pane = pane_entity.read(cx);
+        let items: Vec<control::ItemState> = pane
+            .items()
+            .map(|item| control::ItemState {
+                title: item.tab_content_text(0, cx).to_string(),
+                path: item_path(item.as_ref()),
+                dirty: item.is_dirty(cx),
+            })
+            .collect();
+        control::PaneState {
+            focused: *pane_entity == focused_pane,
+            active: pane_entity == active_pane,
+            has_focus: pane.has_focus(window, cx),
+            active_item: (!items.is_empty()).then(|| pane.active_item_index()),
+            items,
+        }
+    };
+    let panes = workspace.panes().iter().map(|pane| pane_state(pane, workspace.active_pane())).collect();
+    let git_history_panes =
+        workspace.git_history_panes().into_iter().map(|pane| pane_state(pane, workspace.git_history_pane())).collect();
+    let mode = match workspace.mode() {
+        WorkspaceMode::Editor => "editor",
+        WorkspaceMode::GitHistory => "git_history",
+    }
+    .to_string();
 
     let roots = workspace.root_paths(cx).iter().map(|path| path.to_path_buf()).collect();
     let language_servers = workspace
@@ -486,6 +494,13 @@ fn state(window: &Window, cx: &mut App) -> control::State {
 
     control::State {
         window: window_id,
-        workspace: Some(control::WorkspaceState { roots, panes, active_editor, language_servers }),
+        workspace: Some(control::WorkspaceState {
+            roots,
+            mode,
+            panes,
+            git_history_panes,
+            active_editor,
+            language_servers,
+        }),
     }
 }

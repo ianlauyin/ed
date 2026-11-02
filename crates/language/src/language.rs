@@ -270,37 +270,6 @@ pub static PLAIN_TEXT: LazyLock<Arc<Language>> = LazyLock::new(|| {
     ))
 });
 
-pub const fn symbol_kind_to_lsp(kind: SymbolKind) -> lsp::SymbolKind {
-    match kind {
-        SymbolKind::File => lsp::SymbolKind::FILE,
-        SymbolKind::Module => lsp::SymbolKind::MODULE,
-        SymbolKind::Namespace => lsp::SymbolKind::NAMESPACE,
-        SymbolKind::Package => lsp::SymbolKind::PACKAGE,
-        SymbolKind::Class => lsp::SymbolKind::CLASS,
-        SymbolKind::Method => lsp::SymbolKind::METHOD,
-        SymbolKind::Property => lsp::SymbolKind::PROPERTY,
-        SymbolKind::Field => lsp::SymbolKind::FIELD,
-        SymbolKind::Constructor => lsp::SymbolKind::CONSTRUCTOR,
-        SymbolKind::Enum => lsp::SymbolKind::ENUM,
-        SymbolKind::Interface => lsp::SymbolKind::INTERFACE,
-        SymbolKind::Function => lsp::SymbolKind::FUNCTION,
-        SymbolKind::Variable => lsp::SymbolKind::VARIABLE,
-        SymbolKind::Constant => lsp::SymbolKind::CONSTANT,
-        SymbolKind::String => lsp::SymbolKind::STRING,
-        SymbolKind::Number => lsp::SymbolKind::NUMBER,
-        SymbolKind::Boolean => lsp::SymbolKind::BOOLEAN,
-        SymbolKind::Array => lsp::SymbolKind::ARRAY,
-        SymbolKind::Object => lsp::SymbolKind::OBJECT,
-        SymbolKind::Key => lsp::SymbolKind::KEY,
-        SymbolKind::Null => lsp::SymbolKind::NULL,
-        SymbolKind::EnumMember => lsp::SymbolKind::ENUM_MEMBER,
-        SymbolKind::Struct => lsp::SymbolKind::STRUCT,
-        SymbolKind::Event => lsp::SymbolKind::EVENT,
-        SymbolKind::Operator => lsp::SymbolKind::OPERATOR,
-        SymbolKind::TypeParameter => lsp::SymbolKind::TYPE_PARAMETER,
-    }
-}
-
 pub const fn lsp_to_symbol_kind(kind: lsp::SymbolKind) -> SymbolKind {
     match kind {
         lsp::SymbolKind::FILE => SymbolKind::File,

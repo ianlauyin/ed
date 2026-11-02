@@ -64,10 +64,6 @@ pub struct ThemeColors {
     ///
     /// Disabled states are shown when a user cannot interact with an element, like a disabled button or input.
     pub element_disabled: Hsla,
-    /// Background Color. Used for the area that shows where a dragged element will be dropped.
-    pub drop_target_background: Hsla,
-    /// Border Color. Used for the border that shows where a dragged element will be dropped.
-    pub drop_target_border: Hsla,
     /// Used for the background of a ghost element that should have the same background as the surface it's on.
     ///
     /// Elements might include: Buttons, Inputs, Checkboxes, Radio Buttons...
@@ -364,8 +360,6 @@ pub enum ThemeColorField {
     ElementActive,
     ElementSelected,
     ElementDisabled,
-    DropTargetBackground,
-    DropTargetBorder,
     GhostElementBackground,
     GhostElementHover,
     GhostElementActive,
@@ -465,6 +459,16 @@ pub enum ThemeColorField {
 }
 
 impl ThemeColors {
+    /// Fill for a drag-and-drop target area: a faint wash of the accent colour.
+    pub fn drop_target_background(&self) -> Hsla {
+        self.text_accent.opacity(0.12)
+    }
+
+    /// Outline or insertion bar marking a drag-and-drop target.
+    pub const fn drop_target_border(&self) -> Hsla {
+        self.text_accent
+    }
+
     pub fn panel_background_for_overlay(&self) -> Hsla {
         if self.background.a >= 1.0 || self.panel_background.a >= 1.0 {
             self.background.blend(self.panel_background)
@@ -489,8 +493,6 @@ impl ThemeColors {
             ThemeColorField::ElementActive => self.element_active,
             ThemeColorField::ElementSelected => self.element_selected,
             ThemeColorField::ElementDisabled => self.element_disabled,
-            ThemeColorField::DropTargetBackground => self.drop_target_background,
-            ThemeColorField::DropTargetBorder => self.drop_target_border,
             ThemeColorField::GhostElementBackground => self.ghost_element_background,
             ThemeColorField::GhostElementHover => self.ghost_element_hover,
             ThemeColorField::GhostElementActive => self.ghost_element_active,
@@ -631,4 +633,16 @@ pub struct ThemeStyles {
     pub player: PlayerColor,
 
     pub syntax: Arc<SyntaxTheme>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ThemeColors;
+
+    #[test]
+    fn test_drop_target_colors_follow_accent() {
+        let colors = ThemeColors::dark();
+        assert_eq!(colors.drop_target_border(), colors.text_accent);
+        assert_eq!(colors.drop_target_background(), colors.text_accent.opacity(0.12));
+    }
 }

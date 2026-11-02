@@ -4,7 +4,6 @@ use collections::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::CenteredPaddingSettings;
 use crate::CommandAliasTarget;
 use crate::DelayMs;
 use crate::DockPosition;
@@ -33,8 +32,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: "left"
     pub pane_split_direction_vertical: Option<PaneSplitDirectionVertical>,
-    /// Centered layout related settings.
-    pub centered_layout: Option<CenteredLayoutSettings>,
     /// Whether or not to prompt the user to confirm before closing the application.
     ///
     /// Default: false
@@ -60,10 +57,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: true
     pub restore_on_file_reopen: Option<bool>,
-    /// Whether to reveal an already open file in an existing pane instead of opening it in the active pane.
-    ///
-    /// Default: false
-    pub reveal_if_open: Option<bool>,
     /// The size of the workspace split drop targets on the outer edges.
     /// Given as a fraction that will be multiplied by the smaller dimension of the workspace.
     ///
@@ -106,30 +99,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: native
     pub fullscreen_mode: Option<FullscreenMode>,
-    /// Whether invoking a panel's `ToggleFocus` action while the panel is
-    /// already focused closes the panel, instead of just moving focus back
-    /// to the editor. This only applies to a panel's focus-toggle action, not
-    /// to its regular visibility-toggle action.
-    ///
-    /// Default: false
-    pub close_panel_on_toggle: Option<bool>,
-    /// Window title template.
-    ///
-    /// Available variables are `${projectName}`, `${fileName}`,
-    /// `${filePath}`, `${relativePath}`, `${fileStem}`, `${remoteName}`,
-    /// `${remoteHost}`, `${appName}`, `${branch}`,
-    /// and `${separator}`.
-    /// `${separator}` is omitted when adjacent variables are empty,
-    /// but literal text is preserved.
-    /// If the template renders to nothing, the default template is used instead.
-    ///
-    /// Default: `${projectName}${separator}${fileName}`
-    pub window_title_format: Option<String>,
-    /// String substituted for `${separator}` in the window title format.
-    /// Include any surrounding whitespace in the value.
-    ///
-    /// Default: ` — `
-    pub window_title_separator: Option<String>,
     /// Controls whether ed or the window manager or compositor draws window decorations on Linux.
     ///
     /// Default: client
@@ -356,10 +325,6 @@ pub struct TabBarSettingsContent {
     ///
     /// Default: true
     pub show: Option<bool>,
-    /// Whether or not to show the navigation history buttons in the tab bar.
-    ///
-    /// Default: true
-    pub show_nav_history_buttons: Option<bool>,
     /// Whether or not to show the tab bar buttons.
     ///
     /// Default: true
@@ -450,21 +415,6 @@ pub enum PaneSplitDirectionHorizontal {
 pub enum PaneSplitDirectionVertical {
     Left,
     Right,
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct CenteredLayoutSettings {
-    /// The relative width of the left padding of the central pane from the
-    /// workspace when the centered layout is used.
-    ///
-    /// Default: 0.2
-    pub left_padding: Option<CenteredPaddingSettings>,
-    // The relative width of the right padding of the central pane from the
-    // workspace when the centered layout is used.
-    ///
-    /// Default: 0.2
-    pub right_padding: Option<CenteredPaddingSettings>,
 }
 
 #[derive(

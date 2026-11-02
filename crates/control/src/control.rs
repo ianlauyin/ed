@@ -217,7 +217,11 @@ pub struct State {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkspaceState {
     pub roots: Vec<PathBuf>,
+    /// "editor" or "git_history".
+    pub mode: String,
     pub panes: Vec<PaneState>,
+    /// The Git History mode panes, kept apart from the editor panes.
+    pub git_history_panes: Vec<PaneState>,
     /// The active item, when it is an editor.
     pub active_editor: Option<EditorState>,
     pub language_servers: Vec<LanguageServerState>,
@@ -232,7 +236,12 @@ pub struct LanguageServerState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PaneState {
+    /// The pane the workspace treats as focused (the active one, or a dock's).
     pub focused: bool,
+    /// The active pane of its group, where new items open.
+    pub active: bool,
+    /// Whether keyboard focus is inside the pane.
+    pub has_focus: bool,
     pub active_item: Option<usize>,
     pub items: Vec<ItemState>,
 }

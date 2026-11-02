@@ -1,8 +1,6 @@
 use std::ops::Range;
 
-use collections::HashMap;
 use futures::FutureExt;
-use futures::future::join_all;
 use gpui::App;
 use gpui::Context;
 use gpui::HighlightStyle;
@@ -13,11 +11,9 @@ use language::LanguageAwareStyling;
 use language::OutlineItem;
 use language::highlight_ranges_from_text;
 use language::language_settings::LanguageSettings;
-use multi_buffer::Anchor;
 use multi_buffer::AnchorRangeExt as _;
 use multi_buffer::MultiBufferOffset;
 use multi_buffer::MultiBufferRow;
-use multi_buffer::MultiBufferSnapshot;
 use multi_buffer::ToOffset as _;
 use text::BufferId;
 use theme::ActiveTheme as _;
@@ -25,13 +21,14 @@ use theme::SyntaxTheme;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::Editor;
+use crate::EditorEvent;
 use crate::LSP_REQUEST_DEBOUNCE_TIMEOUT;
 use crate::display_map::DisplaySnapshot;
 
 impl Editor {
     /// Returns all document outline items for a buffer, using LSP or
     /// tree-sitter based on the `document_symbols` setting.
-    /// External consumers (outline modal, breadcrumbs) should use this.
+    /// External consumers (outline panel) should use this.
     pub fn buffer_outline_items(
         &self,
         buffer_id: BufferId,
@@ -42,9 +39,11 @@ impl Editor {
         };
 
         if lsp_symbols_enabled(buffer.read(cx), cx) {
-            let refresh_task = self.refresh_document_symbols_task.clone();
+            let refresh_task = self.refresh_document_symbols_tasks.get(&buffer_id).cloned();
             cx.spawn(async move |editor, cx| {
-                refresh_task.await;
+                if let Some(refresh_task) = refresh_task {
+                    refresh_task.await;
+                }
                 editor
                     .read_with(cx, |editor, _| editor.lsp_document_symbols.get(&buffer_id).cloned().unwrap_or_default())
                     .ok()
@@ -57,88 +56,10 @@ impl Editor {
         }
     }
 
-    /// Whether the buffer at `cursor` has LSP document symbols enabled.
-    pub(super) fn uses_lsp_document_symbols(
-        &self,
-        cursor: Anchor,
-        multi_buffer_snapshot: &MultiBufferSnapshot,
-        cx: &Context<Self>,
-    ) -> bool {
-        let Some((anchor, _)) = multi_buffer_snapshot.anchor_to_buffer_anchor(cursor) else {
-            return false;
-        };
-        let Some(buffer) = self.buffer.read(cx).buffer(anchor.buffer_id) else {
-            return false;
-        };
-        lsp_symbols_enabled(buffer.read(cx), cx)
-    }
-
-    /// Filters editor-local LSP document symbols to the ancestor chain
-    /// containing `cursor`. Never triggers an LSP request.
-    pub(super) fn lsp_symbols_at_cursor(
-        &self,
-        cursor: Anchor,
-        multi_buffer_snapshot: &MultiBufferSnapshot,
-        _cx: &Context<Self>,
-    ) -> Option<(BufferId, Vec<OutlineItem<Anchor>>)> {
-        let (cursor_text_anchor, buffer) = multi_buffer_snapshot.anchor_to_buffer_anchor(cursor)?;
-        let all_items = self.lsp_document_symbols.get(&cursor_text_anchor.buffer_id)?;
-        if all_items.is_empty() {
-            return None;
-        }
-
-        let mut symbols = all_items
-            .iter()
-            .filter(|item| {
-                item.range.start.cmp(&cursor_text_anchor, buffer).is_le()
-                    && item.range.end.cmp(&cursor_text_anchor, buffer).is_ge()
-            })
-            .filter_map(|item| {
-                let range_start = multi_buffer_snapshot.anchor_in_buffer(item.range.start)?;
-                let range_end = multi_buffer_snapshot.anchor_in_buffer(item.range.end)?;
-                let source_range_for_text_start =
-                    multi_buffer_snapshot.anchor_in_buffer(item.source_range_for_text.start)?;
-                let source_range_for_text_end =
-                    multi_buffer_snapshot.anchor_in_buffer(item.source_range_for_text.end)?;
-                Some(OutlineItem {
-                    depth: item.depth,
-                    range: range_start..range_end,
-                    selection_range: multi_buffer_snapshot.anchor_in_buffer(item.selection_range.start)?
-                        ..multi_buffer_snapshot.anchor_in_buffer(item.selection_range.end)?,
-                    source_range_for_text: source_range_for_text_start..source_range_for_text_end,
-                    text: item.text.clone(),
-                    highlight_ranges: item.highlight_ranges.clone(),
-                    name_ranges: item.name_ranges.clone(),
-                    body_range: item.body_range.as_ref().and_then(|r| {
-                        Some(
-                            multi_buffer_snapshot.anchor_in_buffer(r.start)?
-                                ..multi_buffer_snapshot.anchor_in_buffer(r.end)?,
-                        )
-                    }),
-                    annotation_range: item.annotation_range.as_ref().and_then(|r| {
-                        Some(
-                            multi_buffer_snapshot.anchor_in_buffer(r.start)?
-                                ..multi_buffer_snapshot.anchor_in_buffer(r.end)?,
-                        )
-                    }),
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let mut prev_depth = None;
-        symbols.retain(|item| {
-            let retain = prev_depth.is_none_or(|prev_depth| item.depth > prev_depth);
-            prev_depth = Some(item.depth);
-            retain
-        });
-
-        Some((buffer.remote_id(), symbols))
-    }
-
     /// Fetches document symbols from the LSP for buffers that have the setting
     /// enabled. Called from `update_lsp_data` on edits, server events, etc.
     /// When the fetch completes, stores results in `self.lsp_document_symbols`
-    /// and triggers `refresh_outline_symbols_at_cursor` so breadcrumbs pick up the new data.
+    /// and emits `DocumentSymbolsChanged` so the outline panel picks up the new data.
     pub(super) fn refresh_document_symbols(&mut self, for_buffer: Option<BufferId>, cx: &mut Context<Self>) {
         if !self.lsp_data_enabled() {
             return;
@@ -174,61 +95,52 @@ impl Editor {
             retain
         });
         if symbols_altered {
-            self.refresh_outline_symbols_at_cursor(cx);
+            cx.emit(EditorEvent::DocumentSymbolsChanged);
         }
 
-        if buffers_to_query.is_empty() {
-            return;
-        }
+        self.refresh_document_symbols_tasks.retain(|buffer_id, _| {
+            multi_buffer.read(cx).buffer(*buffer_id).is_some_and(|buffer| lsp_symbols_enabled(buffer.read(cx), cx))
+        });
 
-        self.refresh_document_symbols_task = cx
-            .spawn(async move |editor, cx| {
-                cx.background_executor().timer(LSP_REQUEST_DEBOUNCE_TIMEOUT).await;
+        for buffer in buffers_to_query {
+            let buffer_id = buffer.read(cx).remote_id();
+            let project = project.clone();
+            let task = cx
+                .spawn(async move |editor, cx| {
+                    cx.background_executor().timer(LSP_REQUEST_DEBOUNCE_TIMEOUT).await;
 
-                let Some(tasks) = project
-                    .update(cx, |project, cx| {
-                        project.lsp_store().update(cx, |lsp_store, cx| {
-                            buffers_to_query
-                                .into_iter()
-                                .map(|buffer| {
-                                    let buffer_id = buffer.read(cx).remote_id();
-                                    let task = lsp_store.fetch_document_symbols(&buffer, cx);
-                                    async move { (buffer_id, task.await) }
-                                })
-                                .collect::<Vec<_>>()
+                    let Some(task) = project
+                        .update(cx, |project, cx| {
+                            project
+                                .lsp_store()
+                                .update(cx, |lsp_store, cx| lsp_store.fetch_document_symbols(&buffer, cx))
                         })
-                    })
-                    .ok()
-                else {
-                    return;
-                };
+                        .ok()
+                    else {
+                        return;
+                    };
+                    let mut items = task.await;
 
-                let results = join_all(tasks).await.into_iter().collect::<HashMap<_, _>>();
-                editor
-                    .update(cx, |editor, cx| {
-                        let syntax = cx.theme().syntax().clone();
-                        let display_snapshot = editor.display_map.update(cx, |map, cx| map.snapshot(cx));
-                        let mut highlighted_results = results;
-                        for (buffer_id, items) in &mut highlighted_results {
-                            let language = editor
-                                .buffer
-                                .read(cx)
-                                .buffer(*buffer_id)
-                                .and_then(|buffer| buffer.read(cx).language().cloned());
-                            for item in items {
+                    editor
+                        .update(cx, |editor, cx| {
+                            let syntax = cx.theme().syntax().clone();
+                            let display_snapshot = editor.display_map.update(cx, |map, cx| map.snapshot(cx));
+                            let language = buffer.read(cx).language().cloned();
+                            for item in &mut items {
                                 if let Some(highlights) = highlights_from_buffer(&display_snapshot, item, &syntax) {
                                     item.highlight_ranges = highlights;
                                 } else if let Some(language) = &language {
                                     item.highlight_ranges = highlight_ranges_from_text(&item.text, language, &syntax);
                                 }
                             }
-                        }
-                        editor.lsp_document_symbols.extend(highlighted_results);
-                        editor.refresh_outline_symbols_at_cursor(cx);
-                    })
-                    .ok();
-            })
-            .shared();
+                            editor.lsp_document_symbols.insert(buffer_id, items);
+                            cx.emit(EditorEvent::DocumentSymbolsChanged);
+                        })
+                        .ok();
+                })
+                .shared();
+            self.refresh_document_symbols_tasks.insert(buffer_id, task);
+        }
     }
 }
 

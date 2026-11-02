@@ -311,9 +311,6 @@ pub struct DiagnosticsSettings {
     /// Whether to show the project diagnostics button in the status bar.
     pub button: bool,
 
-    /// Whether or not to include warning diagnostics.
-    pub include_warnings: bool,
-
     /// Settings for using LSP pull diagnostics mechanism in ed.
     pub lsp_pull_diagnostics: LspPullDiagnosticsSettings,
 
@@ -413,7 +410,6 @@ impl Settings for ProjectSettings {
             },
             diagnostics: DiagnosticsSettings {
                 button: diagnostics.button.unwrap(),
-                include_warnings: diagnostics.include_warnings.unwrap(),
                 lsp_pull_diagnostics: LspPullDiagnosticsSettings {
                     enabled: lsp_pull_diagnostics.enabled.unwrap(),
                     debounce_ms: lsp_pull_diagnostics.debounce_ms.unwrap().0,

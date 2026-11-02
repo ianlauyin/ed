@@ -37,7 +37,7 @@
 - Diagrams render at their natural size times the fence scale
   (```` ```mermaid 150 ````); wider ones scroll horizontally. There is no
   per-diagram zoom (ctrl/cmd+scroll was removed). Diagrams follow the
-  preview's temporary font zoom (cmd +/-/0): they scale by current ÷
-  configured preview font size, re-rendered (not stretched) on change, so at
-  the configured size they are 1:1. Theme and zoom changes keep showing the
+  preview's temporary font zoom (cmd +/-/0): they scale by current preview
+  font size ÷ configured UI font size, re-rendered (not stretched) on change,
+  so at the configured size they are 1:1. Theme and zoom changes keep showing the
   old raster until the new one is ready.

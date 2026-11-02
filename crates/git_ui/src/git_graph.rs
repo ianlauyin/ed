@@ -9,6 +9,7 @@ use collections::HashMap;
 use collections::IndexSet;
 use ed_actions::buffer_search;
 pub use ed_actions::git_graph::Open;
+pub use ed_actions::git_graph::Show;
 use ed_actions::search::SelectNextMatch;
 use ed_actions::search::SelectPreviousMatch;
 use ed_actions::search::ToggleCaseSensitive;
@@ -107,6 +108,7 @@ use workspace::Workspace;
 use workspace::WorkspaceMode;
 use workspace::item::Item;
 use workspace::item::ItemEvent;
+use workspace::item::ItemHandle;
 use workspace::item::TabTooltipContent;
 
 use crate::commit_context_menu::CommitContextMenuData;
@@ -118,7 +120,7 @@ use crate::commit_details_panel::CommitDetailsEvent;
 use crate::commit_details_panel::CommitDetailsPanel;
 use crate::commit_details_panel::render_ref_chip;
 use crate::commit_view::CommitView;
-use crate::commit_view::open_project_file;
+use crate::commit_view::open_file_in_project;
 
 const COMMIT_CIRCLE_RADIUS: Pixels = px(4.5);
 const COMMIT_CIRCLE_STROKE_WIDTH: Pixels = px(1.5);
@@ -237,6 +239,8 @@ impl QueryState {
 }
 
 struct SearchState {
+    /// The search row is hidden until opened with `cmd-f`.
+    shown: bool,
     case_sensitive: bool,
     editor: Entity<Editor>,
     state: QueryState,
@@ -318,6 +322,9 @@ actions!(
 #[action(namespace = git_graph)]
 pub struct OpenAtCommit {
     pub sha: String,
+    /// The commit's repository; the active repository when omitted.
+    #[serde(default)]
+    pub repo_id: Option<u64>,
 }
 
 fn timestamp_format() -> &'static [BorrowedFormatItem<'static>] {
@@ -721,7 +728,23 @@ impl GraphData {
 }
 
 pub fn init(cx: &mut App) {
-    cx.observe_new(|workspace: &mut workspace::Workspace, _, _| {
+    cx.observe_new(|workspace: &mut workspace::Workspace, window, cx| {
+        // Git History follows the folder picked in the title bar while shown.
+        if let Some(window) = window {
+            let git_store = workspace.project().read(cx).git_store().clone();
+            cx.subscribe_in(&git_store, window, |workspace, _, event, window, cx| {
+                if let GitStoreEvent::ActiveRepositoryChanged(Some(_)) = event
+                    && workspace.mode() == WorkspaceMode::GitHistory
+                {
+                    show_active_repository_history(workspace, window, cx);
+                }
+            })
+            .detach();
+        }
+
+        workspace.register_action(|workspace, _: &Show, window, cx| {
+            show_active_repository_history(workspace, window, cx);
+        });
         workspace.register_action_renderer(|div, workspace, window, cx| {
             div.when_some(resolve_file_history_target(workspace, window, cx), |div, (repo_id, log_source)| {
                 let git_store = workspace.project().read(cx).git_store().clone();
@@ -765,12 +788,14 @@ pub fn init(cx: &mut App) {
                 })
                 .on_action(move |action: &OpenAtCommit, window, cx| {
                     let sha = action.sha.clone();
+                    let requested_repo_id = action.repo_id.map(RepositoryId);
                     workspace
                         .update(cx, |workspace, cx| {
-                            let Some(repo) = workspace.project().read(cx).active_repository(cx) else {
+                            let active_repo_id =
+                                workspace.project().read(cx).active_repository(cx).map(|repo| repo.read(cx).id);
+                            let Some(selected_repo_id) = commit_graph_repo(requested_repo_id, active_repo_id) else {
                                 return;
                             };
-                            let selected_repo_id = repo.read(cx).id;
 
                             let git_store = workspace.project().read(cx).git_store().clone();
                             open_or_reuse_graph(
@@ -823,6 +848,50 @@ fn resolve_file_history_target(workspace: &Workspace, window: &Window, cx: &App)
     Some((repo.read(cx).id, LogSource::Path(repo_path)))
 }
 
+/// Switches to Git History for the active repository: keeps the active history
+/// tab if it belongs to that repository, otherwise shows its graph.
+pub fn show_active_repository_history(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
+    let project = workspace.project().read(cx);
+    let active_repo_id = project.active_repository(cx).map(|repo| repo.read(cx).id);
+    let git_store = project.git_store().clone();
+    let shown_repo_id =
+        workspace.git_history_pane().read(cx).active_item().and_then(|item| history_item_repo_id(item.as_ref(), cx));
+
+    if let Some(repo_id) = graph_repo_to_show(active_repo_id, shown_repo_id) {
+        open_or_reuse_graph(workspace, repo_id, git_store, LogSource::All, None, window, cx);
+    } else if !workspace.git_history_is_empty(cx) {
+        workspace.set_mode(WorkspaceMode::GitHistory, window, cx);
+    }
+}
+
+/// The repository whose graph must be shown so Git History matches the active
+/// repository, or `None` when the active history tab already shows it.
+fn graph_repo_to_show(
+    active_repo_id: Option<RepositoryId>,
+    shown_repo_id: Option<RepositoryId>,
+) -> Option<RepositoryId> {
+    active_repo_id.filter(|active_repo_id| shown_repo_id != Some(*active_repo_id))
+}
+
+/// The repository whose graph shows a commit: its own when known, otherwise
+/// the active one (e.g. a keybinding with only a sha).
+fn commit_graph_repo(
+    requested_repo_id: Option<RepositoryId>,
+    active_repo_id: Option<RepositoryId>,
+) -> Option<RepositoryId> {
+    requested_repo_id.or(active_repo_id)
+}
+
+/// The repository a history tab belongs to: a graph's own, otherwise that of
+/// the commit in its sidebar (commit views, revisions and their previews).
+fn history_item_repo_id(item: &dyn ItemHandle, cx: &App) -> Option<RepositoryId> {
+    if let Some(graph) = item.downcast::<GitGraph>() {
+        return Some(graph.read(cx).repo_id);
+    }
+    let details = item.side_card(cx)?.downcast::<CommitDetailsPanel>().ok()?;
+    details.read(cx).repository_id(cx)
+}
+
 /// Shows the git graph for `repo_id` and `log_source` in the git history
 /// pane, reusing an open one, and switches the window to Git History mode.
 pub fn open_or_reuse_graph(
@@ -834,13 +903,17 @@ pub fn open_or_reuse_graph(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let pane = workspace.git_history_pane().clone();
-    let existing = pane.read(cx).items_of_type::<GitGraph>().find(|graph| {
-        let graph = graph.read(cx);
-        graph.repo_id == repo_id && graph.log_source == log_source
+    // Reuse the graph in whichever history pane holds it.
+    let existing = workspace.git_history_panes().into_iter().find_map(|pane| {
+        let graph = pane.read(cx).items_of_type::<GitGraph>().find(|graph| {
+            let graph = graph.read(cx);
+            graph.repo_id == repo_id && graph.log_source == log_source
+        })?;
+        Some((pane.clone(), graph))
     });
 
-    let git_graph = if let Some(existing) = existing {
+    let git_graph = if let Some((pane, existing)) = existing {
+        workspace.set_active_git_history_pane(&pane, window, cx);
         pane.update(cx, |pane, cx| {
             if let Some(ix) = pane.index_for_item(&existing) {
                 pane.activate_item(ix, true, true, window, cx);
@@ -853,7 +926,8 @@ pub fn open_or_reuse_graph(
         let git_graph =
             cx.new(|cx| GitGraph::new(repo_id, git_store, workspace_handle, languages, Some(log_source), window, cx));
         // The repository-wide graph is always the first tab.
-        let destination = (git_graph.read(cx).log_source == LogSource::All).then_some(0);
+        let destination = is_repository_graph(&git_graph.read(cx).log_source).then_some(0);
+        let pane = workspace.git_history_pane().clone();
         pane.update(cx, |pane, cx| pane.add_item(Box::new(git_graph.clone()), true, true, destination, window, cx));
         git_graph
     };
@@ -866,6 +940,12 @@ pub fn open_or_reuse_graph(
             });
         });
     }
+}
+
+/// Whether a graph of `log_source` is the repository-wide one, a permanent
+/// first tab in the history pane.
+const fn is_repository_graph(log_source: &LogSource) -> bool {
+    matches!(log_source, LogSource::All)
 }
 
 /// The path a file history reveals in each commit's changed files.
@@ -1191,6 +1271,7 @@ impl GitGraph {
             focus_handle,
             git_store,
             search_state: SearchState {
+                shown: false,
                 case_sensitive: false,
                 editor: search_editor,
                 matches: IndexSet::default(),
@@ -1298,13 +1379,17 @@ impl GitGraph {
         }
     }
 
-    fn fetch_initial_graph_data(&mut self, cx: &mut App) {
+    /// Takes whatever commits the repository already has cached. A graph reopened
+    /// on a loaded repository gets no further load events, so the newest commit
+    /// is selected here too.
+    fn fetch_initial_graph_data(&mut self, cx: &mut Context<Self>) {
         if let Some(repository) = self.get_repository(cx) {
             repository.update(cx, |repository, cx| {
                 let commits = repository.graph_data(self.log_source.clone(), self.log_order, 0..usize::MAX, cx).commits;
                 self.graph_data.add_commits(commits);
             });
         }
+        self.select_newest_if_unselected(cx);
     }
 
     fn get_repository(&self, cx: &App) -> Option<Entity<Repository>> {
@@ -1496,8 +1581,9 @@ impl GitGraph {
             .collect()
     }
 
-    /// Selects the newest commit once commits arrive, so the details sidebar is
-    /// always shown. A pending selection (e.g. "Show in Git Graph") wins.
+    /// Selects the newest commit once commits arrive (cached on open, or from
+    /// load events), so the details sidebar is always shown. A pending selection
+    /// (e.g. "Show in Git History") wins.
     fn select_newest_if_unselected(&mut self, cx: &mut Context<Self>) {
         if let Some(idx) = newest_commit_to_select(
             self.selected_entry_idx,
@@ -1546,9 +1632,9 @@ impl GitGraph {
                     cx,
                 );
             }
-            CommitDetailsEvent::OpenProjectFile(repo_path) => {
+            CommitDetailsEvent::OpenFileInProject(repo_path) => {
                 if let Some(repository) = self.get_repository(cx) {
-                    open_project_file(&self.workspace, &repository, repo_path, window, cx);
+                    open_file_in_project(&self.workspace, &repository, repo_path, window, cx);
                 }
             }
             CommitDetailsEvent::DeployRefMenu { position, name } => {
@@ -1683,6 +1769,33 @@ impl GitGraph {
     fn confirm_search(&mut self, _: &menu::Confirm, _window: &mut Window, cx: &mut Context<Self>) {
         let query = self.search_state.editor.read(cx).text(cx).into();
         self.search(query, cx);
+    }
+
+    fn show_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let was_shown = std::mem::replace(&mut self.search_state.shown, true);
+        self.search_state.editor.update(cx, |editor, cx| editor.focus_handle(cx).focus(window, cx));
+        self.activate_search_editor_if_focused(window, cx);
+        if !was_shown {
+            let query = self.search_state.editor.read(cx).text(cx).into();
+            self.search(query, cx);
+        }
+        cx.notify();
+    }
+
+    /// Hides the search row and its matches; the query is kept for next time.
+    fn hide_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.search_state.shown {
+            return;
+        }
+        self.search_state.shown = false;
+        self.search_state.matches.clear();
+        self.search_state.selected_index = None;
+        self.search_state.state = QueryState::Empty;
+        self.update_commit_message_search_highlights(cx);
+        if self.search_state.editor.focus_handle(cx).contains_focused(window, cx) {
+            window.focus(&self.focus_handle, cx);
+        }
+        cx.notify();
     }
 
     fn activate_search_editor_if_focused(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2090,6 +2203,9 @@ impl GitGraph {
                     .rounded_md()
                     .bg(color.toolbar_background)
                     .on_action(cx.listener(Self::confirm_search))
+                    .on_action(cx.listener(|this, _: &editor::actions::Cancel, window, cx| {
+                        this.hide_search(window, cx);
+                    }))
                     .child(self.search_state.editor.clone())
                     .child({
                         let focus_handle = query_focus_handle.clone();
@@ -3010,10 +3126,7 @@ impl Render for GitGraph {
             }))
             .on_action(cx.listener(Self::copy_selected_commit_sha))
             .on_action(cx.listener(Self::copy_selected_commit_tag))
-            .on_action(cx.listener(|this, _: &FocusSearch, window, cx| {
-                this.search_state.editor.update(cx, |editor, cx| editor.focus_handle(cx).focus(window, cx));
-                this.activate_search_editor_if_focused(window, cx);
-            }))
+            .on_action(cx.listener(|this, _: &FocusSearch, window, cx| this.show_search(window, cx)))
             .on_action(cx.listener(Self::select_first))
             .on_action(cx.listener(Self::select_prev))
             .on_action(cx.listener(Self::select_next))
@@ -3036,15 +3149,24 @@ impl Render for GitGraph {
                 cx.emit(ItemEvent::Edit);
                 cx.notify();
             }))
-            .child(v_flex().size_full().child(self.render_search_bar(cx)).child(div().flex_1().child(content)))
+            .child(
+                v_flex()
+                    .size_full()
+                    .when(self.search_state.shown, |this| this.child(self.render_search_bar(cx)))
+                    .child(div().flex_1().child(content)),
+            )
             .children(self.context_menu.as_ref().map(|context_menu| {
                 deferred(
                     anchored().position(context_menu.position).anchor(Anchor::TopLeft).child(context_menu.menu.clone()),
                 )
                 .with_priority(1)
             }))
-            .on_action(cx.listener(|_, _: &buffer_search::Deploy, window, cx| {
-                window.dispatch_action(Box::new(FocusSearch), cx);
+            .on_action(cx.listener(|this, _: &buffer_search::Deploy, window, cx| {
+                this.show_search(window, cx);
+                cx.stop_propagation();
+            }))
+            .on_action(cx.listener(|this, _: &buffer_search::Dismiss, window, cx| {
+                this.hide_search(window, cx);
                 cx.stop_propagation();
             }))
     }
@@ -3054,7 +3176,11 @@ impl EventEmitter<ItemEvent> for GitGraph {}
 
 impl Focusable for GitGraph {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.search_state.editor.read(cx).focus_handle(cx)
+        if self.search_state.shown {
+            self.search_state.editor.read(cx).focus_handle(cx)
+        } else {
+            self.focus_handle.clone()
+        }
     }
 }
 
@@ -3069,6 +3195,10 @@ impl Item for GitGraph {
         Some(Icon::new(IconName::GitGraph))
     }
 
+    fn is_permanent(&self, _: &App) -> bool {
+        is_repository_graph(&self.log_source)
+    }
+
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent> {
         let repo_name = self.get_repository(cx).and_then(|repo| {
             repo.read(cx).work_directory_abs_path.file_name().map(|name| name.to_string_lossy().to_string())
@@ -3081,7 +3211,7 @@ impl Item for GitGraph {
         Some(TabTooltipContent::Custom(Box::new(Tooltip::element({
             move |_, _| {
                 v_flex()
-                    .child(Label::new(if path_history_path.is_some() { "Path History" } else { "Git Graph" }))
+                    .child(Label::new(if path_history_path.is_some() { "Path History" } else { "Git History" }))
                     .when_some(path_history_path.clone(), |this, path| {
                         this.child(Label::new(path).color(Color::Muted).size(LabelSize::Small))
                     })
@@ -3144,6 +3274,34 @@ mod tests {
         assert_eq!(history_reveal_path(&LogSource::Path(path.clone())), Some(path));
         assert_eq!(history_reveal_path(&LogSource::All), None);
         assert_eq!(history_reveal_path(&LogSource::Branch("main".into())), None);
+    }
+
+    #[test]
+    fn test_is_repository_graph() {
+        assert!(is_repository_graph(&LogSource::All));
+        assert!(!is_repository_graph(&LogSource::Branch("main".into())));
+        assert!(!is_repository_graph(&LogSource::Path(RepoPath::new("README.md").unwrap())));
+    }
+
+    #[test]
+    fn test_commit_graph_repo() {
+        let a = RepositoryId(1);
+        let b = RepositoryId(2);
+        assert_eq!(commit_graph_repo(Some(b), Some(a)), Some(b));
+        assert_eq!(commit_graph_repo(Some(b), None), Some(b));
+        assert_eq!(commit_graph_repo(None, Some(a)), Some(a));
+        assert_eq!(commit_graph_repo(None, None), None);
+    }
+
+    #[test]
+    fn test_graph_repo_to_show() {
+        let a = RepositoryId(1);
+        let b = RepositoryId(2);
+        assert_eq!(graph_repo_to_show(Some(a), Some(a)), None);
+        assert_eq!(graph_repo_to_show(Some(b), Some(a)), Some(b));
+        assert_eq!(graph_repo_to_show(Some(a), None), Some(a));
+        assert_eq!(graph_repo_to_show(None, Some(a)), None);
+        assert_eq!(graph_repo_to_show(None, None), None);
     }
 
     #[test]

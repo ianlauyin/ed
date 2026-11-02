@@ -14,8 +14,6 @@ use anyhow::Result;
 use anyhow::anyhow;
 use collections::HashMap;
 use collections::HashSet;
-use ed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
-use ed_actions::preview::svg::OpenPreview as OpenSvgPreview;
 use file_icons::FileIcons;
 use fs::MTime;
 use futures::channel::oneshot;
@@ -27,7 +25,6 @@ use gpui::Context;
 use gpui::Entity;
 use gpui::EntityId;
 use gpui::EventEmitter;
-use gpui::Font;
 use gpui::IntoElement;
 use gpui::ParentElement;
 use gpui::Pixels;
@@ -41,7 +38,6 @@ use language::Buffer;
 use language::BufferRow;
 use language::CharKind;
 use language::CharScopeContext;
-use language::HighlightedText;
 use language::LocalFile;
 use language::PLAIN_TEXT;
 use language::Point;
@@ -77,8 +73,6 @@ use workspace::ItemNavHistory;
 use workspace::OpenOptions;
 use workspace::OpenVisible;
 use workspace::Pane;
-use workspace::TabBarSettings;
-use workspace::ToolbarItemLocation;
 use workspace::Workspace;
 use workspace::WorkspaceId;
 use workspace::WorkspaceSettings;
@@ -484,33 +478,6 @@ impl Item for Editor {
         self.pixel_position_of_newest_cursor
     }
 
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        if self.breadcrumbs_visible() && self.buffer().read(cx).is_singleton() {
-            ToolbarItemLocation::PrimaryLeft
-        } else {
-            ToolbarItemLocation::Hidden
-        }
-    }
-
-    // In a non-singleton case, the breadcrumbs are actually shown on sticky file headers of the multibuffer.
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        if self.buffer.read(cx).is_singleton() {
-            let font = theme_settings::ThemeSettings::get_global(cx).buffer_font.clone();
-            Some((self.breadcrumbs_inner(cx)?, Some(font)))
-        } else {
-            None
-        }
-    }
-
-    fn breadcrumb_prefix(&self, _window: &mut Window, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
-        (!TabBarSettings::get_global(cx).show && ItemSettings::get_global(cx).file_icons)
-            .then(|| {
-                path_for_buffer(&self.buffer, 0, true, cx).and_then(|path| FileIcons::get_icon(Path::new(&*path), cx))
-            })
-            .flatten()
-            .map(|icon_path| Icon::from_path(icon_path).into_any_element())
-    }
-
     fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace = Some((workspace.weak_handle(), workspace.database_id()));
         if let Some(workspace_entity) = &workspace.weak_handle().upgrade() {
@@ -546,28 +513,20 @@ impl Item for Editor {
         match event {
             EditorEvent::Saved | EditorEvent::TitleChanged => {
                 f(ItemEvent::UpdateTab);
-                f(ItemEvent::UpdateBreadcrumbs);
-            }
-
-            EditorEvent::Reparsed(_) => {
-                f(ItemEvent::UpdateBreadcrumbs);
+                f(ItemEvent::UpdateActivePath);
             }
 
             EditorEvent::SelectionsChanged { local } if *local => {
-                f(ItemEvent::UpdateBreadcrumbs);
+                f(ItemEvent::UpdateActivePath);
             }
 
-            EditorEvent::BreadcrumbsChanged | EditorEvent::OutlineSymbolsChanged => {
-                f(ItemEvent::UpdateBreadcrumbs);
-            }
-
-            EditorEvent::DirtyChanged | EditorEvent::CapabilityChanged => {
+            // The tab bar's preview button depends on the language.
+            EditorEvent::DirtyChanged | EditorEvent::CapabilityChanged | EditorEvent::LanguageChanged => {
                 f(ItemEvent::UpdateTab);
             }
 
             EditorEvent::BufferEdited => {
                 f(ItemEvent::Edit);
-                f(ItemEvent::UpdateBreadcrumbs);
             }
 
             EditorEvent::BufferRangesUpdated { .. } | EditorEvent::BuffersRemoved { .. } => {
@@ -576,36 +535,6 @@ impl Item for Editor {
 
             _ => {}
         }
-    }
-
-    fn tab_extra_context_menu_actions(
-        &self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<(SharedString, Box<dyn gpui::Action>)> {
-        let mut actions = Vec::new();
-
-        let is_markdown = self
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .and_then(|buffer| buffer.read(cx).language())
-            .is_some_and(|language| language.name().as_ref() == "Markdown");
-
-        let is_svg =
-            self.buffer().read(cx).as_singleton().and_then(|buffer| buffer.read(cx).file()).is_some_and(|file| {
-                std::path::Path::new(file.file_name(cx)).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
-            });
-
-        if is_markdown {
-            actions.push(("Open Markdown Preview".into(), Box::new(OpenMarkdownPreview) as Box<dyn gpui::Action>));
-        }
-
-        if is_svg {
-            actions.push(("Open SVG Preview".into(), Box::new(OpenSvgPreview) as Box<dyn gpui::Action>));
-        }
-
-        actions
     }
 
     fn preserve_preview(&self, cx: &App) -> bool {

@@ -11,6 +11,7 @@ mod corner_solver;
 mod highlight_contrast;
 mod retained_focus;
 mod search_input;
+mod window_drag;
 mod with_rem_size;
 
 pub use apca_contrast::*;
@@ -22,6 +23,7 @@ pub use corner_solver::inner_corner_radius;
 pub use highlight_contrast::*;
 pub use retained_focus::*;
 pub use search_input::*;
+pub use window_drag::window_drag_area;
 pub use with_rem_size::*;
 
 /// Returns true if the current theme is light or vibrant light.

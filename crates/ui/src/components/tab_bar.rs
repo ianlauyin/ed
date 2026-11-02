@@ -4,6 +4,7 @@ use smallvec::SmallVec;
 
 use crate::Tab;
 use crate::TabStyle;
+use crate::components::tab::FOLDER_TAB_RADIUS;
 use crate::prelude::*;
 
 #[derive(IntoElement)]
@@ -85,6 +86,12 @@ impl ParentElement for TabBar {
     }
 }
 
+/// Without end buttons, a folder tab strip stops short of the card's rounded top-right corner, so a
+/// tab cut off by it ends over the card's straight top edge instead of hanging past the curve.
+fn end_inset(style: TabStyle, has_end_children: bool) -> Pixels {
+    if style == TabStyle::Folder && !has_end_children { FOLDER_TAB_RADIUS } else { px(0.) }
+}
+
 impl RenderOnce for TabBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         div()
@@ -96,11 +103,12 @@ impl RenderOnce for TabBar {
             .h(Tab::container_height(cx))
             .map(|this| match self.style {
                 // Clears the card's rounded top-left corner, so the first tab meets the card's
-                // straight top edge (matches `workspace::CARD_RADIUS`).
-                TabStyle::Folder => this.pl(px(10.)),
+                // straight top edge.
+                TabStyle::Folder => this.pl(FOLDER_TAB_RADIUS),
                 // Pills sit inside the card, already inset from its edge.
                 TabStyle::Pill => this.pl(DynamicSpacing::Base04.px(cx)),
             })
+            .pr(end_inset(self.style, !self.end_children.is_empty()))
             .when(!self.start_children.is_empty(), |this| {
                 this.child(
                     h_flex()
@@ -129,5 +137,17 @@ impl RenderOnce for TabBar {
                         .children(self.end_children),
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_end_inset() {
+        assert_eq!(end_inset(TabStyle::Folder, false), FOLDER_TAB_RADIUS);
+        assert_eq!(end_inset(TabStyle::Folder, true), px(0.));
+        assert_eq!(end_inset(TabStyle::Pill, false), px(0.));
     }
 }

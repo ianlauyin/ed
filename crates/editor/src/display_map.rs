@@ -195,12 +195,6 @@ use crate::hover_links::InlayHighlight;
 use crate::inlays::Inlay;
 use crate::movement::TextLayoutDetails;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum FoldStatus {
-    Folded,
-    Foldable,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NavigationOverlayKey(TypeId);
 
@@ -933,11 +927,6 @@ impl DisplayMap {
         }
     }
 
-    /// Returns `true` when at least one buffer has LSP folding-range creases.
-    pub(super) fn has_lsp_folding_ranges(&self) -> bool {
-        !self.lsp_folding_crease_ids.is_empty()
-    }
-
     pub fn insert_blocks(
         &mut self,
         blocks: impl IntoIterator<Item = BlockProperties<Anchor>>,
@@ -1562,10 +1551,6 @@ impl DisplaySnapshot {
         self.inlay_snapshot().to_offset(self.display_point_to_inlay_point(point, bias))
     }
 
-    pub fn anchor_to_inlay_offset(&self, anchor: Anchor) -> InlayOffset {
-        self.inlay_snapshot().to_inlay_offset(anchor.to_offset(self.buffer_snapshot()))
-    }
-
     pub fn display_point_to_anchor(&self, point: DisplayPoint, bias: Bias) -> Anchor {
         self.buffer_snapshot().anchor_at(point.to_offset(self, bias), bias)
     }
@@ -1606,23 +1591,6 @@ impl DisplaySnapshot {
                 Highlights::default(),
             )
             .map(|h| h.text)
-    }
-
-    /// Returns text chunks starting at the end of the given display row in reverse until the start of the file
-    pub fn reverse_text_chunks(&self, display_row: DisplayRow) -> impl Iterator<Item = &str> {
-        (0..=display_row.0).rev().flat_map(move |row| {
-            self.block_snapshot
-                .chunks(
-                    BlockRow(row)..BlockRow(row + 1),
-                    LanguageAwareStyling { tree_sitter: false, diagnostics: false },
-                    self.masked,
-                    Highlights::default(),
-                )
-                .map(|h| h.text)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-        })
     }
 
     pub fn chunks(
@@ -1861,16 +1829,6 @@ impl DisplaySnapshot {
             let ret = (ch, offset);
             offset += ch.len_utf8();
             ret
-        })
-    }
-
-    pub fn reverse_buffer_chars_at(
-        &self,
-        mut offset: MultiBufferOffset,
-    ) -> impl Iterator<Item = (char, MultiBufferOffset)> + '_ {
-        self.buffer_snapshot().reversed_chars_at(offset).map(move |ch| {
-            offset -= ch.len_utf8();
-            (ch, offset)
         })
     }
 
@@ -2125,23 +2083,6 @@ impl DisplaySnapshot {
 
     pub const fn excerpt_header_height(&self) -> u32 {
         self.block_snapshot.excerpt_header_height
-    }
-
-    /// Given a `DisplayPoint`, returns another `DisplayPoint` corresponding to
-    /// the start of the buffer row that is a given number of buffer rows away
-    /// from the provided point.
-    ///
-    /// This moves by buffer rows instead of display rows, a distinction that is
-    /// important when soft wrapping is enabled.
-    pub fn start_of_relative_buffer_row(&self, point: DisplayPoint, times: isize) -> DisplayPoint {
-        let start = self.display_point_to_fold_point(point, Bias::Left);
-        let target = (start.row() as usize).cast_signed() + times;
-        let new_row = (target.max(0) as u32).min(self.fold_snapshot().max_point().row());
-
-        self.clip_point(
-            self.fold_point_to_display_point(self.fold_snapshot().clip_point(FoldPoint::new(new_row, 0), Bias::Right)),
-            Bias::Right,
-        )
     }
 
     pub(crate) fn fully_replaced_tab_rows(&self, row: u32) -> Option<RangeInclusive<u32>> {

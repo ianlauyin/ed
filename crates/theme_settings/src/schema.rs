@@ -169,8 +169,6 @@ pub fn theme_colors_refinement(
             .element_selection_background
             .as_ref()
             .and_then(|color| try_parse_color(color).ok()),
-        drop_target_background: this.drop_target_background.as_ref().and_then(|color| try_parse_color(color).ok()),
-        drop_target_border: this.drop_target_border.as_ref().and_then(|color| try_parse_color(color).ok()),
         ghost_element_background: this.ghost_element_background.as_ref().and_then(|color| try_parse_color(color).ok()),
         ghost_element_hover: this.ghost_element_hover.as_ref().and_then(|color| try_parse_color(color).ok()),
         ghost_element_active: this.ghost_element_active.as_ref().and_then(|color| try_parse_color(color).ok()),

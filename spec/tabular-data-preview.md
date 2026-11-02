@@ -1,7 +1,7 @@
 # Tabular data preview
 
-`tabular_data_preview` shows CSV-like files as a grid (`tabular_data::OpenPreview`,
-`OpenPreviewToTheSide`).
+`tabular_data_preview` shows CSV-like files as a grid, opened through the shared
+preview actions (see ui-layout.md).
 
 ## Column widths
 

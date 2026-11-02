@@ -7,22 +7,18 @@ use gpui::AnyWeakView;
 use gpui::Axis;
 use gpui::Bounds;
 use gpui::Entity;
-use gpui::Hsla;
 use gpui::IntoElement;
 use gpui::Pixels;
 use gpui::Point;
 use gpui::StyleRefinement;
 use gpui::WeakEntity;
 use gpui::Window;
-use gpui::point;
-use gpui::size;
+use gpui::px;
 use parking_lot::Mutex;
-use project::Project;
 use serde::Deserialize;
 use settings::Settings;
 use ui::prelude::*;
 
-use crate::AppState;
 use crate::Pane;
 use crate::Workspace;
 use crate::WorkspaceSettings;
@@ -220,7 +216,7 @@ impl PaneGroup {
         &self,
         zoomed: Option<&AnyWeakView>,
         maximized: Option<&WeakEntity<Pane>>,
-        render_cx: &dyn PaneLeaderDecorator,
+        render_cx: &PaneRenderContext,
         window: &mut Window,
         cx: &mut App,
     ) -> impl IntoElement {
@@ -235,6 +231,13 @@ impl PaneGroup {
 
     pub fn first_pane(&self) -> Entity<Pane> {
         self.root.first_pane()
+    }
+
+    /// Panes whose tab bars sit along the top edge of the group.
+    pub fn top_row_panes(&self) -> Vec<&Entity<Pane>> {
+        let mut panes = Vec::new();
+        self.root.collect_top_row_panes(&mut panes);
+        panes
     }
 
     pub fn last_pane(&self) -> Entity<Pane> {
@@ -254,21 +257,26 @@ impl PaneGroup {
             _ => bounding_box.center(),
         };
 
-        let distance_to_next = crate::HANDLE_HITBOX_SIZE;
-
-        let target = match direction {
-            SplitDirection::Left => Point::new(bounding_box.left() - distance_to_next.into(), center.y),
-            SplitDirection::Right => Point::new(bounding_box.right() + distance_to_next.into(), center.y),
-            SplitDirection::Up => Point::new(center.x, bounding_box.top() - distance_to_next.into()),
-            SplitDirection::Down => Point::new(center.x, bounding_box.bottom() + distance_to_next.into()),
-        };
-        self.pane_at_pixel_position(target)
+        self.pane_at_pixel_position(neighbor_probe(bounding_box, center, direction))
     }
+}
 
-    pub fn invert_axies(&mut self, cx: &mut App) {
-        self.root.invert_pane_axies();
-        self.mark_positions(cx);
+/// A point just inside the pane next to `bounds` in `direction`, level with
+/// `center`. Split panes are cards `CARD_GAP` apart, so the probe crosses the gap.
+fn neighbor_probe(bounds: Bounds<Pixels>, center: Point<Pixels>, direction: SplitDirection) -> Point<Pixels> {
+    let distance_to_next = crate::CARD_GAP + px(crate::HANDLE_HITBOX_SIZE);
+    match direction {
+        SplitDirection::Left => Point::new(bounds.left() - distance_to_next, center.y),
+        SplitDirection::Right => Point::new(bounds.right() + distance_to_next, center.y),
+        SplitDirection::Up => Point::new(center.x, bounds.top() - distance_to_next),
+        SplitDirection::Down => Point::new(center.x, bounds.bottom() + distance_to_next),
     }
+}
+
+/// Whether member `index` of a split along `axis` touches the split's top edge:
+/// every column of a side-by-side split does, only the first row of a stack.
+fn member_reaches_top(axis: Axis, index: usize) -> bool {
+    axis == Axis::Horizontal || index == 0
 }
 
 #[derive(Debug, Clone)]
@@ -292,63 +300,11 @@ impl Member {
     }
 }
 
+/// What rendering a pane tree needs from its workspace.
 #[derive(Clone, Copy)]
 pub struct PaneRenderContext<'a> {
-    pub project: &'a Entity<Project>,
-
     pub active_pane: &'a Entity<Pane>,
-    pub app_state: &'a Arc<AppState>,
     pub workspace: &'a WeakEntity<Workspace>,
-}
-
-#[derive(Default)]
-pub struct LeaderDecoration {
-    border: Option<Hsla>,
-    status_box: Option<AnyElement>,
-}
-
-pub trait PaneLeaderDecorator {
-    fn decorate(&self, pane: &Entity<Pane>, cx: &App) -> LeaderDecoration;
-    fn active_pane(&self) -> &Entity<Pane>;
-    fn workspace(&self) -> &WeakEntity<Workspace>;
-}
-
-pub struct ActivePaneDecorator<'a> {
-    active_pane: &'a Entity<Pane>,
-    workspace: &'a WeakEntity<Workspace>,
-}
-
-impl<'a> ActivePaneDecorator<'a> {
-    pub const fn new(active_pane: &'a Entity<Pane>, workspace: &'a WeakEntity<Workspace>) -> Self {
-        Self { active_pane, workspace }
-    }
-}
-
-impl PaneLeaderDecorator for ActivePaneDecorator<'_> {
-    fn decorate(&self, _: &Entity<Pane>, _: &App) -> LeaderDecoration {
-        LeaderDecoration::default()
-    }
-    fn active_pane(&self) -> &Entity<Pane> {
-        self.active_pane
-    }
-
-    fn workspace(&self) -> &WeakEntity<Workspace> {
-        self.workspace
-    }
-}
-
-impl PaneLeaderDecorator for PaneRenderContext<'_> {
-    fn decorate(&self, _: &Entity<Pane>, _: &App) -> LeaderDecoration {
-        LeaderDecoration::default()
-    }
-
-    fn active_pane(&self) -> &Entity<Pane> {
-        self.active_pane
-    }
-
-    fn workspace(&self) -> &WeakEntity<Workspace> {
-        self.workspace
-    }
 }
 
 impl Member {
@@ -392,7 +348,7 @@ impl Member {
         basis: usize,
         zoomed: Option<&AnyWeakView>,
         maximized: Option<&WeakEntity<Pane>>,
-        render_cx: &dyn PaneLeaderDecorator,
+        render_cx: &PaneRenderContext,
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
@@ -411,8 +367,7 @@ impl Member {
                     false
                 };
 
-                let decoration = render_cx.decorate(pane, cx);
-                let is_active = pane == render_cx.active_pane();
+                let is_active = pane == render_cx.active_pane;
 
                 let pane = div()
                     .relative()
@@ -424,11 +379,7 @@ impl Member {
                             .shadow_lg()
                             .overflow_hidden()
                     })
-                    .child(AnyView::from(pane.clone()).cached(StyleRefinement::default().v_flex().size_full()))
-                    .when_some(decoration.border, |this, color| {
-                        this.child(div().absolute().size_full().left_0().top_0().border_2().border_color(color))
-                    })
-                    .children(decoration.status_box);
+                    .child(AnyView::from(pane.clone()).cached(StyleRefinement::default().v_flex().size_full()));
 
                 PaneRenderResult {
                     element: div()
@@ -452,6 +403,19 @@ impl Member {
         }
     }
 
+    fn collect_top_row_panes<'a>(&'a self, panes: &mut Vec<&'a Entity<Pane>>) {
+        match self {
+            Member::Axis(axis) => {
+                for (index, member) in axis.members.iter().enumerate() {
+                    if member_reaches_top(axis.axis, index) {
+                        member.collect_top_row_panes(panes);
+                    }
+                }
+            }
+            Member::Pane(pane) => panes.push(pane),
+        }
+    }
+
     fn collect_panes<'a>(&'a self, panes: &mut Vec<&'a Entity<Pane>>) {
         match self {
             Member::Axis(axis) => {
@@ -460,18 +424,6 @@ impl Member {
                 }
             }
             Member::Pane(pane) => panes.push(pane),
-        }
-    }
-
-    fn invert_pane_axies(&mut self) {
-        match self {
-            Self::Axis(axis) => {
-                axis.axis = axis.axis.invert();
-                for member in &mut axis.members {
-                    member.invert_pane_axies();
-                }
-            }
-            Self::Pane(_) => {}
         }
     }
 }
@@ -733,7 +685,7 @@ impl PaneAxis {
         basis: usize,
         zoomed: Option<&AnyWeakView>,
         maximized: Option<&WeakEntity<Pane>>,
-        render_cx: &dyn PaneLeaderDecorator,
+        render_cx: &PaneRenderContext,
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
@@ -760,7 +712,7 @@ impl PaneAxis {
                 match member {
                     Member::Pane(pane) => {
                         leaf_panes[ix] = Some(pane.clone());
-                        if pane == render_cx.active_pane() {
+                        if pane == render_cx.active_pane {
                             active_pane_ix = pane.read(cx).has_focus(window, cx).then_some(ix);
                             contains_active_pane = true;
                         }
@@ -776,17 +728,12 @@ impl PaneAxis {
             })
             .collect::<Vec<_>>();
 
-        let element = pane_axis(
-            self.axis,
-            basis,
-            self.flexes.clone(),
-            self.bounding_boxes.clone(),
-            render_cx.workspace().clone(),
-        )
-        .with_leaf_panes(leaf_panes)
-        .children(rendered_children)
-        .with_active_pane(active_pane_ix)
-        .into_any_element();
+        let element =
+            pane_axis(self.axis, basis, self.flexes.clone(), self.bounding_boxes.clone(), render_cx.workspace.clone())
+                .with_leaf_panes(leaf_panes)
+                .children(rendered_children)
+                .with_active_pane(active_pane_ix)
+                .into_any_element();
 
         PaneRenderResult { element, contains_active_pane }
     }
@@ -837,21 +784,6 @@ impl SplitDirection {
             Self::Down => rect.bottom_left().y,
             Self::Left => rect.bottom_left().x,
             Self::Right => rect.bottom_right().x,
-        }
-    }
-
-    pub fn along_edge(&self, bounds: Bounds<Pixels>, length: Pixels) -> Bounds<Pixels> {
-        match self {
-            Self::Up => Bounds { origin: bounds.origin, size: size(bounds.size.width, length) },
-            Self::Down => Bounds {
-                origin: point(bounds.bottom_left().x, bounds.bottom_left().y - length),
-                size: size(bounds.size.width, length),
-            },
-            Self::Left => Bounds { origin: bounds.origin, size: size(length, bounds.size.height) },
-            Self::Right => Bounds {
-                origin: point(bounds.bottom_right().x - length, bounds.bottom_left().y),
-                size: size(length, bounds.size.height),
-            },
         }
     }
 
@@ -915,7 +847,6 @@ mod element {
     use parking_lot::Mutex;
     use settings::Settings;
     use smallvec::SmallVec;
-    use ui::Tab;
     use ui::prelude::*;
     use util::ResultExt;
 
@@ -1183,11 +1114,9 @@ mod element {
                 // Read after prepaint, so the pane has rendered this frame.
                 let card_bounds = self.leaf_panes.get(ix).and_then(Option::as_ref).map(|pane| {
                     let mut card_bounds = child_bounds;
-                    if pane.read(cx).tab_bar_displayed() {
-                        let tab_bar_height = Tab::container_height(cx);
-                        card_bounds.origin.y += tab_bar_height;
-                        card_bounds.size.height = (card_bounds.size.height - tab_bar_height).max(px(0.));
-                    }
+                    let tab_strip_height = pane.read(cx).tab_strip_height(cx);
+                    card_bounds.origin.y += tab_strip_height;
+                    card_bounds.size.height = (card_bounds.size.height - tab_strip_height).max(px(0.));
                     card_bounds
                 });
 
@@ -1335,5 +1264,51 @@ mod element {
 
     fn flex_values_in_bounds(flexes: &[f32]) -> bool {
         (flexes.iter().copied().sum::<f32>() - flexes.len() as f32).abs() < 0.001
+    }
+}
+
+#[cfg(test)]
+mod neighbor_probe_tests {
+    use gpui::Bounds;
+    use gpui::point;
+    use gpui::px;
+    use gpui::size;
+
+    use super::SplitDirection;
+    use super::neighbor_probe;
+    use crate::CARD_GAP;
+
+    #[test]
+    fn test_neighbor_probe_lands_in_adjacent_card() {
+        let bounds = Bounds::new(point(px(100.), px(100.)), size(px(200.), px(200.)));
+        let center = point(px(150.), px(120.));
+        let next_card = |direction: SplitDirection| match direction {
+            SplitDirection::Left => Bounds::new(point(px(0.), px(100.)), size(px(100.) - CARD_GAP, px(200.))),
+            SplitDirection::Right => Bounds::new(point(px(300.) + CARD_GAP, px(100.)), size(px(200.), px(200.))),
+            SplitDirection::Up => Bounds::new(point(px(100.), px(0.)), size(px(200.), px(100.) - CARD_GAP)),
+            SplitDirection::Down => Bounds::new(point(px(100.), px(300.) + CARD_GAP), size(px(200.), px(200.))),
+        };
+
+        for direction in [SplitDirection::Left, SplitDirection::Right, SplitDirection::Up, SplitDirection::Down] {
+            let probe = neighbor_probe(bounds, center, direction);
+            assert!(next_card(direction).contains(&probe), "{direction:?} probe {probe:?}");
+        }
+        assert_eq!(neighbor_probe(bounds, center, SplitDirection::Right).y, center.y);
+        assert_eq!(neighbor_probe(bounds, center, SplitDirection::Down).x, center.x);
+    }
+}
+
+#[cfg(test)]
+mod top_row_tests {
+    use gpui::Axis;
+
+    use super::member_reaches_top;
+
+    #[test]
+    fn test_member_reaches_top() {
+        assert!(member_reaches_top(Axis::Horizontal, 0));
+        assert!(member_reaches_top(Axis::Horizontal, 2));
+        assert!(member_reaches_top(Axis::Vertical, 0));
+        assert!(!member_reaches_top(Axis::Vertical, 1));
     }
 }

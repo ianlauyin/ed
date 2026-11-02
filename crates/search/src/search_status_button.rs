@@ -10,16 +10,20 @@ use ui::Window;
 use ui::prelude::*;
 use workspace::ItemHandle;
 use workspace::StatusItemView;
+use workspace::status_item_color;
+
+use crate::ProjectSearchView;
 
 pub const SEARCH_ICON: IconName = IconName::MagnifyingGlass;
 
 pub struct SearchButton {
     pane_item_focus_handle: Option<FocusHandle>,
+    search_active: bool,
 }
 
 impl SearchButton {
     pub const fn new() -> Self {
-        Self { pane_item_focus_handle: None }
+        Self { pane_item_focus_handle: None, search_active: false }
     }
 }
 
@@ -41,6 +45,7 @@ impl Render for SearchButton {
         button.child(
             IconButton::new("project-search-indicator", SEARCH_ICON)
                 .icon_size(IconSize::Small)
+                .icon_color(status_item_color(self.search_active))
                 .tab_index(0isize)
                 .tooltip(move |_window, cx| {
                     if let Some(focus_handle) = &focus_handle {
@@ -64,5 +69,7 @@ impl StatusItemView for SearchButton {
         cx: &mut Context<Self>,
     ) {
         self.pane_item_focus_handle = active_pane_item.map(|item| item.item_focus_handle(cx));
+        self.search_active = active_pane_item.is_some_and(|item| item.downcast::<ProjectSearchView>().is_some());
+        cx.notify();
     }
 }

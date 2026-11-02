@@ -46,6 +46,7 @@ use project::git_store::CommitDataState;
 use project::git_store::CommitDiff;
 use project::git_store::CommitFile;
 use project::git_store::Repository;
+use project::git_store::RepositoryId;
 use ui::Chip;
 use ui::ContextMenu;
 use ui::DiffStat;
@@ -71,8 +72,8 @@ pub enum CommitDetailsEvent {
     OpenFile(RepoPath),
     /// "Open Revision" on a changed file's context menu.
     OpenRevision(RepoPath),
-    /// "Open Project File" on a changed file's context menu.
-    OpenProjectFile(RepoPath),
+    /// "Open File in Project" on a changed file's context menu.
+    OpenFileInProject(RepoPath),
     /// A ref chip was right-clicked.
     DeployRefMenu { position: Point<Pixels>, name: SharedString },
 }
@@ -211,6 +212,11 @@ impl CommitDetailsPanel {
         cx.notify();
     }
 
+    /// The repository of the shown commit, while it is still open.
+    pub fn repository_id(&self, cx: &App) -> Option<RepositoryId> {
+        self.repository.upgrade().map(|repository| repository.read(cx).id)
+    }
+
     /// The current commit's loaded diff, if it has finished loading.
     pub fn diff(&self) -> Option<Arc<CommitDiff>> {
         self.diff.clone()
@@ -255,8 +261,8 @@ impl CommitDetailsPanel {
                     panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenRevision(repo_path.clone()))).ok();
                 }
             })
-            .entry("Open Project File", None, move |_, cx| {
-                panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenProjectFile(repo_path.clone()))).ok();
+            .entry("Open File in Project", None, move |_, cx| {
+                panel.update(cx, |_, cx| cx.emit(CommitDetailsEvent::OpenFileInProject(repo_path.clone()))).ok();
             })
         });
         window.focus(&context_menu.focus_handle(cx), cx);

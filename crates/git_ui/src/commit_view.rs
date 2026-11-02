@@ -16,7 +16,6 @@ use editor::HiddenDiffHunkRenderer;
 use editor::MultiBuffer;
 use editor::SelectionEffects;
 use editor::SplittableEditor;
-use editor::actions::OpenExcerpts;
 use editor::multibuffer_context_lines;
 use editor::scroll::Autoscroll;
 use editor::scroll::ScrollAnchor;
@@ -35,6 +34,7 @@ use gpui::AppContext as _;
 use gpui::AsyncWindowContext;
 use gpui::Context;
 use gpui::Entity;
+use gpui::EntityId;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
@@ -72,6 +72,8 @@ use settings::DiffViewStyle;
 use settings::Settings;
 use theme::ActiveTheme;
 use ui::ContextMenu;
+use ui::DiffStat;
+use ui::Divider;
 use ui::Tooltip;
 use ui::prelude::*;
 use util::ResultExt;
@@ -91,7 +93,6 @@ use workspace::item::ItemEvent;
 use workspace::item::TabTooltipContent;
 use workspace::notifications::NotificationId;
 use workspace::notifications::NotifyTaskExt;
-use workspace::pane;
 use workspace::pane::SaveIntent;
 use workspace::searchable::SearchableItemHandle;
 
@@ -156,7 +157,7 @@ pub(crate) fn worktree_id_for_repo_path(
 
 /// Opens the project file at `repo_path`, or shows a toast when the commit's
 /// file is no longer in the project.
-pub(crate) fn open_project_file(
+pub(crate) fn open_file_in_project(
     workspace: &WeakEntity<Workspace>,
     repository: &Entity<Repository>,
     repo_path: &RepoPath,
@@ -247,6 +248,10 @@ impl Addon for CommitDiffAddon {
         Some("Open Revision")
     }
 
+    fn shows_project_file_actions(&self) -> bool {
+        false
+    }
+
     fn extend_buffer_header_context_menu(
         &self,
         menu: ContextMenu,
@@ -272,7 +277,7 @@ impl Addon for CommitDiffAddon {
 
         menu.when_some(file_to_open, |menu, file| {
             let commit_view = self.commit_view.clone();
-            menu.entry("Open File in Project", Some(Box::new(OpenFileAtHead)), move |window, cx| {
+            menu.separator().entry("Open File in Project", Some(Box::new(OpenFileAtHead)), move |window, cx| {
                 commit_view.update(cx, |view, cx| view.open_file_at_head(&file, window, cx)).log_err();
             })
         })
@@ -400,17 +405,30 @@ impl CommitView {
                             )
                         });
 
-                        let pane = workspace.git_history_pane().clone();
+                        let workspace_entity = cx.entity();
                         commit_view.update(cx, |view, cx| {
-                            let subscription = cx.subscribe_in(&pane, window, |view, _, event, window, cx| {
-                                if let pane::Event::AddItem { item } = event
-                                    && let Some(editor) = item.downcast::<Editor>()
-                                {
-                                    view.adopt_revision_editor(&editor, window, cx);
-                                }
-                            });
+                            let subscription =
+                                cx.subscribe_in(&workspace_entity, window, |view, _, event, window, cx| {
+                                    if let workspace::Event::GitHistoryItemAdded { item } = event
+                                        && let Some(editor) = item.downcast::<Editor>()
+                                    {
+                                        view.adopt_revision_editor(&editor, window, cx);
+                                    }
+                                });
                             view._revision_subscriptions.push(subscription);
                         });
+                        // Reopening a commit replaces its tab, in whichever history pane holds it.
+                        let pane = workspace
+                            .git_history_panes()
+                            .into_iter()
+                            .find(|pane| {
+                                pane.read(cx)
+                                    .items_of_type::<CommitView>()
+                                    .any(|view| view.read(cx).commit.sha == commit_sha)
+                            })
+                            .unwrap_or_else(|| workspace.git_history_pane())
+                            .clone();
+                        workspace.set_active_git_history_pane(&pane, window, cx);
                         pane.update(cx, |pane, cx| {
                             let ix = pane.items().position(|item| {
                                 let commit_view = item.downcast::<CommitView>();
@@ -468,7 +486,7 @@ impl CommitView {
         cx.subscribe_in(&details, window, |this: &mut Self, _, event, window, cx| match event {
             CommitDetailsEvent::OpenFile(repo_path) => {
                 this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
-                if this.is_revision_tab_active(cx) {
+                if this.is_sidebar_beside_other_tab(cx) {
                     this.open_file_revision(repo_path, window, cx);
                 } else {
                     this.scroll_to_file(repo_path, window, cx);
@@ -478,8 +496,8 @@ impl CommitView {
                 this.details.update(cx, |details, cx| details.reveal_file(repo_path, cx));
                 this.open_file_revision(repo_path, window, cx);
             }
-            CommitDetailsEvent::OpenProjectFile(repo_path) => {
-                open_project_file(&this.workspace, &this.repository, repo_path, window, cx);
+            CommitDetailsEvent::OpenFileInProject(repo_path) => {
+                open_file_in_project(&this.workspace, &this.repository, repo_path, window, cx);
             }
             CommitDetailsEvent::DeployRefMenu { .. } => {}
         })
@@ -746,16 +764,21 @@ impl CommitView {
         self.multibuffer.read(cx).buffer(buffer.read(cx).remote_id())
     }
 
-    /// Whether the history pane is showing one of this commit's file
-    /// revisions, i.e. this commit's sidebar is beside a revision tab.
-    fn is_revision_tab_active(&self, cx: &App) -> bool {
+    /// Whether the active history tab is another tab showing this commit's
+    /// sidebar: one of its file revisions, or a preview of one.
+    fn is_sidebar_beside_other_tab(&self, cx: &Context<Self>) -> bool {
         let Some(workspace) = self.workspace.upgrade() else {
             return false;
         };
-        let active_item = workspace.read(cx).git_history_pane().read(cx).active_item();
-        active_item
-            .and_then(|item| item.downcast::<Editor>())
-            .is_some_and(|editor| self.revision_buffer(&editor, cx).is_some())
+        let Some(active_item) = workspace.read(cx).git_history_pane().read(cx).active_item() else {
+            return false;
+        };
+        shows_sidebar_beside_other_tab(
+            active_item.item_id(),
+            || active_item.side_card(cx).map(|side_card| side_card.entity_id()),
+            cx.entity_id(),
+            self.details.entity_id(),
+        )
     }
 
     /// Moves the diff's cursor to the first hunk of `repo_path`, returning
@@ -810,7 +833,28 @@ impl CommitView {
             })
         });
         let focus_handle = self.editor.read(cx).rhs_editor().read(cx).focus_handle(cx);
-        window.focus(&focus_handle, cx);
+        // Bring this tab forward, since the click may come from the sidebar of
+        // another tab (e.g. a revision) in front of it. Deferred, because
+        // activating the tab reads this view.
+        let workspace = self.workspace.clone();
+        let commit_view_id = cx.entity_id();
+        window.defer(cx, move |window, cx| {
+            workspace
+                .update(cx, |workspace, cx| {
+                    let Some(pane) = workspace.pane_for_item_id(commit_view_id) else {
+                        return;
+                    };
+                    workspace.set_active_git_history_pane(&pane, window, cx);
+                    pane.update(cx, |pane, cx| {
+                        let ix = pane.items().position(|item| item.item_id() == commit_view_id);
+                        if let Some(ix) = ix {
+                            pane.activate_item(ix, true, false, window, cx);
+                        }
+                    });
+                })
+                .ok();
+            window.focus(&focus_handle, cx);
+        });
     }
 
     /// Opens `repo_path`'s revision tab at its first hunk, the same as
@@ -820,25 +864,13 @@ impl CommitView {
             return;
         }
         self.editor.update(cx, |editor, cx| {
-            editor.rhs_editor().update(cx, |editor, cx| editor.open_excerpts(&OpenExcerpts, window, cx))
+            editor.rhs_editor().update(cx, |editor, cx| editor.open_excerpt_at_newest_cursor(window, cx))
         });
     }
 
     fn open_file_at_head(&self, file: &Arc<dyn language::File>, window: &mut Window, cx: &mut Context<Self>) {
-        let rel_path = file.path().clone();
-        let worktree_id = file.worktree_id(cx);
-        let repo_path = RepoPath::from_rel_path(&rel_path);
-        let project_path = self
-            .repository
-            .read(cx)
-            .repo_path_to_project_path(&repo_path, cx)
-            .unwrap_or(project::ProjectPath { worktree_id, path: rel_path });
-
-        self.workspace
-            .update(cx, |workspace, cx| {
-                workspace.open_path_preview(project_path, None, true, false, true, window, cx).detach_and_log_err(cx);
-            })
-            .log_err();
+        let repo_path = RepoPath::from_rel_path(file.path());
+        open_file_in_project(&self.workspace, &self.repository, &repo_path, window, cx);
     }
 
     fn open_file_at_head_action(&mut self, _: &OpenFileAtHead, window: &mut Window, cx: &mut Context<Self>) {
@@ -1005,9 +1037,13 @@ impl CommitView {
         workspace
             .update_in(cx, |workspace, window, cx| {
                 let commit_view_id = commit_view.entity_id();
-                workspace
-                    .git_history_pane()
-                    .update(cx, |pane, cx| pane.close_item_by_id(commit_view_id, SaveIntent::Skip, window, cx))
+                let pane = workspace
+                    .git_history_panes()
+                    .into_iter()
+                    .find(|pane| pane.read(cx).items().any(|item| item.item_id() == commit_view_id))
+                    .unwrap_or_else(|| workspace.git_history_pane())
+                    .clone();
+                pane.update(cx, |pane, cx| pane.close_item_by_id(commit_view_id, SaveIntent::Skip, window, cx))
             })?
             .await?;
         anyhow::Ok(())
@@ -1294,11 +1330,13 @@ impl Render for CommitView {
 
 pub struct CommitViewToolbar {
     commit_view: Option<WeakEntity<CommitView>>,
+    /// Re-renders the diff stat as the commit's files load in.
+    _multibuffer_subscription: Option<Subscription>,
 }
 
 impl CommitViewToolbar {
     pub const fn new() -> Self {
-        Self { commit_view: None }
+        Self { commit_view: None, _multibuffer_subscription: None }
     }
 }
 
@@ -1319,27 +1357,28 @@ impl Render for CommitViewToolbar {
         let commit_view_ref = commit_view.read(cx);
         let is_stash = commit_view_ref.stash.is_some();
         let sha_for_graph = commit_view_ref.commit.sha.to_string();
+        let repo_id_for_graph = commit_view_ref.repository.read(cx).id.0;
+        let multibuffer = commit_view_ref.multibuffer.read(cx);
+        let (additions, deletions) = multibuffer.snapshot(cx).total_changed_lines();
+        let is_multibuffer_empty = multibuffer.is_empty();
 
         h_flex()
             .gap_1()
-            .child(
-                IconButton::new("buffer-search", IconName::MagnifyingGlass)
-                    .icon_size(IconSize::Small)
-                    .tooltip(move |_, cx| {
-                        Tooltip::for_action("Buffer Search", &ed_actions::buffer_search::Deploy::find(), cx)
-                    })
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(Box::new(ed_actions::buffer_search::Deploy::find()), cx);
-                    }),
-            )
+            .when(!is_multibuffer_empty, |this| {
+                this.child(DiffStat::new("commit-view-diff-stat", additions as usize, deletions as usize))
+                    .child(Divider::vertical().mx_1())
+            })
             .when(!is_stash, |this| {
                 this.child(
-                    IconButton::new("show-in-git-graph", IconName::GitGraph)
+                    IconButton::new("show-in-git-history", IconName::GitGraph)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Show in Git Graph"))
+                        .tooltip(Tooltip::text("Show in Git History"))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
-                                Box::new(crate::git_graph::OpenAtCommit { sha: sha_for_graph.clone() }),
+                                Box::new(crate::git_graph::OpenAtCommit {
+                                    sha: sha_for_graph.clone(),
+                                    repo_id: Some(repo_id_for_graph),
+                                }),
                                 cx,
                             );
                         }),
@@ -1357,17 +1396,32 @@ impl ToolbarItemView for CommitViewToolbar {
     ) -> ToolbarItemLocation {
         if let Some(entity) = active_pane_item.and_then(|i| i.act_as::<CommitView>(cx)) {
             self.commit_view = Some(entity.downgrade());
+            let multibuffer = entity.read(cx).multibuffer.clone();
+            self._multibuffer_subscription = Some(cx.observe(&multibuffer, |_, _, cx| cx.notify()));
             return ToolbarItemLocation::PrimaryRight;
         }
         self.commit_view = None;
+        self._multibuffer_subscription = None;
         ToolbarItemLocation::Hidden
     }
-
-    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 fn stash_matches_index(sha: &str, stash_index: usize, repo: &Repository) -> bool {
     repo.stash_entries.entries.get(stash_index).map(|entry| entry.oid.to_string() == sha).unwrap_or(false)
+}
+
+/// Whether a click on a file in the commit sidebar should open its revision
+/// rather than scroll the commit view: the active tab shows this commit's
+/// sidebar (`details_id`) but isn't the commit view itself. The side card is
+/// only asked for when the active tab is another item: the commit view is
+/// already being updated when its sidebar reports the click, so it can't be read.
+fn shows_sidebar_beside_other_tab(
+    active_item_id: EntityId,
+    side_card_id: impl FnOnce() -> Option<EntityId>,
+    commit_view_id: EntityId,
+    details_id: EntityId,
+) -> bool {
+    active_item_id != commit_view_id && side_card_id() == Some(details_id)
 }
 
 #[cfg(test)]
@@ -1382,6 +1436,7 @@ mod tests {
     use super::InitialFile;
     use super::file_load_order;
     use super::project_file_not_found_message;
+    use super::shows_sidebar_beside_other_tab;
 
     fn commit_file(path: &str) -> CommitFile {
         CommitFile {
@@ -1390,6 +1445,23 @@ mod tests {
             new_text: Some("new".to_string()),
             is_binary: false,
         }
+    }
+
+    #[test]
+    fn test_shows_sidebar_beside_other_tab() {
+        let [commit_view, details, revision, other_details] = [1u64, 2, 3, 4].map(gpui::EntityId::from);
+        // A revision or preview showing this commit's sidebar opens revisions.
+        assert!(shows_sidebar_beside_other_tab(revision, || Some(details), commit_view, details));
+        // The commit view itself scrolls its diff, without reading its own side card.
+        assert!(!shows_sidebar_beside_other_tab(
+            commit_view,
+            || panic!("the active commit view must not be read"),
+            commit_view,
+            details
+        ));
+        // Another commit's sidebar, or none, isn't this commit's.
+        assert!(!shows_sidebar_beside_other_tab(revision, || Some(other_details), commit_view, details));
+        assert!(!shows_sidebar_beside_other_tab(revision, || None, commit_view, details));
     }
 
     #[test]
@@ -1405,6 +1477,12 @@ mod tests {
     fn test_commit_diff_addon_open_file_label() {
         let addon = CommitDiffAddon { file_statuses: HashMap::default(), commit_view: WeakEntity::new_invalid() };
         assert_eq!(addon.open_file_label(), Some("Open Revision"));
+    }
+
+    #[test]
+    fn test_commit_diff_addon_hides_project_file_actions() {
+        let addon = CommitDiffAddon { file_statuses: HashMap::default(), commit_view: WeakEntity::new_invalid() };
+        assert!(!addon.shows_project_file_actions());
     }
 
     #[test]

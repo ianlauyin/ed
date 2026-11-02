@@ -12,7 +12,6 @@ use gpui::AnyElement;
 use gpui::Entity;
 use gpui::EventEmitter;
 use gpui::Focusable;
-use gpui::Font;
 use gpui::Pixels;
 use gpui::Subscription;
 use gpui::WeakEntity;
@@ -20,7 +19,6 @@ use gpui::canvas;
 use gpui::prelude::*;
 use language::Buffer;
 use language::Capability;
-use language::HighlightedText;
 use multi_buffer::Anchor;
 use multi_buffer::AnchorRangeExt as _;
 use multi_buffer::BufferOffset;
@@ -48,7 +46,6 @@ use ui::prelude::*;
 use workspace::ActivatePaneLeft;
 use workspace::ActivatePaneRight;
 use workspace::Item;
-use workspace::ToolbarItemLocation;
 use workspace::Workspace;
 use workspace::item::ItemBufferKind;
 use workspace::item::ItemEvent;
@@ -486,13 +483,6 @@ impl SplittableEditor {
 
     pub fn lhs_editor(&self) -> Option<&Entity<Editor>> {
         self.lhs.as_ref().map(|s| &s.editor)
-    }
-
-    pub fn update_editors(&self, cx: &mut Context<Self>, f: impl Fn(&mut Editor, &mut Context<Editor>)) {
-        if let Some(lhs) = &self.lhs {
-            lhs.editor.update(cx, &f);
-        }
-        self.rhs_editor.update(cx, &f);
     }
 
     pub const fn diff_view_style(&self) -> DiffViewStyle {
@@ -1254,14 +1244,6 @@ impl Item for SplittableEditor {
 
     fn as_searchable(&self, handle: &Entity<Self>, _: &App) -> Option<Box<dyn SearchableItemHandle>> {
         Some(Box::new(handle.clone()))
-    }
-
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        self.rhs_editor.read(cx).breadcrumb_location(cx)
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        self.rhs_editor.read(cx).breadcrumbs(cx)
     }
 
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<gpui::Point<gpui::Pixels>> {

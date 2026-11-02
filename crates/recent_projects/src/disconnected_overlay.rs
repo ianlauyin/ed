@@ -15,7 +15,6 @@ use ui::ModalHeader;
 use ui::Section;
 use ui::prelude::*;
 use workspace::ModalView;
-use workspace::MultiWorkspace;
 use workspace::OpenOptions;
 use workspace::Workspace;
 use workspace::notifications::DetachAndPromptErr;
@@ -90,7 +89,7 @@ impl DisconnectedOverlay {
             return;
         };
 
-        let Some(window_handle) = window.window_handle().downcast::<MultiWorkspace>() else {
+        let Some(window_handle) = window.window_handle().downcast::<Workspace>() else {
             return;
         };
 

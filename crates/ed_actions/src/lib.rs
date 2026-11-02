@@ -217,7 +217,11 @@ pub mod git_graph {
         git_graph,
         [
             /// Switches the window to Git History mode, showing the git graph.
-            Open
+            Open,
+            /// Switches the window to Git History mode for the active repository:
+            /// keeps the active history tab if it belongs to that repository,
+            /// otherwise shows the repository's graph.
+            Show
         ]
     );
 }
@@ -365,57 +369,6 @@ pub struct OpenRemote {
     pub from_existing_connection: bool,
     #[serde(default)]
     pub create_new_window: Option<bool>,
-}
-
-pub mod outline {
-    use std::sync::OnceLock;
-
-    use gpui::AnyView;
-    use gpui::App;
-    use gpui::Window;
-    use gpui::actions;
-
-    actions!(
-        outline,
-        [
-            #[action(name = "Toggle")]
-            ToggleOutline
-        ]
-    );
-    /// A pointer to outline::toggle function, exposed here to sewer the breadcrumbs <-> outline dependency.
-    pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
-}
-
-actions!(call_hierarchy, [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]);
-
-pub mod preview {
-    pub mod markdown {
-        use gpui::actions;
-
-        actions!(
-            markdown,
-            [
-                /// Opens a markdown preview for the current file.
-                OpenPreview,
-                /// Opens a markdown preview in a split pane.
-                OpenPreviewToTheSide,
-            ]
-        );
-    }
-
-    pub mod svg {
-        use gpui::actions;
-
-        actions!(
-            svg,
-            [
-                /// Opens an SVG preview for the current file.
-                OpenPreview,
-                /// Opens an SVG preview in a split pane.
-                OpenPreviewToTheSide,
-            ]
-        );
-    }
 }
 
 pub mod git_panel {

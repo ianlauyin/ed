@@ -12,6 +12,7 @@ use gpui::Subscription;
 use gpui::Task;
 use gpui::WeakEntity;
 use gpui::Window;
+use language::Capability;
 use project::search::SearchQuery;
 use settings::SeedQuerySetting;
 
@@ -64,6 +65,13 @@ pub struct SearchOptions {
     pub selection: bool,
     pub select_all: bool,
     pub find_in_results: bool,
+}
+
+impl SearchOptions {
+    /// Replace edits the item, so it is only offered on editable items.
+    pub const fn for_capability(self, capability: Capability) -> SearchOptions {
+        SearchOptions { replacement: self.replacement && capability.editable(), ..self }
+    }
 }
 
 // Whether to always select the current selection (even if empty)
@@ -308,7 +316,8 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
     }
 
     fn supported_options(&self, cx: &App) -> SearchOptions {
-        self.read(cx).supported_options()
+        let item = self.read(cx);
+        item.supported_options().for_capability(item.capability(cx))
     }
 
     #[allow(clippy::type_complexity)]
@@ -509,5 +518,22 @@ impl Eq for Box<dyn WeakSearchableItemHandle> {}
 impl std::hash::Hash for Box<dyn WeakSearchableItemHandle> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id().hash(state)
+    }
+}
+
+#[cfg(test)]
+mod search_options_tests {
+    use language::Capability;
+
+    use super::SearchOptions;
+
+    #[test]
+    fn test_for_capability() {
+        let options = |replacement: bool| SearchOptions { replacement, ..SearchOptions::default() };
+
+        assert!(options(true).for_capability(Capability::ReadWrite).replacement);
+        assert!(!options(true).for_capability(Capability::Read).replacement);
+        assert!(!options(true).for_capability(Capability::ReadOnly).replacement);
+        assert!(!options(false).for_capability(Capability::ReadWrite).replacement);
     }
 }

@@ -1010,7 +1010,6 @@ impl LanguageServer {
                         ..TextDocumentSyncClientCapabilities::default()
                     }),
                     code_lens: Some(CodeLensClientCapabilities { dynamic_registration: Some(true) }),
-                    call_hierarchy: Some(CallHierarchyClientCapabilities { dynamic_registration: Some(true) }),
                     document_symbol: Some(DocumentSymbolClientCapabilities {
                         hierarchical_document_symbol_support: Some(true),
                         dynamic_registration: Some(true),

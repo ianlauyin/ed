@@ -1,13 +1,13 @@
 use editor::Editor;
 use editor::EditorEvent;
 use gpui::Action;
+use gpui::AnyView;
 use gpui::AppContext;
 use gpui::Entity;
 use gpui::EventEmitter;
 use gpui::FocusHandle;
 use gpui::Focusable;
 use gpui::Task;
-use gpui::actions;
 use serde::Deserialize;
 use ui::SharedString;
 use ui::prelude::*;
@@ -20,13 +20,12 @@ pub use crate::table_view::CellSelection;
 pub use crate::table_view::TableView;
 
 mod parser;
+mod preview_provider;
 mod renderer;
 mod settings;
 mod table_data_engine;
 mod table_view;
 pub mod types;
-
-actions!(tabular_data, [OpenPreview, OpenPreviewToTheSide]);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -61,30 +60,10 @@ pub struct TabularDataPreviewPane {
 }
 
 pub fn init(cx: &mut App) {
-    cx.observe_new(|workspace: &mut Workspace, _, _| {
-        TabularDataPreviewPane::register(workspace);
-    })
-    .detach()
+    workspace::preview::register_preview_provider(preview_provider::PROVIDER, cx);
 }
 
 impl TabularDataPreviewPane {
-    pub fn register(workspace: &mut Workspace) {
-        workspace.register_action_renderer(|div, _, _, cx| {
-            div.on_action(cx.listener(|workspace, _: &OpenPreview, window, cx| {
-                if let Some(editor) = Self::resolve_active_item_as_tabular_data_editor(workspace, cx) {
-                    let pane = workspace.active_pane().clone();
-                    Self::open_preview_in_pane(editor, pane, window, cx);
-                }
-            }))
-            .on_action(cx.listener(|workspace, _: &OpenPreviewToTheSide, window, cx| {
-                if let Some(editor) = Self::resolve_active_item_as_tabular_data_editor(workspace, cx) {
-                    let pane = workspace.active_pane().clone();
-                    Self::open_preview_to_the_side_of_pane(workspace, editor, pane, window, cx);
-                }
-            }))
-        });
-    }
-
     pub fn open_preview_in_pane(
         editor: Entity<Editor>,
         pane: Entity<Pane>,
@@ -167,14 +146,6 @@ impl TabularDataPreviewPane {
         &self.active_editor_state
     }
 
-    pub fn resolve_active_item_as_tabular_data_editor(
-        workspace: &Workspace,
-        cx: &mut Context<Workspace>,
-    ) -> Option<Entity<Editor>> {
-        let editor = workspace.active_item(cx).and_then(|item| item.act_as::<Editor>(cx))?;
-        Self::is_tabular_data_file(&editor, cx).then_some(editor)
-    }
-
     pub fn is_tabular_data_file(editor: &Entity<Editor>, cx: &App) -> bool {
         parser::TabularFormat::from_editor(editor, cx).is_some()
     }
@@ -207,6 +178,11 @@ impl EventEmitter<()> for TabularDataPreviewPane {}
 
 impl Item for TabularDataPreviewPane {
     type Event = ();
+
+    /// A preview of a Git History revision keeps that commit's sidebar.
+    fn side_card(&self, cx: &App) -> Option<AnyView> {
+        Item::side_card(self.active_editor_state.editor.read(cx), cx)
+    }
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<Icon> {
         Some(Icon::new(IconName::Table))
