@@ -145,7 +145,8 @@
   worktree root. When the worktree root (and its ancestors) has no `biome.json(c)`,
   it instead uses the shallowest config within 3 levels below (skipping
   `node_modules`, hidden and build directories): Biome and its `node_modules/.bin`
-  are resolved from that directory and `--config-path` points at it. Only one
+  are resolved from that directory and it is sent as the `configurationPath`
+  workspace setting (`lsp-proxy` has no `--config-path` flag; a user-set value wins). Only one
   such directory is used per worktree. Formatting stays on the Biome CLI (below).
 - `lsp.tsgo.settings` / `lsp.biome.settings` are passed through as workspace
   configuration.

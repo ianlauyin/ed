@@ -73,6 +73,18 @@ impl BiomeLspAdapter {
     }
 }
 
+/// `biome lsp-proxy` takes no `--config-path`, so a nested config directory is handed
+/// over as the `configurationPath` workspace setting. A user-set value wins.
+fn with_configuration_path(settings: Option<Value>, config_dir: Option<&Path>) -> Value {
+    let mut settings = settings.unwrap_or_else(|| json!({}));
+    if let (Some(config_dir), Some(object)) = (config_dir, settings.as_object_mut()) {
+        object
+            .entry("configurationPath")
+            .or_insert_with(|| json!(config_dir.to_string_lossy()));
+    }
+    settings
+}
+
 #[async_trait(?Send)]
 impl LspAdapter for BiomeLspAdapter {
     fn name(&self) -> LanguageServerName {
@@ -96,25 +108,17 @@ impl LspAdapter for BiomeLspAdapter {
             move || find_config_dir(&worktree_root)
         })
         .await;
-        let mut arguments: Vec<std::ffi::OsString> = Self::ARGUMENTS.iter().map(Into::into).collect();
-        if let Some(config_dir) = &config_dir {
-            arguments.push(format!("--config-path={}", config_dir.display()).into());
-        }
-
         for dir in config_dir.as_deref().unwrap_or(&worktree_root).ancestors() {
             let path = dir.join("node_modules").join(".bin").join("biome");
             if self.fs.is_file(&path).await {
                 return Some(LanguageServerBinary {
                     path,
                     env: Some(delegate.shell_env().await),
-                    arguments,
+                    arguments: Self::ARGUMENTS.iter().map(Into::into).collect(),
                 });
             }
         }
-        let mut binary =
-            crate::npx::node_server_binary(delegate, &[Self::NPX_PACKAGE], "biome", Self::ARGUMENTS).await?;
-        binary.arguments.extend(arguments.into_iter().skip(Self::ARGUMENTS.len()));
-        Some(binary)
+        crate::npx::node_server_binary(delegate, &[Self::NPX_PACKAGE], "biome", Self::ARGUMENTS).await
     }
 
     async fn workspace_configuration(
@@ -126,7 +130,9 @@ impl LspAdapter for BiomeLspAdapter {
         let settings = cx.update(|cx| {
             language_server_settings(delegate.as_ref(), &Self::SERVER_NAME, cx).and_then(|s| s.settings.clone())
         });
-        Ok(settings.unwrap_or_else(|| json!({})))
+        let worktree_root = delegate.worktree_root_path().to_path_buf();
+        let config_dir = smol::unblock(move || find_config_dir(&worktree_root)).await;
+        Ok(with_configuration_path(settings, config_dir.as_deref()))
     }
 
     fn language_ids(&self) -> HashMap<LanguageName, String> {
@@ -180,5 +186,21 @@ mod tests {
         std::fs::write(root.join("biome.jsonc"), "{}").unwrap();
         std::fs::write(root.join("pkg/biome.json"), "{}").unwrap();
         assert_eq!(find_config_dir(&root), None);
+    }
+
+    #[test]
+    fn configuration_path_set_from_nested_dir() {
+        let dir = Path::new("/work/fe");
+        assert_eq!(
+            with_configuration_path(None, Some(dir)),
+            json!({ "configurationPath": "/work/fe" })
+        );
+    }
+
+    #[test]
+    fn configuration_path_keeps_user_value_and_absent_dir() {
+        let user = json!({ "configurationPath": "/mine", "other": 1 });
+        assert_eq!(with_configuration_path(Some(user.clone()), Some(Path::new("/work/fe"))), user);
+        assert_eq!(with_configuration_path(None, None), json!({}));
     }
 }
