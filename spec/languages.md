@@ -248,12 +248,21 @@
   `__virtual__` paths are not resolved, and tsgo only uses
   `node_modules/typescript` (never `.yarn/sdks`).
   Yarn remains usable as a package manager / task runner (`yarn.lock` detection).
-- Prettier is removed (no Prettier server, default Prettier install, plugins,
-  `prettier` language setting, or `"prettier"` formatter value). Built-in formatting
-  for web languages uses Biome instead:
+- Prettier is not a server, plugin host or setting: no Prettier server, default
+  Prettier install, plugins, `prettier` language setting, or `"prettier"` formatter
+  value. Built-in formatting for web languages uses the Biome or Prettier CLI:
   - `formatter: "auto"` formats CSS, GraphQL, JavaScript, JSON, JSONC, TSX and
-    TypeScript with Biome; the list is hardcoded with no setting. Other languages
-    under `"auto"` use the primary language server.
+    TypeScript with the CLI formatter the project configures: the nearest
+    ancestor of the file holding a Biome config (`biome.json(c)`) or a Prettier
+    config (`.prettierrc*`, `prettier.config.*`, or a `prettier` key in
+    `package.json`) decides, Biome winning a tie. With neither, no CLI formatter
+    runs and `"auto"` uses the primary language server like other languages. The
+    language list is hardcoded with no setting.
+  - Prettier resolves in order: nearest `node_modules/.bin/prettier` above the
+    file, `prettier` on the shell `PATH`, then `npx --yes prettier`. Each format
+    runs `prettier --stdin-filepath <path>` from the nearest ancestor holding a
+    Prettier config (else the file's directory); unsaved buffers use a synthetic
+    `untitled.<ext>` path. Failures are logged, not shown.
   - Biome resolves in order: nearest `node_modules/.bin/biome` above the file,
     `biome` on the shell `PATH`, then `npx --yes @biomejs/biome`.
   - Each format runs `biome format --stdin-file-path <path>` once, from the
@@ -263,7 +272,7 @@
     `untitled.<ext>`. Editor settings such as `tab_size` are not passed to Biome.
   - Format Selections formats the whole buffer and keeps only edits that overlap
     the selections.
-  - As with other `"auto"` formatters, Biome failures are logged and not shown to the user.
+  - As with other `"auto"` formatters, Biome and Prettier failures are logged and not shown to the user.
 - External library sources (e.g. dependency crates) open as library worktrees,
   see "External libraries" in `project-panel.md`. Each language recognizes its
   own library paths through a `LibraryProvider` registered by the `languages`

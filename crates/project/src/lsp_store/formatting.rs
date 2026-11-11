@@ -60,6 +60,7 @@ use crate::CodeAction;
 use crate::ProjectItem as _;
 use crate::ProjectTransaction;
 use crate::biome;
+use crate::prettier;
 use crate::lsp_command;
 use crate::lsp_command::GetCodeActions;
 use crate::lsp_command::OnTypeFormatting;
@@ -291,12 +292,17 @@ impl LocalLspStore {
         // auto-resolved ones stay silent so a missing optional tool
         // (e.g. biome) does not warn on every save.
         let mut format_error = None;
-        let auto_uses_biome =
-            buffer.handle.read_with(cx, |buffer, _| biome::supports(buffer.language().map(AsRef::as_ref)));
+        let auto_cli_formatter =
+            if buffer.handle.read_with(cx, |buffer, _| biome::supports(buffer.language().map(AsRef::as_ref))) {
+                let start_dir = buffer.abs_path.as_deref().and_then(Path::parent).map(Path::to_path_buf);
+                cx.background_spawn(async move { prettier::detect(start_dir.as_deref()) }).await
+            } else {
+                None
+            };
         for formatter in formatters {
             let is_auto = formatter == &Formatter::Auto;
-            let result = if is_auto && auto_uses_biome {
-                Self::apply_biome_formatter(buffer, formatting_transaction_id, cx).await
+            let result = if let (true, Some(cli_formatter)) = (is_auto, auto_cli_formatter) {
+                Self::apply_cli_formatter(buffer, formatting_transaction_id, cli_formatter, cx).await
             } else {
                 let formatter = if is_auto {
                     &Formatter::LanguageServer(LanguageServerFormatterSpecifier::Current)
@@ -329,12 +335,14 @@ impl LocalLspStore {
         }
     }
 
-    async fn apply_biome_formatter(
+    /// Formats with the given CLI formatter.
+    async fn apply_cli_formatter(
         buffer: &FormattableBuffer,
         formatting_transaction_id: clock::Lamport,
+        cli_formatter: prettier::CliFormatter,
         cx: &mut AsyncApp,
     ) -> anyhow::Result<()> {
-        // Biome formats whole files only. For selection formatting
+        // Biome and Prettier format whole files only. For selection formatting
         // (FormatSelections) we format the whole buffer and keep only the
         // edits that overlap the selected byte ranges.
         let byte_ranges = buffer.ranges.as_ref().map(|ranges| {
@@ -347,7 +355,10 @@ impl LocalLspStore {
             })
         });
 
-        let diff = Self::format_via_biome(buffer, cx).await?;
+        let diff = match cli_formatter {
+            prettier::CliFormatter::Prettier => Self::format_via_prettier(buffer, cx).await?,
+            prettier::CliFormatter::Biome => Self::format_via_biome(buffer, cx).await?,
+        };
         let Some(mut diff) = diff else {
             return Ok(());
         };
@@ -996,6 +1007,30 @@ impl LocalLspStore {
         }
         child.args(biome.args).arg("format").arg("--stdin-file-path").arg(stdin_file_path);
         Self::run_formatter_command(buffer, child, "biome", cx).await
+    }
+
+    /// Formats the buffer with Prettier, resolved per `prettier::resolve_command`.
+    async fn format_via_prettier(buffer: &FormattableBuffer, cx: &mut AsyncApp) -> Result<Option<Diff>> {
+        let language = buffer.handle.read_with(cx, |buffer, _| buffer.language().cloned());
+        let stdin_file_path = biome::stdin_file_path(buffer.abs_path.as_deref(), language.as_deref());
+        let start_dir = buffer.abs_path.as_deref().and_then(Path::parent).map(Path::to_path_buf);
+        let path_env = buffer.env.as_ref().and_then(|env| env.get("PATH").cloned());
+        let prettier = cx
+            .background_spawn({
+                let start_dir = start_dir.clone();
+                async move { prettier::resolve_command(start_dir.as_deref(), path_env.as_deref()) }
+            })
+            .await;
+
+        let mut child = command::new_command(&prettier.program);
+        if let Some(buffer_env) = buffer.env.as_ref() {
+            child.envs(buffer_env);
+        }
+        if let Some(start_dir) = start_dir {
+            child.current_dir(prettier::working_dir(&start_dir));
+        }
+        child.args(prettier.args).arg("--stdin-filepath").arg(stdin_file_path);
+        Self::run_formatter_command(buffer, child, "prettier", cx).await
     }
 
     /// Pipes the buffer text into `child` and diffs the buffer against its stdout.
