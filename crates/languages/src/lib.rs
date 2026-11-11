@@ -16,9 +16,7 @@ use util::ResultExt;
 use crate::json::JsonTaskProvider;
 
 mod bash;
-mod biome;
 mod css;
-mod eslint;
 mod go;
 mod html;
 mod json;
@@ -41,10 +39,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
 
     let bash_lsp_adapter = Arc::new(bash::BashLspAdapter);
     let css_lsp_adapter = Arc::new(css::CssLspAdapter);
-    let biome_lsp_adapter = Arc::new(biome::BiomeLspAdapter::new(fs.clone()));
-    let eslint_lsp_adapter = Arc::new(eslint::EsLintLspAdapter);
     let go_context_provider = Arc::new(go::GoContextProvider);
-    let go_lsp_adapter = Arc::new(go::GoLspAdapter);
     let html_lsp_adapter = Arc::new(html::HtmlLspAdapter);
     let json_context_provider = Arc::new(JsonTaskProvider);
     let json_lsp_adapter = Arc::new(json::JsonLspAdapter::new(languages.clone()));
@@ -66,42 +61,22 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo { name: "c", adapters: vec![], ..Default::default() },
         LanguageInfo { name: "cpp", adapters: vec![], ..Default::default() },
-        LanguageInfo {
-            name: "css",
-            adapters: vec![css_lsp_adapter, biome_lsp_adapter.clone(), stylelint_lsp_adapter],
-            ..Default::default()
-        },
+        LanguageInfo { name: "css", adapters: vec![css_lsp_adapter, stylelint_lsp_adapter], ..Default::default() },
         LanguageInfo { name: "diff", adapters: vec![], ..Default::default() },
         LanguageInfo { name: "env", adapters: vec![], ..Default::default() },
-        LanguageInfo {
-            name: "go",
-            adapters: vec![go_lsp_adapter.clone()],
-            context: Some(go_context_provider.clone()),
-            semantic_token_rules: Some(go::semantic_token_rules()),
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "gomod",
-            adapters: vec![go_lsp_adapter.clone()],
-            context: Some(go_context_provider.clone()),
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "gowork",
-            adapters: vec![go_lsp_adapter],
-            context: Some(go_context_provider),
-            ..Default::default()
-        },
+        LanguageInfo { name: "go", context: Some(go_context_provider.clone()), ..Default::default() },
+        LanguageInfo { name: "gomod", context: Some(go_context_provider.clone()), ..Default::default() },
+        LanguageInfo { name: "gowork", context: Some(go_context_provider), ..Default::default() },
         LanguageInfo { name: "html", adapters: vec![html_lsp_adapter], ..Default::default() },
         LanguageInfo {
             name: "json",
-            adapters: vec![json_lsp_adapter.clone(), biome_lsp_adapter.clone()],
+            adapters: vec![json_lsp_adapter.clone()],
             context: Some(json_context_provider.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "jsonc",
-            adapters: vec![json_lsp_adapter, biome_lsp_adapter.clone()],
+            adapters: vec![json_lsp_adapter],
             context: Some(json_context_provider),
             ..Default::default()
         },
@@ -109,10 +84,10 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         LanguageInfo { name: "markdown-inline", adapters: vec![], ..Default::default() },
         LanguageInfo {
             name: "python",
-            adapters: vec![Arc::new(python::TyLspAdapter), Arc::new(python::RuffLspAdapter)],
+            adapters: vec![],
             context: Some(python_context_provider),
             manifest_name: Some(SharedString::new_static("pyproject.toml").into()),
-            semantic_token_rules: Some(python::semantic_token_rules()),
+            semantic_token_rules: None,
         },
         LanguageInfo {
             name: "rust",
@@ -129,19 +104,19 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo {
             name: "tsx",
-            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone(), eslint_lsp_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter.clone()],
             context: Some(typescript_context.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "typescript",
-            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone(), eslint_lsp_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter.clone()],
             context: Some(typescript_context.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "javascript",
-            adapters: vec![tsgo_lsp_adapter, biome_lsp_adapter, eslint_lsp_adapter],
+            adapters: vec![tsgo_lsp_adapter],
             context: Some(typescript_context),
             ..Default::default()
         },

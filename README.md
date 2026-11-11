@@ -5,10 +5,6 @@
 npm install -g vscode-langservers-extracted
 # typescript / javascript: TypeScript 7 (`tsc --lsp`), from the project's node_modules
 npm install -D typescript@^7
-# lint (js/ts/json/css) and formatting
+# formatting (js/ts/json/css), only used in projects with a biome.json
 npm install -D @biomejs/biome
-
-# python
-uv tool install ruff
-uv tool install ty
 ```

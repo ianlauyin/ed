@@ -143,8 +143,7 @@
   setting (the other `diagnostics.inline` settings remain).
 - Run/test code lenses are never requested: gutter runnables cover them.
   rust-analyzer isn't told the client supports `rust-analyzer.runSingle` (so
-  it omits "Run" / "Run Test" lenses), and gopls's `test` codelens is left at
-  its default (off). Lens commands handled client-side are limited to showing
+  it omits "Run" / "Run Test" lenses). Lens commands handled client-side are limited to showing
   locations.
 - Text inside highlights (search matches, selections, etc.) is recolored to
   keep `minimum_contrast_for_highlights` against the highlight background.

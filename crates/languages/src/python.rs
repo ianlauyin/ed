@@ -1,14 +1,10 @@
 use std::borrow::Cow;
-use std::fmt::Write;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use collections::HashMap;
 use gpui::App;
-use gpui::AsyncApp;
 use gpui::Entity;
 use gpui::SharedString;
 use gpui::Task;
@@ -16,67 +12,15 @@ use language::Buffer;
 use language::ContextLocation;
 use language::ContextProvider;
 use language::LanguageName;
-use language::LspAdapter;
-use language::LspAdapterDelegate;
 use language::ManifestName;
 use language::ManifestProvider;
 use language::ManifestQuery;
-use language::Symbol;
 use language::language_settings::LanguageSettings;
-use lsp::CompletionItemKind;
-use lsp::LanguageServerBinary;
-use lsp::LanguageServerName;
-use lsp::Uri;
-use project::lsp_store::language_server_settings;
-use serde_json::Value;
-use serde_json::json;
-use settings::SemanticTokenRules;
 use task::TaskTemplate;
 use task::TaskTemplates;
 use task::VariableName;
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
-
-pub(crate) fn semantic_token_rules() -> SemanticTokenRules {
-    let content =
-        grammars::get_file("python/semantic_token_rules.json").expect("missing python/semantic_token_rules.json");
-    let json = std::str::from_utf8(&content.data).expect("invalid utf-8 in semantic_token_rules");
-    serde_json::from_str::<SemanticTokenRules>(json).expect("failed to parse python semantic_token_rules.json")
-}
-
-/// The project virtual environment, always `.venv` at the worktree root.
-const VENV_DIR: &str = ".venv";
-
-/// Directory inside a virtual environment that holds its executables.
-const VENV_BIN_DIR: &str = if cfg!(windows) { "Scripts" } else { "bin" };
-
-/// Resolves a Python tool run as a language server: the project's
-/// `.venv` first, then the shell `PATH`, then `uvx <tool>`, which runs the
-/// latest release from uv's cache, downloading it on first use.
-async fn python_tool_binary(
-    delegate: &Arc<dyn LspAdapterDelegate>,
-    tool: &str,
-    arguments: &[&str],
-) -> Option<LanguageServerBinary> {
-    let env = delegate.shell_env().await;
-    let in_venv = delegate.worktree_root_path().join(VENV_DIR).join(VENV_BIN_DIR).join(tool);
-    for candidate in [in_venv, PathBuf::from(tool)] {
-        if let Some(path) = delegate.which(candidate.as_os_str()).await {
-            return Some(LanguageServerBinary {
-                path,
-                env: Some(env),
-                arguments: arguments.iter().map(Into::into).collect(),
-            });
-        }
-    }
-
-    let uvx = delegate.which("uvx".as_ref()).await?;
-    Some(LanguageServerBinary {
-        path: uvx,
-        env: Some(env),
-        arguments: std::iter::once(tool).chain(arguments.iter().copied()).map(Into::into).collect(),
-    })
-}
 
 pub(crate) struct PyprojectTomlManifestProvider;
 
@@ -121,139 +65,6 @@ impl FromStr for TestRunner {
             "pytest" => Ok(Self::Pytest),
             _ => Err(()),
         }
-    }
-}
-
-fn label_for_python_symbol(symbol: &Symbol, language: &Arc<language::Language>) -> Option<language::CodeLabel> {
-    let name = &symbol.name;
-    let (text, filter_range, display_range) = match symbol.kind {
-        language::SymbolKind::Method | language::SymbolKind::Function => {
-            let text = format!("def {}():\n", name);
-            let filter_range = 4..4 + name.len();
-            let display_range = 0..filter_range.end;
-            (text, filter_range, display_range)
-        }
-        language::SymbolKind::Class => {
-            let text = format!("class {}:", name);
-            let filter_range = 6..6 + name.len();
-            let display_range = 0..filter_range.end;
-            (text, filter_range, display_range)
-        }
-        language::SymbolKind::Constant => {
-            let text = format!("{} = 0", name);
-            let filter_range = 0..name.len();
-            let display_range = 0..filter_range.end;
-            (text, filter_range, display_range)
-        }
-        _ => return None,
-    };
-    Some(language::CodeLabel::new(
-        text[display_range.clone()].to_string(),
-        filter_range,
-        language.highlight_text(text.as_str(), display_range).collect(),
-    ))
-}
-
-/// Returns the highlight ID for the given completion item kind, if it is supported.
-///
-/// The outer `Option` is `None` if the item kind returned by the language server is not covered.
-/// The inner `Option` is `None` if the item kind is covered, but the highlight name is not present in the grammar.
-fn highlight_id_for_completion(
-    item_kind: CompletionItemKind,
-    grammar: &Arc<language::Grammar>,
-) -> Option<Option<language::HighlightId>> {
-    match item_kind {
-        CompletionItemKind::METHOD => Some(grammar.highlight_id_for_name("function.method.call")),
-        CompletionItemKind::FUNCTION => Some(grammar.highlight_id_for_name("function.call")),
-        CompletionItemKind::CLASS => Some(grammar.highlight_id_for_name("type")),
-        CompletionItemKind::CONSTANT => Some(grammar.highlight_id_for_name("constant")),
-        CompletionItemKind::VARIABLE => Some(grammar.highlight_id_for_name("variable")),
-        _ => None,
-    }
-}
-
-pub struct TyLspAdapter;
-
-impl TyLspAdapter {
-    const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("ty");
-}
-
-#[async_trait(?Send)]
-impl LspAdapter for TyLspAdapter {
-    fn name(&self) -> LanguageServerName {
-        Self::SERVER_NAME
-    }
-
-    async fn label_for_completion(
-        &self,
-        item: &lsp::CompletionItem,
-        language: &Arc<language::Language>,
-    ) -> Option<language::CodeLabel> {
-        let label = &item.label;
-        let label_len = label.len();
-        let grammar = language.grammar()?;
-        let highlight_id = highlight_id_for_completion(item.kind?, grammar)?;
-
-        let mut text = label.clone();
-        if let Some(completion_details) = item.label_details.as_ref().and_then(|details| details.detail.as_ref()) {
-            write!(&mut text, " {}", completion_details).ok();
-        }
-
-        Some(language::CodeLabel::filtered(
-            text,
-            label_len,
-            item.filter_text.as_deref(),
-            highlight_id.map(|id| (0..label_len, id)).into_iter().collect(),
-        ))
-    }
-
-    async fn label_for_symbol(
-        &self,
-        symbol: &language::Symbol,
-        language: &Arc<language::Language>,
-    ) -> Option<language::CodeLabel> {
-        label_for_python_symbol(symbol, language)
-    }
-
-    async fn workspace_configuration(
-        self: Arc<Self>,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Uri>,
-        cx: &mut AsyncApp,
-    ) -> Result<Value> {
-        let settings = cx
-            .update(|cx| language_server_settings(delegate.as_ref(), &self.name(), cx).and_then(|s| s.settings.clone()))
-            .unwrap_or_else(|| json!({}));
-        Ok(json!({ "ty": settings }))
-    }
-
-    async fn check_if_user_installed(
-        &self,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        _: &AsyncApp,
-    ) -> Option<LanguageServerBinary> {
-        python_tool_binary(delegate, "ty", &["server"]).await
-    }
-}
-
-pub(crate) struct RuffLspAdapter;
-
-impl RuffLspAdapter {
-    const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("ruff");
-}
-
-#[async_trait(?Send)]
-impl LspAdapter for RuffLspAdapter {
-    fn name(&self) -> LanguageServerName {
-        Self::SERVER_NAME
-    }
-
-    async fn check_if_user_installed(
-        &self,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        _: &AsyncApp,
-    ) -> Option<LanguageServerBinary> {
-        python_tool_binary(delegate, "ruff", &["server"]).await
     }
 }
 

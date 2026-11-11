@@ -74,7 +74,6 @@ use settings_content::InlayHintSettingsContent;
 use settings_content::InlineDiagnosticsSettingsContent;
 use settings_content::ItemSettingsContent;
 use settings_content::JsxTagAutoCloseSettingsContent;
-use settings_content::LanguageServerFormatterSpecifier;
 use settings_content::LanguageSettingsContent;
 use settings_content::LanguageTaskSettingsContent;
 use settings_content::LanguageToSettingsMap;
@@ -626,7 +625,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 "Go".into(),
                 LanguageSettingsContent {
                     hard_tabs: Some(true),
-                    code_actions_on_format: Some([("source.organizeImports".into(), true)].into_iter().collect()),
                     ..Default::default()
                 },
             ),
@@ -657,16 +655,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                         words: Some(WordsCompletionMode::Disabled),
                         ..Default::default()
                     }),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Python".into(),
-                LanguageSettingsContent {
-                    formatter: Some(FormatterList::Single(Formatter::LanguageServer(
-                        LanguageServerFormatterSpecifier::Specific { name: "ruff".into() },
-                    ))),
-                    code_actions_on_format: Some([("source.organizeImports.ruff".into(), true)].into_iter().collect()),
                     ..Default::default()
                 },
             ),

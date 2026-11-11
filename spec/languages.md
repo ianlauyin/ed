@@ -31,7 +31,7 @@
   outline. LSP symbols are fetched per buffer, so in a multibuffer refreshing one
   file never cancels another file's pending fetch.
 - C, C++, Diff, Git Commit, Go Mod, Go Work and TOML are still registered
-  languages (file matching, comments, brackets, gopls for Go Mod/Work, tombi
+  languages (file matching, comments, brackets, tombi
   for TOML, Diff's keep-trailing-whitespace settings, the Git Commit editor)
   but have no grammar, so they get rough highlighting only and none of the
   structure-aware features.
@@ -86,14 +86,11 @@
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
 - Python tooling is uv-only:
-  - The only Python language servers are `ty` (types, completions) and `ruff`
-    (lint, format, organize imports); both run by default and `ruff` is the
-    formatter. pyright, basedpyright and pylsp are removed.
-  - Each resolves from the worktree's `.venv/bin`, then `PATH`, then
-    `uvx <tool> server` (latest release from uv's cache).
+  - Python has no language server (ty, ruff, pyright, basedpyright and pylsp are
+    removed): no completions, diagnostics or formatter. Files keep tree-sitter
+    highlighting, outline, runnables and tasks.
   - There is no toolchain/virtual-environment discovery, selector, status bar
-    item or persisted toolchain. The only environment ed knows is `.venv` at
-    the worktree root; ty finds it on its own.
+    item or persisted toolchain.
   - Built-in Python tasks (run file/module/selection, pytest/unittest) run
     through `uv run python …` from the worktree root.
   - `terminal.detect_venv` (bool, default true): terminals and tasks opened in a
@@ -126,8 +123,8 @@
   naming the server and the binary it looked for on `PATH`.
 - `lsp.<server>.fetch` and `lsp.<server>.binary.ignore_system_version` are removed;
   `binary.arguments` and `binary.env` still apply to whichever binary is used.
-- JavaScript, TypeScript and TSX run three servers: `tsgo`, `biome` and
-  `eslint`. vtsls and typescript-language-server are removed.
+- JavaScript, TypeScript and TSX run one server: `tsgo`. vtsls,
+  typescript-language-server, biome and eslint are removed.
   - `tsgo` is the TypeScript 7 native language server (`tsc --lsp --stdio`).
     It provides completions, navigation, rename, hover, inlay hints and type
     errors. Only TypeScript 7+ is supported: the nearest
@@ -140,37 +137,18 @@
     moved to TypeScript 7, and drop Prettier formatting support in favour of Biome.
   - JavaScript gets the same tsgo features. Type errors only show where the
     project opts in (`checkJs` / `// @ts-check`).
-- `biome` (`biome lsp-proxy`) runs for JavaScript, TypeScript, TSX, JSON, JSONC
-  and CSS (alongside the JSON and CSS servers for those), only in projects with
-  a `biome.json(c)` (at or above the worktree root, or within the nested search
-  below); it never starts automatically otherwise. It provides lint
-  diagnostics and code actions (`source.fixAll.biome`,
-  `source.organizeImports.biome`). It resolves like the Biome formatter, from the
-  worktree root. When the worktree root (and its ancestors) has no `biome.json(c)`,
-  it instead uses the shallowest config within 3 levels below (skipping
-  `node_modules`, hidden and build directories): Biome and its `node_modules/.bin`
-  are resolved from that directory and it is sent as the `configurationPath`
-  workspace setting (`lsp-proxy` has no `--config-path` flag; a user-set value wins). Only one
-  such directory is used per worktree. Formatting stays on the Biome CLI (below).
-- `lsp.tsgo.settings` / `lsp.biome.settings` are passed through as workspace
-  configuration.
+- `lsp.tsgo.settings` is passed through as workspace configuration.
 - `stylelint` (`stylelint-language-server --stdio`, from
-  `@stylelint/language-server`) also runs for CSS, after the CSS server and
-  Biome. It provides lint diagnostics and code actions
+  `@stylelint/language-server`) also runs for CSS, after the CSS server.
+  It provides lint diagnostics and code actions
   (`source.fixAll.stylelint`) using the project's own `stylelint` and config; in
   projects without `stylelint` installed it reports nothing. It resolves from the
   nearest `node_modules/.bin` at or above the worktree root, then `PATH`, then
   npx (the server needs Node ≥ 22.17). `lsp.stylelint.settings` is sent as the
   server's `stylelint` configuration section (e.g. `validate`, `configFile`).
-  Formatting stays on Biome.
-- `eslint` (`vscode-eslint-language-server --stdio`, from
-  `vscode-langservers-extracted`) runs for JavaScript, TypeScript and TSX, after
-  tsgo and Biome. It provides lint diagnostics and code actions (quick fixes,
-  `source.fixAll.eslint`) using the project's own `eslint` and config; in
-  projects without `eslint` installed it reports nothing. It resolves from
-  `PATH`, then npx. `lsp.eslint.settings` is merged over the defaults sent as
-  workspace configuration (e.g. `run`, `useFlatConfig`, `workingDirectory`).
-  Formatting stays on Biome.
+  Formatting stays on the Biome CLI (below).
+- Go has no language server (gopls is removed); Go files keep tree-sitter
+  highlighting, outline, runnables and tasks, and no organize-imports on save.
 - Server binary statuses no longer include checking-for-update or downloading.
 - No Vue.js support: no grammar, language server, `tsserver/request` bridge,
   default settings or `.vue` file icon. `.vue` files open as Plain Text.
