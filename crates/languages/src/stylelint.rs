@@ -15,7 +15,7 @@ use serde_json::json;
 /// Stylelint's language server (`stylelint-language-server --stdio`): lint
 /// diagnostics, quick fixes and `source.fixAll.stylelint` for CSS. It lints with
 /// the `stylelint` installed in the project and does nothing without one.
-pub struct StylelintLspAdapter {
+pub(crate) struct StylelintLspAdapter {
     fs: Arc<dyn Fs>,
 }
 
@@ -25,7 +25,7 @@ impl StylelintLspAdapter {
     const BIN: &str = "stylelint-language-server";
     const ARGUMENTS: &[&str] = &["--stdio"];
 
-    pub fn new(fs: Arc<dyn Fs>) -> Self {
+    pub(crate) fn new(fs: Arc<dyn Fs>) -> Self {
         StylelintLspAdapter { fs }
     }
 }
