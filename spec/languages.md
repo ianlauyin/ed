@@ -126,8 +126,8 @@
   naming the server and the binary it looked for on `PATH`.
 - `lsp.<server>.fetch` and `lsp.<server>.binary.ignore_system_version` are removed;
   `binary.arguments` and `binary.env` still apply to whichever binary is used.
-- JavaScript, TypeScript and TSX run two servers, `tsgo` and `biome`. vtsls,
-  typescript-language-server and ESLint are removed.
+- JavaScript, TypeScript and TSX run three servers: `tsgo`, `biome` and
+  `eslint`. vtsls and typescript-language-server are removed.
   - `tsgo` is the TypeScript 7 native language server (`tsc --lsp --stdio`).
     It provides completions, navigation, rename, hover, inlay hints and type
     errors. Only TypeScript 7+ is supported: the nearest
@@ -158,6 +158,14 @@
   nearest `node_modules/.bin` at or above the worktree root, then `PATH`, then
   npx (the server needs Node ≥ 22.17). `lsp.stylelint.settings` is sent as the
   server's `stylelint` configuration section (e.g. `validate`, `configFile`).
+  Formatting stays on Biome.
+- `eslint` (`vscode-eslint-language-server --stdio`, from
+  `vscode-langservers-extracted`) runs for JavaScript, TypeScript and TSX, after
+  tsgo and Biome. It provides lint diagnostics and code actions (quick fixes,
+  `source.fixAll.eslint`) using the project's own `eslint` and config; in
+  projects without `eslint` installed it reports nothing. It resolves from
+  `PATH`, then npx. `lsp.eslint.settings` is merged over the defaults sent as
+  workspace configuration (e.g. `run`, `useFlatConfig`, `workingDirectory`).
   Formatting stays on Biome.
 - Server binary statuses no longer include checking-for-update or downloading.
 - No Vue.js support: no grammar, language server, `tsserver/request` bridge,

@@ -78,9 +78,7 @@ impl BiomeLspAdapter {
 fn with_configuration_path(settings: Option<Value>, config_dir: Option<&Path>) -> Value {
     let mut settings = settings.unwrap_or_else(|| json!({}));
     if let (Some(config_dir), Some(object)) = (config_dir, settings.as_object_mut()) {
-        object
-            .entry("configurationPath")
-            .or_insert_with(|| json!(config_dir.to_string_lossy()));
+        object.entry("configurationPath").or_insert_with(|| json!(config_dir.to_string_lossy()));
     }
     settings
 }
@@ -191,10 +189,7 @@ mod tests {
     #[test]
     fn configuration_path_set_from_nested_dir() {
         let dir = Path::new("/work/fe");
-        assert_eq!(
-            with_configuration_path(None, Some(dir)),
-            json!({ "configurationPath": "/work/fe" })
-        );
+        assert_eq!(with_configuration_path(None, Some(dir)), json!({ "configurationPath": "/work/fe" }));
     }
 
     #[test]

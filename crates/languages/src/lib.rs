@@ -18,6 +18,7 @@ use crate::json::JsonTaskProvider;
 mod bash;
 mod biome;
 mod css;
+mod eslint;
 mod go;
 mod html;
 mod json;
@@ -41,6 +42,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let bash_lsp_adapter = Arc::new(bash::BashLspAdapter);
     let css_lsp_adapter = Arc::new(css::CssLspAdapter);
     let biome_lsp_adapter = Arc::new(biome::BiomeLspAdapter::new(fs.clone()));
+    let eslint_lsp_adapter = Arc::new(eslint::EsLintLspAdapter);
     let go_context_provider = Arc::new(go::GoContextProvider);
     let go_lsp_adapter = Arc::new(go::GoLspAdapter);
     let html_lsp_adapter = Arc::new(html::HtmlLspAdapter);
@@ -127,19 +129,19 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo {
             name: "tsx",
-            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone(), eslint_lsp_adapter.clone()],
             context: Some(typescript_context.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "typescript",
-            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone(), eslint_lsp_adapter.clone()],
             context: Some(typescript_context.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "javascript",
-            adapters: vec![tsgo_lsp_adapter, biome_lsp_adapter],
+            adapters: vec![tsgo_lsp_adapter, biome_lsp_adapter, eslint_lsp_adapter],
             context: Some(typescript_context),
             ..Default::default()
         },
