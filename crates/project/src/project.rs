@@ -8,6 +8,7 @@ pub mod library;
 pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
+mod prettier;
 pub mod project_search;
 pub mod project_settings;
 pub mod search;

@@ -83,8 +83,20 @@ fn with_configuration_path(settings: Option<Value>, config_dir: Option<&Path>) -
     settings
 }
 
+/// Whether a Biome config is at or above `root`, or within `MAX_CONFIG_SEARCH_DEPTH`
+/// levels below it.
+fn has_config(root: &Path) -> bool {
+    CONFIG_FILES.iter().any(|name| root.ancestors().any(|dir| dir.join(name).is_file()))
+        || find_config_dir(root).is_some()
+}
+
 #[async_trait(?Send)]
 impl LspAdapter for BiomeLspAdapter {
+    /// Biome only starts in projects that have a `biome.json(c)`.
+    fn is_enabled_for_worktree(&self, worktree_root: &Path) -> bool {
+        has_config(worktree_root)
+    }
+
     fn name(&self) -> LanguageServerName {
         Self::SERVER_NAME
     }
@@ -175,6 +187,17 @@ mod tests {
         std::fs::write(root.join("node_modules/pkg/biome.json"), "{}").unwrap();
         std::fs::write(root.join("a/b/c/d/biome.json"), "{}").unwrap();
         assert_eq!(find_config_dir(&root), None);
+    }
+
+    #[test]
+    fn has_config_checks_ancestors_and_nested_dirs() {
+        let root = temp_dir("has-config");
+        std::fs::create_dir_all(root.join("fe/src")).unwrap();
+        assert!(!has_config(&root.join("fe")));
+        std::fs::write(root.join("fe/biome.json"), "{}").unwrap();
+        assert!(has_config(&root));
+        assert!(has_config(&root.join("fe/src")));
+        assert!(has_config(&root.join("fe")));
     }
 
     #[test]

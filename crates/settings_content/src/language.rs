@@ -621,7 +621,8 @@ impl AsRef<[Formatter]> for FormatterList {
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Formatter {
-    /// Format files using Biome for languages it supports,
+    /// Format files using Biome (or Prettier, in projects that configure it
+    /// instead of Biome) for languages they support,
     /// or falling back to formatting via language server.
     #[default]
     Auto,

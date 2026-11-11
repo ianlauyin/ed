@@ -454,6 +454,12 @@ pub trait LspAdapter: 'static + Send + Sync {
         None
     }
 
+    /// Whether the server starts automatically for a worktree rooted at `worktree_root`.
+    /// Starting it by hand is not affected.
+    fn is_enabled_for_worktree(&self, _worktree_root: &Path) -> bool {
+        true
+    }
+
     /// The executable [`Self::check_if_user_installed`] looks for, named in the error
     /// when the server is not installed.
     fn binary_name(&self) -> String {
