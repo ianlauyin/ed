@@ -132,10 +132,12 @@
     It provides completions, navigation, rename, hover, inlay hints and type
     errors. Only TypeScript 7+ is supported: the nearest
     `node_modules/typescript` at or above the worktree root is used when its
-    major version is ≥ 7, and the server refuses to start (naming the found
-    version) when it is older. Projects without `typescript` run
-    `npx --yes --package typescript@^7 tsc --lsp --stdio`. `tsc` on `PATH` is
+    major version is ≥ 7. Projects without `typescript`, or with an older one,
+    run `npx --yes --package typescript@^7 tsc --lsp --stdio`, which leaves the
+    project untouched (its own `tsc` and build keep their version). `tsc` on `PATH` is
     never used, since it is commonly an old global install.
+  - TODO: remove the old-TypeScript (< 7) npx fallback once projects have
+    moved to TypeScript 7, and drop Prettier formatting support in favour of Biome.
   - JavaScript gets the same tsgo features. Type errors only show where the
     project opts in (`checkJs` / `// @ts-check`).
 - `biome` (`biome lsp-proxy`) runs for JavaScript, TypeScript, TSX, JSON, JSONC

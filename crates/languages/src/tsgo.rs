@@ -61,38 +61,37 @@ fn major_version(version: &str) -> Option<u64> {
     version.split('.').next()?.parse().ok()
 }
 
+fn is_supported_version(version: &str) -> bool {
+    major_version(version).is_some_and(|major| major >= TsgoLspAdapter::MIN_MAJOR_VERSION)
+}
+
 #[async_trait(?Send)]
 impl LspAdapter for TsgoLspAdapter {
     fn name(&self) -> LanguageServerName {
         Self::SERVER_NAME
     }
 
-    /// Uses the project's `typescript` when it is 7 or newer and refuses to start for
-    /// older versions. Projects without `typescript` run the latest 7.x through npx.
+    // TODO: remove the npx fallback for projects with TypeScript < 7 once they upgrade.
+    /// Uses the project's `typescript` when it is 7 or newer. Projects without
+    /// `typescript`, or with an older one, run the latest 7.x through npx and leave
+    /// the project untouched.
     async fn find_binary(&self, delegate: &Arc<dyn LspAdapterDelegate>, _: &AsyncApp) -> Result<LanguageServerBinary> {
         if let Some(installed) = self.installed_typescript(delegate.worktree_root_path()).await {
-            let supported = major_version(&installed.version).is_some_and(|major| major >= Self::MIN_MAJOR_VERSION);
-            anyhow::ensure!(
-                supported,
-                "{} requires TypeScript {} or newer, but the project has typescript {} \
-                (at {})",
-                Self::SERVER_NAME,
-                Self::MIN_MAJOR_VERSION,
-                installed.version,
-                installed.bin.display(),
-            );
-            return Ok(LanguageServerBinary {
-                path: installed.bin,
-                env: Some(delegate.shell_env().await),
-                arguments: Self::ARGUMENTS.iter().map(Into::into).collect(),
-            });
+            if is_supported_version(&installed.version) {
+                return Ok(LanguageServerBinary {
+                    path: installed.bin,
+                    env: Some(delegate.shell_env().await),
+                    arguments: Self::ARGUMENTS.iter().map(Into::into).collect(),
+                });
+            }
         }
 
         crate::npx::npx_binary(delegate, &[Self::NPX_PACKAGE], "tsc", Self::ARGUMENTS).await.with_context(|| {
             format!(
-                "language server {} is not installed: `node_modules/.bin/tsc` was not \
-                    found in the project, and `npx` was not found on your PATH",
+                "language server {} needs TypeScript {} or newer: the project has none \
+                    (or an older one) and `npx` was not found on your PATH",
                 Self::SERVER_NAME,
+                Self::MIN_MAJOR_VERSION,
             )
         })
     }
@@ -163,5 +162,13 @@ mod tests {
         assert_eq!(major_version("7.1.0-dev.20261019.1"), Some(7));
         assert_eq!(major_version("5.9.3"), Some(5));
         assert_eq!(major_version(""), None);
+    }
+
+    #[test]
+    fn only_typescript_7_or_newer_is_supported() {
+        assert!(is_supported_version("7.0.2"));
+        assert!(is_supported_version("8.0.0"));
+        assert!(!is_supported_version("6.0.3"));
+        assert!(!is_supported_version(""));
     }
 }
