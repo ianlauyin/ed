@@ -25,7 +25,7 @@
 <key>LSApplicationCategoryType</key>
 <string>public.app-category.developer-tools</string>
 <key>LSMinimumSystemVersion</key>
-<string>27.2</string>
+<string>27.0</string>
 <key>NSLocalNetworkUsageDescription</key>
 <string>Terminals, git and language servers started by ed may connect to hosts on your local network.</string>
 <key>NSHighResolutionCapable</key>
