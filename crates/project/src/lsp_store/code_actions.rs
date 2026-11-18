@@ -23,7 +23,6 @@ use lsp::request::CodeLensResolve;
 use lsp::request::ExecuteCommand;
 use rustc_hash::FxHashSet;
 use text::Anchor;
-use util::defer;
 
 use super::LanguageServerToQuery;
 use super::LocalLspStore;
@@ -37,31 +36,11 @@ use crate::lsp_command::GetCodeLens;
 impl LocalLspStore {
     async fn execute_code_action_kind_locally(
         lsp_store: WeakEntity<LspStore>,
-        mut buffers: Vec<Entity<Buffer>>,
+        buffers: Vec<Entity<Buffer>>,
         kind: CodeActionKind,
         push_to_history: bool,
         cx: &mut AsyncApp,
     ) -> anyhow::Result<ProjectTransaction> {
-        // Do not allow multiple concurrent code actions requests for the
-        // same buffer.
-        lsp_store.update(cx, |this, cx| {
-            let this = &mut this.local;
-            buffers.retain(|buffer| this.buffers_being_formatted.insert(buffer.read(cx).buffer_id()));
-        })?;
-        let _cleanup = defer({
-            let this = lsp_store.clone();
-            let mut cx = cx.clone();
-            let buffers = &buffers;
-            move || {
-                this.update(&mut cx, |this, cx| {
-                    let this = &mut this.local;
-                    for buffer in buffers {
-                        this.buffers_being_formatted.remove(&buffer.read(cx).buffer_id());
-                    }
-                })
-                .ok();
-            }
-        });
         let mut project_transaction = ProjectTransaction::default();
 
         for buffer in &buffers {
@@ -374,18 +353,7 @@ impl LspStore {
         {
             cx.spawn(async move |lsp_store, cx| {
                 let buffers = buffers.into_iter().collect::<Vec<_>>();
-                let result = LocalLspStore::execute_code_action_kind_locally(
-                    lsp_store.clone(),
-                    buffers,
-                    kind,
-                    push_to_history,
-                    cx,
-                )
-                .await;
-                lsp_store.update(cx, |lsp_store, _| {
-                    lsp_store.update_last_formatting_failure(&result);
-                })?;
-                result
+                LocalLspStore::execute_code_action_kind_locally(lsp_store, buffers, kind, push_to_history, cx).await
             })
         }
     }

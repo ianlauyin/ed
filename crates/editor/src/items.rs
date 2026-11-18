@@ -97,7 +97,6 @@ use crate::Autoscroll;
 use crate::Capability;
 use crate::Editor;
 use crate::EditorEvent;
-use crate::FormatTarget;
 use crate::MultiBuffer;
 use crate::MultiBufferSnapshot;
 use crate::NavigationData;
@@ -356,15 +355,7 @@ impl Item for Editor {
                 .collect()
         };
 
-        cx.spawn_in(window, async move |this, cx| {
-            if options.format {
-                let format_task = this.update_in(cx, |editor, window, cx| {
-                    let target = FormatTarget::Buffers(buffers_to_save.clone());
-                    editor.perform_format(project.clone(), target, window, cx)
-                })?;
-                format_task.await?;
-            }
-
+        cx.spawn_in(window, async move |_, cx| {
             if !buffers_to_save.is_empty() {
                 project.update(cx, |project, cx| project.save_buffers(buffers_to_save.clone(), cx)).await?;
             }

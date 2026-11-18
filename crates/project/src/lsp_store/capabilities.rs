@@ -178,14 +178,6 @@ pub(super) fn completion_trigger_characters_for_buffer(
     triggers
 }
 
-pub(super) fn lsp_ranges_conflict(a: &lsp::Range, b: &lsp::Range) -> bool {
-    if a.start == a.end || b.start == b.end { a.start <= b.end && b.start <= a.end } else { lsp_ranges_overlap(a, b) }
-}
-
-pub(super) fn lsp_ranges_overlap(a: &lsp::Range, b: &lsp::Range) -> bool {
-    a.start < b.end && b.start < a.end
-}
-
 impl LspStore {
     pub fn relevant_server_ids_for_capability_check(
         &self,

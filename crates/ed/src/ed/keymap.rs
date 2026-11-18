@@ -188,7 +188,6 @@ fn build(build_action: BuildAction<'_>) -> Vec<KeyBinding> {
     k.bind("cmd-shift-down", "editor::SelectToEnd");
     k.bind("cmd-a", "editor::SelectAll");
     k.bind("cmd-l", "editor::SelectLine");
-    k.bind("cmd-shift-i", "editor::Format");
     k.bind("alt-shift-o", "editor::OrganizeImports");
     k.bind_input(
         "cmd-shift-left",

@@ -21,7 +21,7 @@ mod document_symbols;
 mod dynamic_registration;
 mod file_watchers;
 mod folding_ranges;
-mod formatting;
+mod on_type_format;
 mod inlay_hints;
 pub mod log_store;
 pub mod lsp_ext_command;
@@ -71,8 +71,6 @@ use file_watchers::LanguageServerWatchedPaths;
 use file_watchers::RenamePathsWatchedForServer;
 pub use file_watchers::glob_literal_prefix;
 pub use folding_ranges::LspFoldingRange;
-pub use formatting::FormattableBuffer;
-pub use formatting::LspFormatTarget;
 use fs::Fs;
 use futures::FutureExt as _;
 use futures::StreamExt as _;
@@ -263,7 +261,6 @@ pub struct LocalLspStore {
     languages: Arc<LanguageRegistry>,
     language_server_ids: FxHashMap<LanguageServerSeed, UnifiedLanguageServer>,
     pub language_servers: FxHashMap<LanguageServerId, LanguageServerState>,
-    buffers_being_formatted: FxHashSet<BufferId>,
     last_workspace_edits_by_language_server: FxHashMap<LanguageServerId, ProjectTransaction>,
     language_server_watched_paths: FxHashMap<LanguageServerId, LanguageServerWatchedPaths>,
     watched_manifest_filenames: FxHashSet<ManifestName>,
@@ -847,7 +844,6 @@ enum ChunkFetch {
 
 pub struct LspStore {
     local: LocalLspStore,
-    last_formatting_failure: Option<String>,
     nonce: u128,
     buffer_store: Entity<BufferStore>,
     worktree_store: Entity<WorktreeStore>,
@@ -1085,7 +1081,6 @@ impl LspStore {
                 language_server_paths_watched_for_rename: FxHashMap::default(),
                 language_server_dynamic_registrations: FxHashMap::default(),
                 initial_server_capabilities: FxHashMap::default(),
-                buffers_being_formatted: FxHashSet::default(),
                 buffers_to_refresh_hash_set: FxHashSet::default(),
                 buffers_to_refresh_queue: VecDeque::new(),
                 _background_diagnostics_worker: Task::ready(()).shared(),
@@ -1106,7 +1101,6 @@ impl LspStore {
                 language_server_restart_tasks: Vec::new(),
                 watched_manifest_filenames: ManifestProvidersStore::global(cx).manifest_file_names(),
             },
-            last_formatting_failure: None,
             buffer_store,
             worktree_store,
             languages: Arc::clone(&languages),

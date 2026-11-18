@@ -6,7 +6,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::Component;
 
-mod biome;
 pub mod buffer_store;
 pub mod color_extractor;
 pub mod git_store;
@@ -15,7 +14,6 @@ pub mod library;
 pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
-mod prettier;
 pub mod project_search;
 pub mod project_settings;
 pub mod search;
@@ -117,7 +115,6 @@ pub use lsp_store::LanguageServerPromptRequest;
 pub use lsp_store::LanguageServerShowDocumentRequest;
 pub use lsp_store::LanguageServerStatus;
 pub use lsp_store::LanguageServerToQuery;
-use lsp_store::LspFormatTarget;
 pub use lsp_store::LspStore;
 pub use lsp_store::LspStoreEvent;
 use lsp_store::OpenLspBufferHandle;
@@ -1712,14 +1709,6 @@ impl Project {
         self.lsp_store.read(cx).language_server_statuses()
     }
 
-    pub fn last_formatting_failure<'a>(&self, cx: &'a App) -> Option<&'a str> {
-        self.lsp_store.read(cx).last_formatting_failure()
-    }
-
-    pub fn reset_last_formatting_failure(&self, cx: &mut App) {
-        self.lsp_store.update(cx, |store, _| store.reset_last_formatting_failure());
-    }
-
     pub fn reload_buffers(
         &self,
         buffers: FxHashSet<Entity<Buffer>>,
@@ -1731,20 +1720,6 @@ impl Project {
 
     pub fn reload_images(&self, images: FxHashSet<Entity<ImageItem>>, cx: &mut Context<Self>) -> Task<Result<()>> {
         self.image_store.update(cx, |image_store, cx| image_store.reload_images(images, cx))
-    }
-
-    pub fn format(
-        &mut self,
-        buffers: FxHashSet<Entity<Buffer>>,
-        target: LspFormatTarget,
-        push_to_history: bool,
-        cx: &mut Context<Project>,
-    ) -> Task<anyhow::Result<ProjectTransaction>> {
-        self.lsp_store.update(cx, |lsp_store, cx| lsp_store.format(buffers, target, push_to_history, cx))
-    }
-
-    pub fn supports_range_formatting(&self, buffer: &Entity<Buffer>, cx: &App) -> bool {
-        self.lsp_store.read(cx).supports_range_formatting(buffer, cx)
     }
 
     pub fn definitions<T: ToPointUtf16>(

@@ -215,7 +215,7 @@
   selection. Both use the shared `ui::utils::highlight_contrast` helpers, so
   anything else that paints text highlights should go through them too.
 - Line endings are always LF: new files start as LF and every file is
-  converted to LF on format/save. There is no line-ending setting, selector or
+  converted to LF on save. There is no line-ending setting, selector or
   status bar indicator.
 - LSP on-type formatting (e.g. after Enter) waits for pending autoindent: the
   request position and the cursors kept in place by the formatting edits are

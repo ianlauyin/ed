@@ -169,10 +169,6 @@ pub enum SaveIntent {
     /// write all files (even if unchanged)
     /// prompt before overwriting on-disk changes.
     Save,
-    /// same as Save, but always formats regardless of the format_on_save setting.
-    FormatAndSave,
-    /// same as Save, but without auto formatting.
-    SaveWithoutFormat,
     /// write any files that have local changes
     /// prompt before overwriting on-disk changes.
     SaveAll,
@@ -1877,9 +1873,7 @@ impl Pane {
             return Ok(true);
         };
 
-        if (save_intent == SaveIntent::Save
-            || save_intent == SaveIntent::FormatAndSave
-            || save_intent == SaveIntent::SaveWithoutFormat)
+        if save_intent == SaveIntent::Save
             && cx.update(|_window, cx| !item.capability(cx).editable())?
         {
             return Ok(true);
@@ -1898,10 +1892,7 @@ impl Pane {
             })?;
 
         // when saving a single buffer, we ignore whether or not it's dirty.
-        if save_intent == SaveIntent::Save
-            || save_intent == SaveIntent::FormatAndSave
-            || save_intent == SaveIntent::SaveWithoutFormat
-        {
+        if save_intent == SaveIntent::Save {
             is_dirty = true;
         }
 
@@ -1915,8 +1906,6 @@ impl Pane {
             has_conflict = false;
         }
 
-        let should_format = save_intent != SaveIntent::SaveWithoutFormat;
-
         if has_conflict && can_save {
             if has_deleted_file && is_singleton {
                 let answer = pane.update_in(cx, |pane, window, cx| {
@@ -1926,7 +1915,7 @@ impl Pane {
                 match answer.await {
                     Ok(0) => {
                         pane.update_in(cx, |_, window, cx| {
-                            item.save(SaveOptions { format: should_format, autosave: false }, project, window, cx)
+                            item.save(SaveOptions { autosave: false }, project, window, cx)
                         })?
                         .await?;
                     }
@@ -1952,7 +1941,7 @@ impl Pane {
             match answer.await {
                 Ok(0) => {
                     pane.update_in(cx, |_, window, cx| {
-                        item.save(SaveOptions { format: should_format, autosave: false }, project, window, cx)
+                        item.save(SaveOptions { autosave: false }, project, window, cx)
                     })?
                     .await?;
                 }
@@ -2008,7 +1997,7 @@ impl Pane {
             if can_save {
                 pane.update_in(cx, |pane, window, cx| {
                     pane.unpreview_item_if_preview(item.item_id());
-                    item.save(SaveOptions { format: should_format, autosave: false }, project, window, cx)
+                    item.save(SaveOptions { autosave: false }, project, window, cx)
                 })?
                 .await?;
             } else if can_save_as && is_singleton {
@@ -2044,13 +2033,6 @@ impl Pane {
                 };
 
                 save_task.await?;
-                if should_format {
-                    pane.update_in(cx, |pane, window, cx| {
-                        pane.unpreview_item_if_preview(item.item_id());
-                        item.save(SaveOptions { format: true, autosave: false }, project, window, cx)
-                    })?
-                    .await?;
-                }
                 return Ok(true);
             }
         }
@@ -2068,7 +2050,7 @@ impl Pane {
         cx: &mut App,
     ) -> Task<Result<()>> {
         if item.can_autosave(cx) {
-            item.save(SaveOptions { format: true, autosave: true }, project, window, cx)
+            item.save(SaveOptions { autosave: true }, project, window, cx)
         } else {
             Task::ready(Ok(()))
         }

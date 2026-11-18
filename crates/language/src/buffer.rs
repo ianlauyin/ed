@@ -1537,65 +1537,6 @@ impl Buffer {
         })
     }
 
-    /// Spawns a background task that returns a `Diff` removing trailing whitespace from line ends.
-    ///
-    /// When `modified_rows` is `Some`, only lines whose row falls within one of the given ranges
-    /// are trimmed; when it is `None`, the whole buffer is scanned.
-    pub fn remove_trailing_whitespace(&self, modified_rows: Option<&[Range<u32>]>, cx: &App) -> Task<Diff> {
-        let old_text = self.as_rope().clone();
-        let line_ending = self.line_ending();
-        let base_version = self.version();
-        let modified_rows = modified_rows.map(<[std::ops::Range<u32>]>::to_vec);
-        cx.background_spawn(async move {
-            let ranges = trailing_whitespace_ranges(&old_text, modified_rows.as_deref());
-            let empty = Arc::<str>::from("");
-            Diff {
-                base_version,
-                line_ending,
-                edits: ranges.into_iter().map(|range| (range, Arc::clone(&empty))).collect(),
-            }
-        })
-    }
-
-    /// Returns a `Diff` ensuring the buffer ends with a trailing newline.
-    ///
-    /// When `modified_rows` is `None`, the whole buffer is considered: trailing whitespace and
-    /// blank lines at the end of the file are collapsed into a single newline.
-    ///
-    /// When `modified_rows` is `Some`, the operation is scoped to a "Format Selection": a single
-    /// newline is appended only when the last line is non-empty and its row falls within one of
-    /// the ranges. Trailing blank lines are left intact so that formatting a selection cannot
-    /// delete unselected rows.
-    pub fn ensure_final_newline(&self, modified_rows: Option<&[Range<u32>]>) -> Diff {
-        let len = self.len();
-        let line_ending = self.line_ending();
-        let base_version = self.version();
-        let newline = Arc::<str>::from("\n");
-
-        let edits = if len == 0 {
-            Vec::new()
-        } else if let Some(modified_rows) = modified_rows {
-            let max_point = self.max_point();
-            let last_line_is_empty = max_point.column == 0;
-            let last_row_is_modified = modified_rows.iter().any(|range| range.contains(&max_point.row));
-            if last_line_is_empty || !last_row_is_modified { Vec::new() } else { Vec::from([(len..len, newline)]) }
-        } else {
-            let mut offset = len;
-            let mut already_normalized = false;
-            for chunk in self.as_rope().reversed_chunks_in_range(0..len) {
-                let non_whitespace_len = chunk.trim_end_matches(|c: char| c.is_ascii_whitespace()).len();
-                offset -= chunk.len();
-                offset += non_whitespace_len;
-                if non_whitespace_len != 0 {
-                    already_normalized = offset == len - 1 && chunk.get(non_whitespace_len..) == Some("\n");
-                    break;
-                }
-            }
-            if already_normalized { Vec::new() } else { Vec::from([(offset..len, newline)]) }
-        };
-        Diff { base_version, line_ending, edits }
-    }
-
     /// Applies a diff to the buffer. If the buffer has changed since the given diff was
     /// calculated, then adjust the diff to account for those changes, and discard any
     /// parts of the diff that conflict with those changes.
@@ -4247,62 +4188,6 @@ impl CharClassifier {
     pub fn kind(&self, c: char) -> CharKind {
         self.kind_with(c, self.ignore_punctuation)
     }
-}
-
-/// Find all of the ranges of whitespace that occur at the ends of lines
-/// in the given rope.
-///
-/// This could also be done with a regex search, but this implementation
-/// avoids copying text.
-/// Returns the byte ranges of trailing whitespace at the end of each line.
-///
-/// When `row_ranges` is `Some`, only lines whose row falls within one of the ranges are
-/// included. The single pass keeps filtering cheap, avoiding collecting every range up front.
-pub(crate) fn trailing_whitespace_ranges(rope: &Rope, row_ranges: Option<&[Range<u32>]>) -> Vec<Range<usize>> {
-    let mut ranges = Vec::new();
-
-    let is_row_included = |row: u32| match row_ranges {
-        Some(row_ranges) => row_ranges.iter().any(|range| range.contains(&row)),
-        None => true,
-    };
-
-    let mut offset = 0;
-    let mut current_row: u32 = 0;
-    let mut prev_row: Option<u32> = None;
-    let mut prev_chunk_trailing_whitespace_range = 0..0;
-    for chunk in rope.chunks() {
-        let mut prev_line_trailing_whitespace_range = 0..0;
-        for (i, line) in chunk.split('\n').enumerate() {
-            let line_end_offset = offset + line.len();
-            let trimmed_line_len = line.trim_end_matches([' ', '\t']).len();
-            let mut trailing_whitespace_range = (offset + trimmed_line_len)..line_end_offset;
-
-            if i == 0 && trimmed_line_len == 0 {
-                trailing_whitespace_range.start = prev_chunk_trailing_whitespace_range.start;
-            }
-            if let Some(row) = prev_row
-                && !prev_line_trailing_whitespace_range.is_empty()
-                && is_row_included(row)
-            {
-                ranges.push(prev_line_trailing_whitespace_range);
-            }
-
-            prev_row = Some(current_row);
-            offset = line_end_offset + 1;
-            current_row += 1;
-            prev_line_trailing_whitespace_range = trailing_whitespace_range;
-        }
-
-        offset -= 1;
-        current_row -= 1;
-        prev_chunk_trailing_whitespace_range = prev_line_trailing_whitespace_range;
-    }
-
-    if !prev_chunk_trailing_whitespace_range.is_empty() && is_row_included(current_row) {
-        ranges.push(prev_chunk_trailing_whitespace_range);
-    }
-
-    ranges
 }
 
 #[cfg(test)]

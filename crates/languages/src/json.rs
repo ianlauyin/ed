@@ -17,7 +17,6 @@ use language::LocalFile as _;
 use language::LspAdapter;
 use language::LspAdapterDelegate;
 use language::language_settings::AllLanguageSettings;
-use language::language_settings::Formatter;
 use language::language_settings::LanguageSettings;
 use language::language_settings::RewrapBehavior;
 use language::language_settings::WordsCompletionMode;
@@ -146,16 +145,6 @@ impl LspAdapter for JsonLspAdapter {
         .await
     }
 
-    async fn initialization_options(
-        self: Arc<Self>,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: &mut AsyncApp,
-    ) -> Result<Option<serde_json::Value>> {
-        Ok(Some(json!({
-            "provideFormatter": true
-        })))
-    }
-
     async fn workspace_configuration(
         self: Arc<Self>,
         _: &Arc<dyn LspAdapterDelegate>,
@@ -249,10 +238,6 @@ pub(crate) fn settings() -> LanguageSettings {
         soft_wrap: false,
         preferred_line_length: 120,
         wrap_guides: vec![120],
-        formatter: Formatter::Auto,
-        code_actions_on_format: FxHashMap::default(),
-        remove_trailing_whitespace_on_save: true,
-        ensure_final_newline_on_save: true,
         lsp_document_symbols: true,
         allow_rewrap: RewrapBehavior::InComments,
         use_on_type_format: true,

@@ -597,7 +597,6 @@ pub const CODE_ACTIONS_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const SELECTION_HIGHLIGHT_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub(crate) const CODE_ACTION_TIMEOUT: Duration = Duration::from_secs(5);
-pub(crate) const FORMAT_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) const SCROLL_CENTER_TOP_BOTTOM_DEBOUNCE_TIMEOUT: Duration = Duration::from_secs(1);
 pub const LSP_REQUEST_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -1637,11 +1636,6 @@ pub enum GotoDefinitionKind {
     Declaration,
     Type,
     Implementation,
-}
-
-pub enum FormatTarget {
-    Buffers(FxHashSet<Entity<Buffer>>),
-    Ranges(Vec<Range<MultiBufferPoint>>),
 }
 
 pub(crate) struct FocusedBlock {

@@ -14,8 +14,6 @@ use language::ContextProvider;
 use language::ManifestName;
 use language::ManifestProvider;
 use language::ManifestQuery;
-use language::language_settings::Formatter;
-use language::language_settings::LanguageServerFormatterSpecifier;
 use language::language_settings::LanguageSettings;
 use language::language_settings::RewrapBehavior;
 use language::language_settings::WordsCompletionMode;
@@ -177,10 +175,6 @@ pub(crate) fn settings() -> LanguageSettings {
         soft_wrap: false,
         preferred_line_length: 120,
         wrap_guides: vec![120],
-        formatter: Formatter::LanguageServer(LanguageServerFormatterSpecifier::Specific { name: "ruff".into() }),
-        code_actions_on_format: std::iter::once(("source.organizeImports.ruff".into(), true)).collect(),
-        remove_trailing_whitespace_on_save: true,
-        ensure_final_newline_on_save: true,
         lsp_document_symbols: true,
         allow_rewrap: RewrapBehavior::InComments,
         use_on_type_format: true,

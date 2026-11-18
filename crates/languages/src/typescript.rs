@@ -19,7 +19,6 @@ use language::ContextLocation;
 use language::ContextProvider;
 use language::File as _;
 use language::LspAdapter;
-use language::language_settings::Formatter;
 use language::language_settings::LanguageSettings;
 use language::language_settings::RewrapBehavior;
 use language::language_settings::SemanticTokenRules;
@@ -485,10 +484,6 @@ pub(crate) fn settings() -> LanguageSettings {
         soft_wrap: false,
         preferred_line_length: 120,
         wrap_guides: vec![120],
-        formatter: Formatter::Auto,
-        code_actions_on_format: FxHashMap::default(),
-        remove_trailing_whitespace_on_save: true,
-        ensure_final_newline_on_save: true,
         lsp_document_symbols: true,
         allow_rewrap: RewrapBehavior::InComments,
         use_on_type_format: true,

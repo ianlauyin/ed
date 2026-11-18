@@ -79,6 +79,12 @@ impl LocalBufferStore {
         mut has_changed_file: bool,
         cx: &mut Context<BufferStore>,
     ) -> Task<Result<()>> {
+        // Line endings are always LF.
+        buffer_handle.update(cx, |buffer, cx| {
+            if buffer.line_ending() != LineEnding::Unix {
+                buffer.set_line_ending(LineEnding::Unix, cx);
+            }
+        });
         let buffer = buffer_handle.read(cx);
 
         let text = buffer.as_rope().clone();

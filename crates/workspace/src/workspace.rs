@@ -312,12 +312,8 @@ actions!(
         ResetOpenDocksSize,
         /// Resets all panes in the center group to equal sizes, preserving the split layout.
         ResetPaneSizes,
-        /// Formats and saves the current file, regardless of the format_on_save setting.
-        FormatAndSave,
         /// Saves the current file with a new name.
         SaveAs,
-        /// Saves without formatting.
-        SaveWithoutFormat,
         /// Suppresses the current notification.
         SuppressNotification,
         /// Toggles the bottom dock.
@@ -1979,22 +1975,6 @@ impl Workspace {
                     workspace
                         .save_active_item(action.save_intent.unwrap_or(SaveIntent::Save), window, cx)
                         .detach_and_prompt_err("Failed to save", window, cx, |_| None);
-                }))
-                .on_action(cx.listener(|workspace, _: &FormatAndSave, window, cx| {
-                    workspace.save_active_item(SaveIntent::FormatAndSave, window, cx).detach_and_prompt_err(
-                        "Failed to save",
-                        window,
-                        cx,
-                        |_| None,
-                    );
-                }))
-                .on_action(cx.listener(|workspace, _: &SaveWithoutFormat, window, cx| {
-                    workspace.save_active_item(SaveIntent::SaveWithoutFormat, window, cx).detach_and_prompt_err(
-                        "Failed to save",
-                        window,
-                        cx,
-                        |_| None,
-                    );
                 }))
             })
             .on_action(cx.listener(|workspace, _: &SaveAs, window, cx| {

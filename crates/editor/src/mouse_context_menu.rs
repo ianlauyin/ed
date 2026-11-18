@@ -34,8 +34,6 @@ use crate::SelectionEffects;
 use crate::SelectionExt as _;
 use crate::ToDisplayPoint as _;
 use crate::ToggleCodeActions;
-use crate::actions::Format;
-use crate::actions::FormatSelections;
 use crate::selections_collection::SelectionsCollection;
 
 #[derive(Debug)]
@@ -202,7 +200,6 @@ pub(crate) fn deploy_context_menu(
                 .is_some()
         });
 
-        let format_selections = window.is_action_available(&FormatSelections, cx);
         let can_edit = !editor.read_only(cx);
 
         let can_preview = window.is_action_available(&OpenPreview, cx);
@@ -217,10 +214,6 @@ pub(crate) fn deploy_context_menu(
                 .action("Find All References", Box::new(FindAllReferences::default()))
                 .separator()
                 .action_disabled_when(!can_edit, "Rename Symbol", Box::new(Rename))
-                .action_disabled_when(!can_edit, "Format Buffer", Box::new(Format))
-                .when(format_selections, |cx| {
-                    cx.action_disabled_when(!can_edit, "Format Selections", Box::new(FormatSelections))
-                })
                 .action_disabled_when(
                     !can_edit,
                     "Show Code Actions",

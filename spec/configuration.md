@@ -33,6 +33,11 @@ migrator, or Vim/Helix mode.
     Unreadable files are ignored.
     Identical contents aren't rewritten. Windows with no root folder aren't
     persisted.
+    The one hand-edited section is `lint` (`{ "lint": { "rust": "check" | "clippy" | "off" } }`,
+    default `clippy`): rust-analyzer's check-on-save, read when the server
+    starts, so a change needs a server restart. `off` disables check-on-save
+    diagnostics only. The app keeps `lint` when it rewrites the file, but only
+    reads it from each worktree's own root.
 - Tabs persist only their own state. An editor tab on a file keeps only its
   path: on restore the file is read from disk, and nothing else (scroll,
   selections, folds, unsaved edits) is kept, so editing or scrolling a file
@@ -50,7 +55,7 @@ migrator, or Vim/Helix mode.
   most recent project whose folders still exist. If nothing is restored, a
   window opens with an empty buffer.
 - Autosave (not configurable) saves a buffer when focus leaves it and when the
-  window deactivates, formatting on save; closing a dirty, autosavable buffer
+  window deactivates; closing a dirty, autosavable buffer
   saves it instead of prompting. Reopening a file in the same pane restores
   its selections, folds and scroll position.
 - Not persisted: panel sizes, window bounds (every new window, restored

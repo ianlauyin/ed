@@ -223,7 +223,7 @@ blobs with no language server, so they are not mixed into editor panes.
   old side of a split diff, get none: in any diff, a deleted line's text isn't
   in the buffer, so definitions and references are never asked for there.
 - A revision's right-click menu disables, as in any read-only editor, Rename,
-  Format, Code Actions, Cut and Paste.
+  Code Actions, Cut and Paste.
 - Focusing a dock panel or an editor pane (opening a file, Open File in Project
   from a commit, File Finder, …) switches back to Editor mode.
 - A preview (e.g. Markdown) of a revision keeps its commit's sidebar,

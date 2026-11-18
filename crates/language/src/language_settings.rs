@@ -84,11 +84,6 @@ pub struct LanguageSettings {
     pub preferred_line_length: u32,
     /// Columns at which to show wrap guides (vertical rulers).
     pub wrap_guides: Vec<usize>,
-    pub formatter: Formatter,
-    /// Which code actions to run on format.
-    pub code_actions_on_format: FxHashMap<String, bool>,
-    pub remove_trailing_whitespace_on_save: bool,
-    pub ensure_final_newline_on_save: bool,
     /// Whether outlines and breadcrumbs use LSP document symbols instead of tree-sitter.
     pub lsp_document_symbols: bool,
     /// Where the `editor::Rewrap` action is allowed.
@@ -186,10 +181,6 @@ impl LanguageSettings {
             soft_wrap: false,
             preferred_line_length: 120,
             wrap_guides: vec![120],
-            formatter: Formatter::Auto,
-            code_actions_on_format: FxHashMap::default(),
-            remove_trailing_whitespace_on_save: true,
-            ensure_final_newline_on_save: true,
             lsp_document_symbols: true,
             allow_rewrap: RewrapBehavior::InComments,
             use_on_type_format: true,
@@ -286,26 +277,6 @@ impl AllLanguageSettings {
         let settings = language_name.and_then(|name| self.languages.get(name)).unwrap_or(&self.fallback);
         Arc::clone(settings)
     }
-}
-
-/// Which formatter runs when formatting code.
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub enum Formatter {
-    /// Format with Biome where it applies, else with a language server.
-    #[default]
-    Auto,
-    /// Run a language server code action.
-    CodeAction(String),
-    LanguageServer(LanguageServerFormatterSpecifier),
-}
-
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub enum LanguageServerFormatterSpecifier {
-    Specific {
-        name: String,
-    },
-    #[default]
-    Current,
 }
 
 /// Where `editor::Rewrap` is allowed.

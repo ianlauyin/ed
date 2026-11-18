@@ -1,20 +1,17 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
 use language::LanguageName;
 use language::LspAdapter;
 use language::LspAdapterDelegate;
-use language::language_settings::Formatter;
 use language::language_settings::LanguageSettings;
 use language::language_settings::RewrapBehavior;
 use language::language_settings::WordsCompletionMode;
 use lsp::LanguageServerBinary;
 use lsp::LanguageServerName;
 use rustc_hash::FxHashMap;
-use serde_json::json;
 
 use crate::LanguageDef;
 use crate::npx;
@@ -41,16 +38,6 @@ impl LspAdapter for HtmlLspAdapter {
         .await
     }
 
-    async fn initialization_options(
-        self: Arc<Self>,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: &mut AsyncApp,
-    ) -> Result<Option<serde_json::Value>> {
-        Ok(Some(json!({
-            "provideFormatter": true
-        })))
-    }
-
     fn language_ids(&self) -> FxHashMap<LanguageName, String> {
         std::iter::once((LanguageName::new_static("HTML"), "html".into())).collect()
     }
@@ -64,10 +51,6 @@ pub(crate) fn settings() -> LanguageSettings {
         soft_wrap: false,
         preferred_line_length: 120,
         wrap_guides: vec![120],
-        formatter: Formatter::Auto,
-        code_actions_on_format: FxHashMap::default(),
-        remove_trailing_whitespace_on_save: true,
-        ensure_final_newline_on_save: true,
         lsp_document_symbols: true,
         allow_rewrap: RewrapBehavior::InComments,
         use_on_type_format: true,

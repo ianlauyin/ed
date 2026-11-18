@@ -313,8 +313,24 @@ pub(crate) fn write_workspace_state(
         if let Some(parent) = path.parent() {
             fs.create_dir(parent).await?;
         }
-        fs.atomic_write(path, json).await
+        let existing = fs.load(&path).await.ok();
+        fs.atomic_write(path, with_user_settings(json, existing.as_deref())).await
     })
+}
+
+/// Carries the hand-edited `lint` section of the file being replaced over to `json`.
+pub(crate) fn with_user_settings(json: String, existing: Option<&str>) -> String {
+    let lint = existing
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+        .and_then(|mut state| state.get_mut("lint").map(serde_json::Value::take));
+    let Some(lint) = lint else { return json };
+    match serde_json::from_str::<serde_json::Value>(&json) {
+        Ok(mut state) => {
+            state["lint"] = lint;
+            serde_json::to_string_pretty(&state).unwrap_or(json)
+        }
+        Err(_) => json,
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -419,6 +435,7 @@ mod tests {
     use super::RecentWorkspace;
     use super::dedupe_recent_workspaces;
     use super::is_in_workspace_state_dir;
+    use super::with_user_settings;
     use super::workspace_state_path;
 
     fn local(paths: &[&str]) -> ProjectLocation {
@@ -560,6 +577,19 @@ mod tests {
     #[test]
     fn workspace_state_paths() {
         assert_eq!(workspace_state_path("/p".as_ref()), PathBuf::from("/p/.ed/workspace.json"));
+    }
+
+    #[test]
+    fn with_user_settings_keeps_the_lint_section() {
+        let json = r#"{"docks":{}}"#.to_owned();
+        assert_eq!(with_user_settings(json.clone(), None), json);
+        assert_eq!(with_user_settings(json.clone(), Some(r#"{"docks":{"x":1}}"#)), json);
+        assert_eq!(with_user_settings(json.clone(), Some("not json")), json);
+
+        let merged = with_user_settings(json, Some(r#"{"lint":{"rust":"off"},"docks":{"x":1}}"#));
+        let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
+        assert_eq!(merged["lint"]["rust"], "off");
+        assert_eq!(merged["docks"], serde_json::json!({}));
     }
 
     #[test]

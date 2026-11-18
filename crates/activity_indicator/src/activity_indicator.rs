@@ -61,8 +61,7 @@ actions!(
     activity_indicator,
     [
         /// Displays error messages from language servers in the status bar.
-        ShowErrorMessage,
-        DismissMessage
+        ShowErrorMessage
     ]
 );
 
@@ -255,17 +254,6 @@ impl ActivityIndicator {
         });
     }
 
-    fn dismiss_message(&mut self, _: &DismissMessage, _: &mut Window, cx: &mut Context<Self>) {
-        self.project.update(cx, |project, cx| {
-            if project.last_formatting_failure(cx).is_some() {
-                project.reset_last_formatting_failure(cx);
-                true
-            } else {
-                false
-            }
-        });
-    }
-
     fn pending_language_server_work<'a>(&self, cx: &'a App) -> impl Iterator<Item = PendingWork<'a>> {
         self.project.read(cx).language_server_statuses(cx).rev().flat_map(|(server_id, status)| {
             let mut pending_work = status
@@ -434,21 +422,6 @@ impl ActivityIndicator {
             });
         }
 
-        // Show any formatting failure
-        if let Some(failure) = self.project.read(cx).last_formatting_failure(cx) {
-            return Some(Content {
-                icon: ActivityIcon::Icon(IconName::Warning),
-                message: format!("Formatting failed: {failure}. Click to see logs."),
-                on_click: Some(Arc::new(|indicator, window, cx| {
-                    indicator.project.update(cx, |project, cx| {
-                        project.reset_last_formatting_failure(cx);
-                    });
-                    window.dispatch_action(Box::new(workspace::OpenLog), cx);
-                })),
-                tooltip_message: None,
-            });
-        }
-
         // Show any health messages for the language servers
         if let Some((server_name, health, message)) = health_messages.pop() {
             let health_str = match health {
@@ -526,8 +499,7 @@ impl Render for ActivityIndicator {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let result = h_flex()
             .id("activity-indicator")
-            .on_action(cx.listener(Self::show_error_message))
-            .on_action(cx.listener(Self::dismiss_message));
+            .on_action(cx.listener(Self::show_error_message));
 
         let Some(content) = self.content_to_render(cx) else {
             return result;

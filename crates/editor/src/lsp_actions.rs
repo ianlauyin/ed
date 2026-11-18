@@ -1,6 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
-use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -19,7 +17,6 @@ use gpui::Window;
 use gpui::div;
 use gpui::prelude::InteractiveElement as _;
 use gpui::prelude::IntoElement as _;
-use itertools::Itertools as _;
 use language::LanguageAwareStyling;
 use language::OffsetRangeExt as _;
 use language::Selection;
@@ -29,10 +26,8 @@ use multi_buffer::AnchorRangeExt as _;
 use multi_buffer::MultiBufferOffset;
 use multi_buffer::ToOffset as _;
 use project::Project;
-use project::lsp_store::LspFormatTarget;
 use rustc_hash::FxHashSet;
 use text::Bias;
-use text::BufferId;
 use theme::ActiveTheme as _;
 use util::TryFutureExt as _;
 use workspace::Workspace;
@@ -41,16 +36,12 @@ use super::CODE_ACTION_TIMEOUT;
 use super::Editor;
 use super::EditorEvent;
 use super::EditorStyle;
-use super::FORMAT_TIMEOUT;
-use super::FormatTarget;
 use super::RenameState;
 use super::RenameTarget;
 use super::SelectionEffects;
 use super::make_inlay_hints_style;
 use crate::actions;
 use crate::actions::ConfirmRename;
-use crate::actions::Format;
-use crate::actions::FormatSelections;
 use crate::actions::OrganizeImports;
 use crate::actions::Rename;
 use crate::actions::RestartLanguageServer;
@@ -340,148 +331,6 @@ impl Editor {
 
     pub const fn pending_rename(&self) -> Option<&RenameState> {
         self.pending_rename.as_ref()
-    }
-
-    pub(super) fn can_format_selections(&self, cx: &App) -> bool {
-        if !self.mode.is_full() {
-            return false;
-        }
-
-        let Some(project) = &self.project else {
-            return false;
-        };
-
-        let project = project.read(cx);
-        let multi_buffer = self.buffer.read(cx);
-        let snapshot = multi_buffer.snapshot(cx);
-
-        self.selections
-            .disjoint_anchor_ranges()
-            .flat_map(|range| [range.start, range.end])
-            .filter_map(|anchor| snapshot.anchor_to_buffer_anchor(anchor))
-            .filter_map(|(_, buffer_snapshot)| multi_buffer.buffer(buffer_snapshot.buffer_id()))
-            .any(|buffer| project.supports_range_formatting(&buffer, cx))
-    }
-
-    pub(super) fn format(&self, _: &Format, window: &Window, cx: &mut Context<Self>) -> Option<Task<Result<()>>> {
-        if self.read_only(cx) {
-            return None;
-        }
-
-        let project = self.project.clone()?;
-
-        Some(self.perform_format(project, FormatTarget::Buffers(self.buffer.read(cx).all_buffers()), window, cx))
-    }
-
-    pub(super) fn format_selections(
-        &self,
-        _: &FormatSelections,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Task<Result<()>>> {
-        if self.read_only(cx) {
-            return None;
-        }
-
-        let project = self.project.clone()?;
-
-        let ranges = self
-            .selections
-            .all_adjusted(&self.display_snapshot(cx))
-            .into_iter()
-            .map(|selection| selection.range())
-            .collect_vec();
-
-        Some(self.perform_format(project, FormatTarget::Ranges(ranges), window, cx))
-    }
-
-    pub(super) fn perform_format(
-        &self,
-        project: Entity<Project>,
-        target: FormatTarget,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        if self.read_only(cx) {
-            return Task::ready(Ok(()));
-        }
-        let buffer = self.buffer.clone();
-        let (mut buffers, target) = match target {
-            FormatTarget::Buffers(buffers) => (buffers, LspFormatTarget::Buffers),
-            FormatTarget::Ranges(selection_ranges) => {
-                let multi_buffer = buffer.read(cx);
-                let snapshot = multi_buffer.read(cx);
-                let mut buffers = FxHashSet::default();
-                let mut buffer_id_to_ranges: BTreeMap<BufferId, Vec<Range<text::Anchor>>> = BTreeMap::new();
-                for selection_range in selection_ranges {
-                    for (buffer_snapshot, buffer_range, _) in snapshot.range_to_buffer_ranges(selection_range) {
-                        let buffer_id = buffer_snapshot.buffer_id();
-                        let start = buffer_snapshot.anchor_before(buffer_range.start);
-                        let end = buffer_snapshot.anchor_after(buffer_range.end);
-                        buffers.insert(multi_buffer.buffer(buffer_id).expect("buffer is in multibuffer"));
-                        buffer_id_to_ranges
-                            .entry(buffer_id)
-                            .and_modify(|buffer_ranges| buffer_ranges.push(start..end))
-                            .or_insert_with(|| vec![start..end]);
-                    }
-                }
-                (buffers, LspFormatTarget::Ranges(buffer_id_to_ranges))
-            }
-        };
-
-        buffers.retain(|buffer| !buffer.read(cx).read_only());
-
-        let transaction_id_prev = buffer.read(cx).last_transaction_id(cx);
-        let (selections_prev, add_selections_state_prev) = transaction_id_prev
-            .and_then(|transaction_id_prev| {
-                // default to selections as they were after the last edit, if we have them,
-                // instead of how they are now.
-                // This will make it so that editing, moving somewhere else, formatting, then undoing the format
-                // will take you back to where you made the last edit, instead of staying where you scrolled
-                self.selection_history
-                    .transaction(transaction_id_prev)
-                    .map(|transaction| (Arc::clone(&transaction.undo), transaction.undo_add_selections_state.clone()))
-            })
-            .unwrap_or_else(|| (self.selections.disjoint_anchors_arc(), self.add_selections_state.clone()));
-
-        let mut timeout = cx.background_executor().timer(FORMAT_TIMEOUT).fuse();
-        let format = project.update(cx, |project, cx| project.format(buffers, target, true, cx));
-
-        cx.spawn_in(window, async move |editor, cx| {
-            let transaction = futures::select_biased! {
-                transaction = format.log_err().fuse() => transaction,
-                () = timeout => {
-                    log::warn!("timed out waiting for formatting");
-                    None
-                }
-            };
-
-            buffer.update(cx, |buffer, cx| {
-                if let Some(transaction) = transaction
-                    && !buffer.is_singleton()
-                {
-                    buffer.push_transaction(&transaction.0, cx);
-                }
-                cx.notify();
-            });
-
-            if let Some(transaction_id_now) = buffer.read_with(cx, |b, cx| b.last_transaction_id(cx)) {
-                let has_new_transaction = transaction_id_prev != Some(transaction_id_now);
-                if has_new_transaction {
-                    editor
-                        .update(cx, |editor, _| {
-                            editor.selection_history.insert_transaction(
-                                transaction_id_now,
-                                selections_prev,
-                                add_selections_state_prev,
-                            );
-                        })
-                        .ok();
-                }
-            }
-
-            Ok(())
-        })
     }
 
     pub(super) fn organize_imports(

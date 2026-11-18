@@ -561,17 +561,6 @@ actions!(
         ToggleFoldRecursive,
         /// Toggles all folds in a buffer or all excerpts in multibuffer.
         ToggleFoldAll,
-        /// Formats the entire document.
-        Format,
-        /// Formats only the selected text.
-        ///
-        /// This action is only available when the active formatter can format ranges.
-        /// When using a language server, this sends an LSP range formatting request for each
-        /// selection, and is hidden when the selected buffer's configured language server does
-        /// not advertise range-formatting support. When using Biome, the whole buffer is
-        /// formatted and resulting edits outside the selected ranges are discarded. External command formatters do not
-        /// support range formatting and are skipped.
-        FormatSelections,
         /// Goes to declaration in a split pane.
         GoToDeclarationSplit,
         /// Goes to definition in a split pane.

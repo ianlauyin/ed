@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use gpui::AsyncApp;
 use language::LspAdapter;
 use language::LspAdapterDelegate;
-use language::language_settings::Formatter;
 use language::language_settings::LanguageSettings;
 use language::language_settings::RewrapBehavior;
 use language::language_settings::WordsCompletionMode;
@@ -14,7 +13,6 @@ use lsp::LanguageServerBinary;
 use lsp::LanguageServerName;
 use lsp::Uri;
 use project::Fs;
-use rustc_hash::FxHashMap;
 use serde_json::json;
 
 use crate::LanguageDef;
@@ -36,16 +34,6 @@ impl LspAdapter for CssLspAdapter {
     ) -> Option<LanguageServerBinary> {
         npx::node_server_binary(delegate, &["vscode-langservers-extracted"], "vscode-css-language-server", &["--stdio"])
             .await
-    }
-
-    async fn initialization_options(
-        self: Arc<Self>,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: &mut AsyncApp,
-    ) -> Result<Option<serde_json::Value>> {
-        Ok(Some(json!({
-            "provideFormatter": true
-        })))
     }
 
     async fn workspace_configuration(
@@ -76,10 +64,6 @@ pub(crate) fn settings() -> LanguageSettings {
         soft_wrap: false,
         preferred_line_length: 120,
         wrap_guides: vec![120],
-        formatter: Formatter::Auto,
-        code_actions_on_format: FxHashMap::default(),
-        remove_trailing_whitespace_on_save: true,
-        ensure_final_newline_on_save: true,
         lsp_document_symbols: true,
         allow_rewrap: RewrapBehavior::InComments,
         use_on_type_format: true,

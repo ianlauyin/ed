@@ -10,17 +10,18 @@
   registered language use `LanguageSettings::fallback()` (in `language`).
   - Per-language fields are only those a language may need to differ in: tab
     size, hard tabs, soft wrap (off or at the editor width), preferred line
-    length, wrap guides, formatter (auto or a language server), code actions on
-    format, trailing whitespace / final newline on save, LSP vs tree-sitter
+    length, wrap guides, LSP vs tree-sitter
     document symbols, rewrap scope (comments or anywhere), on-type formatting,
     auto-indent on paste, and word completions (fallback or disabled). The
     types live in `language::language_settings`; there is no
     `settings_content` crate.
   - Everything else is fixed: inlay hints, indent guides and LSP completion
     options are constants in `language::language_settings`; the rest is inlined
-    where used. Files are always formatted on save (save-without-format still
-    skips it); there are no external-command formatters or modifications-only
-    formatting. Soft-wrapped lines keep the original line's indentation. Indent
+    where used. There is no formatting at all: no format-on-save, Format /
+    Format Selections actions, external-command formatters, trailing-whitespace
+    trimming, final-newline insertion or code actions on save (Organize Imports
+    stays an explicit action). Saving writes the buffer as is, with LF line
+    endings. Soft-wrapped lines keep the original line's indentation. Indent
     guides use indent-aware colors with no background. Whitespace is drawn
     only inside selections. Auto-indent is syntax-aware. LSP completions
     replace the text after the cursor only when the completion ends with it.
@@ -66,17 +67,16 @@
   keep-trailing-whitespace settings, the Git Commit editor)
   but have no grammar, so they get rough highlighting only and none of the
   structure-aware features.
-- TOML's language server is `tombi` (`tombi lsp`). It provides formatting
-  (the TOML formatter under `"auto"`), lint diagnostics, completions and schema
+- TOML's language server is `tombi` (`tombi lsp`). It provides lint diagnostics, completions and schema
   validation; configuration comes from the project's `tombi.toml` /
   `[tool.tombi]`.
 - Terraform (`.tf`) and Terraform Vars (`.tfvars`) use `terraform-ls`
   (`terraform-ls serve`, from `PATH` only) with LSP language ids `terraform`
   and `terraform-vars`. It provides completions, navigation, references,
-  hover, diagnostics, document symbols (the outline) and formatting (the
-  formatter under `"auto"`). Other HCL files (`.hcl`, stacks, tests) are not
+  hover, diagnostics and document symbols (the outline). Other HCL files (`.hcl`, stacks, tests) are not
   registered and stay Plain Text.
-- rust-analyzer's check runs `cargo clippy`. Clippy's Cargo-group lints
+- rust-analyzer's check runs `cargo clippy` unless the project's
+  `lint.rust` (`.ed/workspace.json`, see `configuration.md`) says `check` or `off`. Clippy's Cargo-group lints
   (`wildcard_dependencies`, etc.) have no span and are reported at line 1 of
   the clippy config, once per crate and target. rust-analyzer drops
   diagnostics for files outside its VFS, and a virtual workspace root isn't in
@@ -136,13 +136,13 @@
     is on, and stay unhighlighted otherwise.
   - LSP semantic tokens layer on top as usual.
 - HTML uses `vscode-html-language-server` (from `vscode-langservers-extracted`),
-  started with `--stdio` and `provideFormatter: true`.
+  started with `--stdio`.
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
 - Python tooling is uv-only:
   - Python has no language server (ty, ruff, pyright, basedpyright and pylsp
-    are removed): no completions, diagnostics or formatter. Files keep
+    are removed): no completions or diagnostics. Files keep
     tree-sitter highlighting, outline, runnables and tasks.
   - There is no toolchain/virtual-environment discovery, selector, status bar
     item or persisted toolchain.
@@ -153,7 +153,7 @@
     `PATH`; no activation script is run.
 - Messages to a language server (requests, responses, notifications) are written
   in the order they were sent, through one queue. Notifications are serialized
-  lazily but never overtake an earlier request, so e.g. a formatting request
+  lazily but never overtake an earlier request, so e.g. a hover request
   always sees the document version from the `didChange` sent before it.
 - `initialize` sends the workspace as `workspaceFolders` plus `rootUri` (for
   servers that predate workspace folders); the long-deprecated `rootPath` is
@@ -199,7 +199,7 @@
     project untouched (its own `tsc` and build keep their version). `tsc` on `PATH` is
     never used, since it is commonly an old global install.
   - TODO: remove the old-TypeScript (< 7) npx fallback once projects have
-    moved to TypeScript 7, and drop Prettier formatting support in favour of Biome.
+    moved to TypeScript 7.
   - JavaScript gets the same tsgo features. Type errors only show where the
     project opts in (`checkJs` / `// @ts-check`).
 - `stylelint` (`stylelint-language-server --stdio`, from
@@ -208,12 +208,12 @@
   (`source.fixAll.stylelint`) using the project's own `stylelint` and config; in
   projects without `stylelint` installed it reports nothing. It resolves from the
   nearest `node_modules/.bin` at or above the worktree root, then `PATH`, then
-  npx (the server needs Node ≥ 22.17). Formatting stays on the Biome / Prettier CLI (below).
+  npx (the server needs Node ≥ 22.17). There is no formatting.
 - Go has no language server (gopls is removed); Go files keep tree-sitter
   highlighting, outline, runnables and tasks.
 - There are no `lsp.<server>` settings. Each adapter hardcodes its server's
   binary arguments, initialization options and workspace configuration
-  (rust-analyzer: nightly rustfmt, clippy check, all cargo features). A
+  (rust-analyzer: clippy check, all cargo features). A
   settings change never restarts a server, since nothing that settings control
   feeds into a server's identity. yaml/json don't resolve relative schema paths
   against the worktree.
@@ -244,31 +244,8 @@
   `__virtual__` paths are not resolved, and tsgo only uses
   `node_modules/typescript` (never `.yarn/sdks`).
   Yarn remains usable as a package manager / task runner (`yarn.lock` detection).
-- Prettier is not a server, plugin host or setting: no Prettier server, default
-  Prettier install, plugins, `prettier` language setting, or `"prettier"` formatter
-  value. Built-in formatting for web languages uses the Biome or Prettier CLI:
-  - `formatter: "auto"` formats CSS, GraphQL, JavaScript, JSON, JSONC, TSX and
-    TypeScript with the CLI formatter the project configures: the nearest
-    ancestor of the file holding a Biome config (`biome.json(c)`) or a Prettier
-    config (`.prettierrc*`, `prettier.config.*`, or a `prettier` key in
-    `package.json`) decides, Biome winning a tie. With neither, no CLI formatter
-    runs and `"auto"` uses the primary language server like other languages. The
-    language list is hardcoded with no setting.
-  - Prettier resolves in order: nearest `node_modules/.bin/prettier` above the
-    file, `prettier` on the shell `PATH`, then `npx --yes prettier`. Each format
-    runs `prettier --stdin-filepath <path>` from the nearest ancestor holding a
-    Prettier config (else the file's directory); unsaved buffers use a synthetic
-    `untitled.<ext>` path. Failures are logged, not shown.
-  - Biome resolves in order: nearest `node_modules/.bin/biome` above the file,
-    `biome` on the shell `PATH`, then `npx --yes @biomejs/biome`.
-  - Each format runs `biome format --stdin-file-path <path>` once, from the
-    nearest ancestor directory holding `biome.json`/`biome.jsonc` (else the file's
-    directory), so the project's config applies even to Biome 1.x, which only
-    looks in the working directory. Unsaved buffers use
-    `untitled.<ext>`. Editor settings such as `tab_size` are not passed to Biome.
-  - Format Selections formats the whole buffer and keeps only edits that overlap
-    the selections.
-  - As with other `"auto"` formatters, Biome and Prettier failures are logged and not shown to the user.
+- Biome and Prettier are not used at all: no server, formatter, plugin host or
+  setting.
 - External library sources (e.g. dependency crates) open as library worktrees,
   see "External libraries" in `project-panel.md`. Each language recognizes its
   own library paths through a `LibraryProvider` registered by the `languages`

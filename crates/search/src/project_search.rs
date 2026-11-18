@@ -1640,7 +1640,7 @@ impl ProjectSearchView {
                 let should_save = result == 0;
                 if should_save {
                     this.update_in(cx, |this, window, cx| {
-                        this.save(SaveOptions { format: true, autosave: false }, project, window, cx)
+                        this.save(SaveOptions { autosave: false }, project, window, cx)
                     })?
                     .await
                     .log_err();

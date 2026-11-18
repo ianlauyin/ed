@@ -106,9 +106,6 @@ pub fn lsp_formatting_options(settings: &LanguageSettings) -> lsp::FormattingOpt
     lsp::FormattingOptions {
         tab_size: settings.tab_size.into(),
         insert_spaces: !settings.hard_tabs,
-        trim_trailing_whitespace: Some(settings.remove_trailing_whitespace_on_save),
-        trim_final_newlines: Some(settings.ensure_final_newline_on_save),
-        insert_final_newline: Some(settings.ensure_final_newline_on_save),
         ..lsp::FormattingOptions::default()
     }
 }

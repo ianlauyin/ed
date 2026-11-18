@@ -163,7 +163,6 @@ fn assert_queries_compile(dir: &str, grammar: tree_sitter::Language) {
 
 #[cfg(test)]
 mod tests {
-    use language::language_settings::Formatter;
     use language::language_settings::RewrapBehavior;
     use language::language_settings::WordsCompletionMode;
     use rustc_hash::FxHashSet;
@@ -217,8 +216,6 @@ mod tests {
         assert_eq!(rust::settings(), fallback);
 
         assert!(go::settings().hard_tabs && go::mod_settings().hard_tabs);
-        assert!(go::settings().code_actions_on_format.contains_key("source.organizeImports"));
-        assert!(go::mod_settings().code_actions_on_format.is_empty());
 
         for settings in
             [json::settings(), typescript::settings(), yaml::settings(), markdown::settings(), terraform::settings()]
@@ -226,9 +223,6 @@ mod tests {
             assert_eq!(settings.tab_size.get(), 2);
         }
         assert!(!yaml::settings().auto_indent_on_paste);
-
-        let diff = diff::settings();
-        assert!(!diff.remove_trailing_whitespace_on_save && !diff.ensure_final_newline_on_save);
 
         let markdown = markdown::settings();
         assert!(markdown.soft_wrap);
@@ -239,7 +233,5 @@ mod tests {
             assert!(settings.soft_wrap);
             assert_eq!(settings.allow_rewrap, RewrapBehavior::Anywhere);
         }
-
-        assert!(matches!(python::settings().formatter, Formatter::LanguageServer(_)));
     }
 }
