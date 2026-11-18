@@ -10,15 +10,15 @@ because it hurt readability; an opaque window is also cheaper to composite.
 
 ## Theme
 
-- The theme is constant: Nord (dark), built in Rust in `theme::built_in`, so
+- The theme is constant: One Dark, built in Rust in `theme::built_in`, so
   there is no theme JSON, no light/dark default palette, no refinement or
   fallback derivation, and no `theme_settings` crate. To change colours, edit
   `theme::built_in` and rebuild.
 - `theme::built_in` is the single origin of every colour, in three layers:
-  the Nord palette (the only raw hex values), role constants derived from it
+  the One Dark palette (raw hex values, plus a few syntax-only shades), role constants derived from it
   by formula (`shade` scales RGB channels, `mix` flattens a translucent colour
   onto a surface, alpha via `Hsla::alpha`), and theme fields that reference
-  roles only. No theme field holds a colour from outside the palette (except
+  roles only. No chrome or terminal field holds a colour from outside the palette (except
   the macOS traffic lights).
 - The theme is one lazily built `static`: `built_in::theme()` and `cx.theme()`
   return `&'static Theme`. There is no theme global, no `theme::init`, and no

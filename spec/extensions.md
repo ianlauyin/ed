@@ -9,7 +9,7 @@ macOS.
 
 - Languages, grammars, and language servers come only from built-in code and
   user settings/files. Snippets come only from built-in code; the theme is the
-  built-in Nord theme (see `ui-layout.md`). The user config `themes/` folder is
+  built-in One Dark theme (see `ui-layout.md`). The user config `themes/` folder is
   never read or watched.
 - There are no icon themes: no `icon_theme` setting, selector, or menu item.
   File/folder/chevron icons are one hardcoded set (`file_icons` crate,

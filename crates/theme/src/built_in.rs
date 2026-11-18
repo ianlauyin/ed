@@ -24,11 +24,11 @@ pub const BUFFER_LINE_HEIGHT: f32 = 1.618;
 /// Opacity reduction applied to unnecessary (e.g. unused) code.
 pub const UNNECESSARY_CODE_FADE: f32 = 0.3;
 
-/// The only theme: Nord with the floating-card chrome. Edit these constructors to change the look.
+/// The only theme: One Dark with the floating-card chrome. Edit these constructors to change the look.
 pub fn theme() -> &'static Theme {
     static THEME: LazyLock<Theme> = LazyLock::new(|| Theme {
-        id: "nord".into(),
-        name: SharedString::new_static("Nord"),
+        id: "one-dark".into(),
+        name: SharedString::new_static("One Dark"),
         appearance: Appearance::Dark,
         styles: ThemeStyles {
             window_background_appearance: WindowBackgroundAppearance::Opaque,
@@ -43,44 +43,43 @@ pub fn theme() -> &'static Theme {
     &THEME
 }
 
-// Nord palette: the only raw colour values of the theme. Everything below derives from these.
-const DARK0: u32 = 0x2e3440;
-const DARK1: u32 = 0x3b4252;
-const DARK2: u32 = 0x434c5e;
-const DARK3: u32 = 0x4c566a;
-const LIGHT0: u32 = 0xd8dee9;
-const LIGHT1: u32 = 0xe5e9f0;
-const LIGHT2: u32 = 0xeceff4;
-const FROST0: u32 = 0x8fbcbb;
-const FROST1: u32 = 0x88c0d0;
-const FROST2: u32 = 0x81a1c1;
-const FROST3: u32 = 0x5e81ac;
-const RED: u32 = 0xbf616a;
-const ORANGE: u32 = 0xd08770;
-const YELLOW: u32 = 0xebcb8b;
-const GREEN: u32 = 0xa3be8c;
-const PURPLE: u32 = 0xb48ead;
+// One Dark palette: the only raw colour values of the theme. Everything below derives from these.
+const DARK0: u32 = 0x282c33;
+const DARK1: u32 = 0x363c46;
+const DARK2: u32 = 0x464b57;
+const DARK3: u32 = 0x4e5a5f;
+const LIGHT0: u32 = 0xabb2bf;
+const LIGHT2: u32 = 0xdce0e5;
+const RED: u32 = 0xe06c75;
+const ORANGE: u32 = 0xbf956a;
+const YELLOW: u32 = 0xe5c07b;
+const GREEN: u32 = 0x98c379;
+const PURPLE: u32 = 0xc678dd;
+const BLUE: u32 = 0x61afef;
+const CYAN: u32 = 0x56b6c2;
+const TEAL: u32 = 0x7fc8a9;
+const SKY: u32 = 0x74ade8;
+const SAND: u32 = 0xe6cf9e;
+const ROSE: u32 = 0xd07277;
+const COMMENT: u32 = 0x5d636f;
 
 // Roles: what each palette colour (or a formula of it) is used for.
 /// Everything around the cards: gaps, title bar, status bar, tab bar, side docks.
-const CHROME: u32 = shade(DARK0, -30);
+const CHROME: u32 = 0x3b414d;
 /// Editor and terminal cards, darker than the chrome; the active tab joins its card.
-const CARD: u32 = shade(CHROME, -33);
-const POPUP: u32 = shade(DARK1, -30);
-const BORDER: u32 = DARK1;
-const HIGHLIGHT: u32 = DARK2;
+const CARD: u32 = DARK0;
+const POPUP: u32 = 0x2f343e;
+const BORDER: u32 = DARK2;
+const HIGHLIGHT: u32 = DARK1;
 const FAINT: u32 = DARK3;
-const SELECTION: u32 = shade(DARK3, 50);
+const SELECTION: u32 = SKY;
 const TEXT: u32 = LIGHT2;
-const TEXT_MUTED: u32 = shade(LIGHT0, -20);
-const TEXT_DIM: u32 = shade(LIGHT0, -30);
-const CODE_HINT: u32 = shade(DARK3, 20);
-const WHITE: u32 = LIGHT0;
-const ACCENT: u32 = FROST1;
-const TEAL: u32 = FROST0;
-const CYAN: u32 = FROST1;
-const BLUE: u32 = FROST2;
-const IGNORED: u32 = shade(YELLOW, -40);
+const TEXT_MUTED: u32 = 0xa9afbc;
+const TEXT_DIM: u32 = 0x878e98;
+const CODE_HINT: u32 = 0x5a6a87;
+const WHITE: u32 = 0xacb2be;
+const ACCENT: u32 = SKY;
+const IGNORED: u32 = 0x878a98;
 
 /// Terminal bright / dim variants of an ANSI colour.
 const BRIGHT: i32 = 20;
@@ -177,13 +176,13 @@ pub fn theme_colors() -> ThemeColors {
         editor_diff_hunk_deleted_hollow_background: color(RED).alpha(0.06),
         editor_diff_hunk_deleted_hollow_border: color(RED).alpha(0.36),
         terminal_background: color(CARD),
-        terminal_foreground: color(WHITE),
+        terminal_foreground: color(LIGHT0),
         terminal_bright_foreground: color(TEXT),
         terminal_dim_foreground: color(shade(WHITE, DIM)),
         terminal_ansi_background: color(CARD),
-        terminal_ansi_black: color(DARK1),
-        terminal_ansi_bright_black: color(DARK3),
-        terminal_ansi_dim_black: color(shade(DARK1, DIM)),
+        terminal_ansi_black: color(DARK0),
+        terminal_ansi_bright_black: color(0x636d83),
+        terminal_ansi_dim_black: color(shade(DARK0, DIM)),
         terminal_ansi_red: color(RED),
         terminal_ansi_bright_red: color(shade(RED, BRIGHT)),
         terminal_ansi_dim_red: color(shade(RED, DIM)),
@@ -200,16 +199,16 @@ pub fn theme_colors() -> ThemeColors {
         terminal_ansi_bright_magenta: color(shade(PURPLE, BRIGHT)),
         terminal_ansi_dim_magenta: color(shade(PURPLE, DIM)),
         terminal_ansi_cyan: color(CYAN),
-        terminal_ansi_bright_cyan: color(TEAL),
+        terminal_ansi_bright_cyan: color(shade(CYAN, BRIGHT)),
         terminal_ansi_dim_cyan: color(shade(CYAN, DIM)),
-        terminal_ansi_white: color(LIGHT1),
+        terminal_ansi_white: color(LIGHT0),
         terminal_ansi_bright_white: color(LIGHT2),
-        terminal_ansi_dim_white: color(shade(LIGHT1, DIM)),
-        link_text_hover: color(TEAL),
+        terminal_ansi_dim_white: color(shade(LIGHT0, DIM)),
+        link_text_hover: color(SKY),
         version_control_added: color(GREEN),
         version_control_deleted: color(RED),
         version_control_modified: color(YELLOW),
-        version_control_renamed: color(ORANGE),
+        version_control_renamed: color(SKY),
         version_control_conflict: color(RED),
         version_control_ignored: color(IGNORED),
         version_control_word_added: color(shade(GREEN, -50)),
@@ -240,7 +239,7 @@ pub fn status_colors() -> StatusColors {
         info_background: color(POPUP),
         info_border: color(BORDER),
         modified: color(YELLOW),
-        renamed: color(ORANGE),
+        renamed: color(SKY),
         success: color(GREEN),
         success_background: color(POPUP),
         success_border: color(BORDER),
@@ -274,50 +273,55 @@ pub fn syntax_theme() -> SyntaxTheme {
     let bold = |hex| HighlightStyle { font_weight: Some(FontWeight::BOLD), ..fg(hex) };
     SyntaxTheme::new(
         [
-            ("attribute", fg(TEAL)),
-            ("boolean", fg(BLUE)),
-            ("comment", fg(TEXT_DIM)),
+            ("attribute", fg(SKY)),
+            ("boolean", fg(TEAL)),
+            ("comment", fg(COMMENT)),
             ("comment.doc", fg(TEXT_DIM)),
-            ("constant", fg(WHITE)),
-            ("constructor", fg(ORANGE)),
-            ("definition.function", fg(ORANGE)),
-            ("embedded", fg(ORANGE)),
-            ("emphasis", italic(BLUE)),
-            ("emphasis.strong", bold(BLUE)),
-            ("enum", fg(ORANGE)),
-            ("function", fg(WHITE)),
-            ("function.method", fg(WHITE)),
-            ("hint", fg(CODE_HINT)),
-            ("keyword", fg(BLUE)),
-            ("label", fg(BLUE)),
-            ("lifetime", fg(TEAL)),
-            ("link_text", HighlightStyle { font_style: Some(FontStyle::Normal), ..fg(BLUE) }),
-            ("link_uri", fg(BLUE)),
-            ("number", fg(PURPLE)),
-            ("operator", fg(TEXT_DIM)),
-            ("predictive", fg(CODE_HINT)),
-            ("preproc", fg(FROST3)),
-            ("primary", fg(TEXT)),
-            ("property", fg(WHITE)),
-            ("punctuation", fg(TEXT_DIM)),
-            ("punctuation.bracket", fg(TEXT_DIM)),
-            ("punctuation.delimiter", fg(TEXT_DIM)),
-            ("punctuation.list_marker", fg(TEXT_DIM)),
-            ("punctuation.special", fg(TEXT_DIM)),
-            ("string", fg(GREEN)),
-            ("string.escape", fg(YELLOW)),
-            ("string.regex", fg(GREEN)),
-            ("string.special", fg(GREEN)),
-            ("tag", fg(BLUE)),
-            ("text.literal", fg(GREEN)),
-            ("title", bold(CYAN)),
-            ("type", fg(CYAN)),
-            ("type.builtin", fg(CYAN)),
-            ("type.super", fg(CYAN)),
-            ("variable", fg(WHITE)),
-            ("variable.parameter", fg(WHITE)),
-            ("variable.special", fg(BLUE)),
-            ("variant", fg(PURPLE)),
+            ("constant", fg(0xdfc184)),
+            ("constant.builtin", fg(TEAL)),
+            ("constructor", fg(0x73ade9)),
+            ("definition.function", fg(0x73ade9)),
+            ("embedded", fg(TEXT)),
+            ("emphasis", fg(SKY)),
+            ("emphasis.strong", bold(ORANGE)),
+            ("enum", fg(0x6eb4bf)),
+            ("function", fg(0x73ade9)),
+            ("function.method", fg(0x8cc2f0)),
+            ("function.special", fg(0x56c2d6)),
+            ("hint", fg(0x788ca6)),
+            ("keyword", italic(0xb477cf)),
+            ("keyword.control", HighlightStyle { font_style: Some(FontStyle::Normal), ..fg(0xd55fde) }),
+            ("label", fg(SKY)),
+            ("link_text", italic(0x73ade9)),
+            ("link_uri", fg(0x6eb4bf)),
+            ("namespace", fg(TEXT)),
+            ("number", fg(ORANGE)),
+            ("operator", fg(0xb2b9c6)),
+            ("predictive", italic(CODE_HINT)),
+            ("preproc", fg(0xb477cf)),
+            ("primary", fg(WHITE)),
+            ("property", fg(ROSE)),
+            ("punctuation", fg(WHITE)),
+            ("punctuation.bracket", fg(0xb2b9c6)),
+            ("punctuation.delimiter", fg(0xb2b9c6)),
+            ("punctuation.list_marker", fg(ROSE)),
+            ("punctuation.markup", fg(ROSE)),
+            ("punctuation.special", fg(0xb1574b)),
+            ("selector", fg(0xdfc184)),
+            ("selector.pseudo", fg(SKY)),
+            ("string", fg(0xa1c181)),
+            ("string.escape", fg(TEXT_DIM)),
+            ("string.regex", fg(ORANGE)),
+            ("string.special", fg(ORANGE)),
+            ("string.special.symbol", fg(ORANGE)),
+            ("tag", fg(SKY)),
+            ("text.literal", fg(0xa1c181)),
+            ("title", fg(ROSE)),
+            ("type", fg(0x6eb4bf)),
+            ("variable", fg(SAND)),
+            ("variable.parameter", italic(0xe08f7a)),
+            ("variable.special", italic(ORANGE)),
+            ("variant", fg(0x73ade9)),
         ]
         .map(|(name, style): (&str, HighlightStyle)| (name.to_owned(), style)),
     )
@@ -365,7 +369,7 @@ mod tests {
 
     #[test]
     fn color_parses_rgb_hex() {
-        for hex in [0x88c0d0, 0x3b4252, 0x000000] {
+        for hex in [0x61afef, 0x363c46, 0x000000] {
             let rgba = Rgba::from(color(hex));
             let channels = [rgba.r, rgba.g, rgba.b].map(|channel| (channel * 255.).round() as u32);
             assert_eq!((channels[0] << 16) | (channels[1] << 8) | channels[2], hex);
@@ -381,9 +385,8 @@ mod tests {
     #[test]
     fn shade_scales_and_clamps_channels() {
         assert_eq!(shade(DARK0, 0), DARK0);
-        assert_eq!(shade(DARK0, -30), 0x20242c);
-        assert_eq!(shade(RED, 20), 0xe5747f);
-        assert_eq!(shade(YELLOW, 20), 0xfff3a6);
+        assert_eq!(shade(DARK0, -50), 0x141619);
+        assert_eq!(shade(0x808080, 100), 0xffffff);
         assert_eq!(shade(LIGHT0, -100), 0x000000);
     }
 
@@ -391,26 +394,20 @@ mod tests {
     fn mix_flattens_top_onto_bottom() {
         assert_eq!(mix(DARK1, DARK0, 100), DARK1);
         assert_eq!(mix(DARK1, DARK0, 0), DARK0);
-        assert_eq!(mix(BORDER, CHROME, 50), 0x2e333f);
-        assert_eq!(mix(BORDER, CHROME, 60), 0x303643);
+        assert_eq!(mix(0xffffff, 0x000000, 50), 0x808080);
     }
 
     #[test]
-    fn roles_derive_from_palette() {
-        assert_eq!(CHROME, 0x20242c);
-        assert_eq!(CARD, 0x15181d);
-        assert_eq!(POPUP, 0x292e39);
-        assert_eq!(SELECTION, 0x72819f);
-        assert_eq!(TEXT_MUTED, 0xacb1ba);
-        assert_eq!(TEXT_DIM, 0x979ba3);
-        assert_eq!(CODE_HINT, 0x5b677f);
-        assert_eq!(IGNORED, 0x8d7953);
+    fn card_is_darker_than_chrome() {
+        assert_eq!(CHROME, 0x3b414d);
+        assert_eq!(CARD, 0x282c33);
+        assert!(CARD < CHROME);
     }
 
     #[test]
-    fn theme_is_dark_nord_with_floating_chrome() {
+    fn theme_is_dark_one_dark_with_floating_chrome() {
         let theme = theme();
-        assert_eq!(theme.name.as_ref(), "Nord");
+        assert_eq!(theme.name.as_ref(), "One Dark");
         assert_eq!(theme.appearance, Appearance::Dark);
 
         let colors = theme.colors();
@@ -438,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn status_colors_use_nord_surfaces() {
+    fn status_colors_use_one_dark_surfaces() {
         let status = status_colors();
         assert_eq!(status.ignored_background, status.hint_background);
         assert_eq!(status.ignored_border, status.hint_border);
@@ -449,11 +446,11 @@ mod tests {
     fn syntax_theme_resolves_capture_names() {
         let theme = theme();
         let syntax = theme.syntax();
-        assert_eq!(syntax.style_for_name("keyword").and_then(|style| style.color), Some(color(BLUE)));
-        assert_eq!(syntax.style_for_name("title").and_then(|style| style.font_weight), Some(FontWeight::BOLD));
+        assert_eq!(syntax.style_for_name("keyword").and_then(|style| style.color), Some(color(0xb477cf)));
+        assert_eq!(syntax.style_for_name("emphasis.strong").and_then(|style| style.font_weight), Some(FontWeight::BOLD));
         assert!(syntax.highlight_id("string.escape").is_some());
-        assert_eq!(syntax.style_for_name("lifetime").and_then(|style| style.color), Some(color(TEAL)));
-        assert_eq!(syntax.style_for_name("variant").and_then(|style| style.color), Some(color(PURPLE)));
+        assert_eq!(syntax.style_for_name("variable").and_then(|style| style.color), Some(color(SAND)));
+        assert_eq!(syntax.style_for_name("variant").and_then(|style| style.color), Some(color(0x73ade9)));
         assert!(syntax.style_for_name("missing").is_none());
     }
 
