@@ -37,7 +37,10 @@ migrator, or Vim/Helix mode.
     linters, `clippy` (default on; off runs plain `cargo check` in
     rust-analyzer), `stylelint` (on) and `biome` (off). A server
     that is off isn't started and shows as not installed in the LSP menu.
-    Switches are read when a server starts, so a change needs a restart. The
+    Switches are read when a server starts. Saving the root
+    `.ed/workspace.json` in the editor restarts rust-analyzer, stylelint and
+    biome (even if `lint` didn't change), so a switch applies at once; an edit
+    made outside the editor still needs a manual restart. The
     app keeps `lint` when it rewrites the file and adds any missing switch
     with its default, so every switch is always listed; it only reads `lint`
     from each worktree's own root.

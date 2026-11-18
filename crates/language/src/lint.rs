@@ -11,6 +11,9 @@ pub const BIOME: LintSwitch = ("biome", false);
 /// Every switch, written to the `lint` section with its default when missing.
 pub const LINT_SWITCHES: &[LintSwitch] = &[CLIPPY, STYLELINT, BIOME];
 
+/// Servers that read the switches when they start, restarted when the `lint` section is saved.
+pub const LINT_SERVERS: &[&str] = &["rust-analyzer", "stylelint", "biome"];
+
 /// Whether the `lint.<key>` switch in the workspace state `text` is on. A missing file, key or
 /// anything but `"on"` / `"off"` means `default`.
 pub fn lint_enabled(text: Option<&str>, key: &str, default: bool) -> bool {
@@ -24,6 +27,7 @@ pub fn lint_enabled(text: Option<&str>, key: &str, default: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::LINT_SERVERS;
     use super::LINT_SWITCHES;
     use super::lint_enabled;
 
@@ -33,6 +37,11 @@ mod tests {
         keys.sort_unstable();
         keys.dedup();
         assert_eq!(keys.len(), LINT_SWITCHES.len());
+    }
+
+    #[test]
+    fn every_switch_has_a_server() {
+        assert_eq!(LINT_SERVERS.len(), LINT_SWITCHES.len());
     }
 
     #[test]

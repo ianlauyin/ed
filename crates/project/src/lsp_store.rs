@@ -21,10 +21,10 @@ mod document_symbols;
 mod dynamic_registration;
 mod file_watchers;
 mod folding_ranges;
-mod on_type_format;
 mod inlay_hints;
 pub mod log_store;
 pub mod lsp_ext_command;
+mod on_type_format;
 pub mod rust_analyzer_ext;
 mod semantic_tokens;
 mod server_lifecycle;
@@ -2264,6 +2264,10 @@ impl LspStore {
     }
 
     pub fn on_buffer_saved(&mut self, buffer: Entity<Buffer>, cx: &mut Context<Self>) -> Option<()> {
+        if File::from_dyn(buffer.read(cx).file()).is_some_and(|file| is_workspace_state_file(file.path())) {
+            let buffers = self.buffer_store.read(cx).buffers().collect();
+            self.restart_language_servers_for_buffers(buffers, lint_server_selectors(), cx);
+        }
         let file = File::from_dyn(buffer.read(cx).file())?;
         let worktree_id = file.worktree_id(cx);
         let abs_path = file.abs_path(cx);
@@ -2915,4 +2919,44 @@ async fn populate_labels_for_symbols(
 
 pub(crate) fn collapse_newlines(text: &str, separator: &str) -> String {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).join(separator)
+}
+
+/// Whether `path` is the worktree's `.ed/workspace.json`, whose `lint` switches servers read on start.
+fn is_workspace_state_file(path: &RelPath) -> bool {
+    path.as_unix_str() == language::WORKSPACE_STATE_FILE
+}
+
+/// The linter servers to restart after the `lint` switches are saved. Saving restarts them even when
+/// the section is unchanged: it's a rare, hand-made edit.
+fn lint_server_selectors() -> FxHashSet<LanguageServerSelector> {
+    language::LINT_SERVERS
+        .iter()
+        .map(|name| LanguageServerSelector::Name(LanguageServerName::new_static(name)))
+        .collect()
+}
+
+#[cfg(test)]
+mod lint_switch_tests {
+    use lsp::LanguageServerName;
+    use lsp::LanguageServerSelector;
+    use util::rel_path::RelPath;
+
+    use super::is_workspace_state_file;
+    use super::lint_server_selectors;
+
+    #[test]
+    fn only_the_root_workspace_state_file_matches() {
+        assert!(is_workspace_state_file(RelPath::from_unix_str(".ed/workspace.json").unwrap()));
+        assert!(!is_workspace_state_file(RelPath::from_unix_str("sub/.ed/workspace.json").unwrap()));
+        assert!(!is_workspace_state_file(RelPath::from_unix_str("workspace.json").unwrap()));
+    }
+
+    #[test]
+    fn restarts_every_lint_server() {
+        let selectors = lint_server_selectors();
+        for name in ["rust-analyzer", "stylelint", "biome"] {
+            assert!(selectors.contains(&LanguageServerSelector::Name(LanguageServerName::new_static(name))));
+        }
+        assert_eq!(selectors.len(), 3);
+    }
 }

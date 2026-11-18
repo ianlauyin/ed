@@ -114,6 +114,7 @@ pub use library::LibraryProvider;
 pub use library::LibraryRoot;
 pub use lint::BIOME;
 pub use lint::CLIPPY;
+pub use lint::LINT_SERVERS;
 pub use lint::LINT_SWITCHES;
 pub use lint::LintSwitch;
 pub use lint::STYLELINT;
