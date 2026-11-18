@@ -128,7 +128,7 @@ repository's `$PATH`; if none is found, the repository is not opened.
   expanded state is obvious. `git::Commit` /
   `git::Amend` from outside the editor open the panel and focus its commit
   editor (amend loads the last commit message) instead of opening a modal.
-- Not configurable: docked left only (360px default width), always has a
+- Not configurable: docked right only (360px default width), always has a
   status bar button, shows status icons (labels keep the default colour),
   folder icons in tree view, per-file and total diff stats, and no commit
   title length warning. Clicking an entry opens the project diff;

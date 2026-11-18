@@ -1636,7 +1636,7 @@ impl Panel for GitPanel {
     }
 
     fn position(&self, _: &Window, _: &App) -> DockPosition {
-        DockPosition::Left
+        DockPosition::Right
     }
 
     fn default_size(&self, _: &Window, _: &App) -> Pixels {

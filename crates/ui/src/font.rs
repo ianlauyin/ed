@@ -31,7 +31,7 @@ static UI_FONT: LazyLock<Font> = LazyLock::new(|| Font {
 });
 
 static BUFFER_FONT: LazyLock<Font> = LazyLock::new(|| Font {
-    family: "JetBrainsMono Nerd Font".into(),
+    family: "Menlo".into(),
     features: FontFeatures(Arc::default()),
     fallbacks: None,
     weight: FontWeight::NORMAL,
@@ -130,7 +130,7 @@ mod tests {
     fn fonts() {
         assert_eq!(ui_font().family.as_ref(), ".SystemUIFont");
         assert_eq!(ui_font().features.tag_value_list(), &[("calt".to_owned(), 0)]);
-        assert_eq!(buffer_font().family.as_ref(), "JetBrainsMono Nerd Font");
+        assert_eq!(buffer_font().family.as_ref(), "Menlo");
         assert!(buffer_font().features.tag_value_list().is_empty());
     }
 }

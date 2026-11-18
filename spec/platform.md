@@ -99,7 +99,9 @@ or UNC prefixes. There is no path-style abstraction; code uses
   ignored, and JSON language server proxy settings are not forwarded.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.
 - No bundled fonts: the UI defaults to the macOS system font (`.SystemUIFont`),
-  the minimap inherits the buffer font, and SVG/Mermaid text uses system fonts.
+  the buffer font is Menlo (ships with macOS; a missing font would fall back to
+  proportional Helvetica and break the terminal's cell grid), the minimap
+  inherits the buffer font, and SVG/Mermaid text uses system fonts.
 - No reduce-motion mode: GPUI has no `reduce_motion` flag and there is no
   `reduce_motion` setting; animations (spinners, GIFs, scrollbar fades,
   notification fades, cursor animation, smooth scrolling, dock open/close) always run.
