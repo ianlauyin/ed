@@ -65,6 +65,12 @@ fn is_supported_version(version: &str) -> bool {
     major_version(version).is_some_and(|major| major >= TsgoLspAdapter::MIN_MAJOR_VERSION)
 }
 
+/// Reference counts are tsgo code lenses, which are off by default.
+fn workspace_configuration() -> Value {
+    let language = serde_json::json!({ "referencesCodeLens": { "enabled": true, "showOnAllFunctions": true } });
+    serde_json::json!({ "typescript": language, "javascript": language })
+}
+
 #[async_trait(?Send)]
 impl LspAdapter for TsgoLspAdapter {
     fn name(&self) -> LanguageServerName {
@@ -95,6 +101,15 @@ impl LspAdapter for TsgoLspAdapter {
             ))
             .into()
         })
+    }
+
+    async fn workspace_configuration(
+        self: Arc<Self>,
+        _: &Arc<dyn LspAdapterDelegate>,
+        _: Option<lsp::Uri>,
+        _: &mut AsyncApp,
+    ) -> Result<Value> {
+        Ok(workspace_configuration())
     }
 
     async fn label_for_completion(
@@ -146,6 +161,16 @@ mod tests {
 
     use super::is_supported_version;
     use super::major_version;
+    use super::workspace_configuration;
+
+    #[test]
+    fn enables_references_code_lens() {
+        let config = workspace_configuration();
+        for language in ["typescript", "javascript"] {
+            assert_eq!(config[language]["referencesCodeLens"]["enabled"], true);
+            assert_eq!(config[language]["referencesCodeLens"]["showOnAllFunctions"], true);
+        }
+    }
 
     #[test]
     fn parses_major_version() {

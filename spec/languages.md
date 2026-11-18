@@ -201,6 +201,11 @@
     never used, since it is commonly an old global install.
   - TODO: remove the old-TypeScript (< 7) npx fallback once projects have
     moved to TypeScript 7.
+  - Reference counts (`referencesCodeLens`, on all functions) are enabled for
+    TypeScript and JavaScript through workspace configuration; they show as
+    code lenses in the hover popover.
+  - The LSP `initialized` notification must carry `{}`, not `null`: tsgo
+    rejects `null`, never creates its session, and panics on the first request.
   - JavaScript gets the same tsgo features. Type errors only show where the
     project opts in (`checkJs` / `// @ts-check`).
 - `stylelint` (`stylelint-language-server --stdio`, from

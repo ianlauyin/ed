@@ -1229,7 +1229,8 @@ pub struct ClientInfo {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
-pub struct InitializedParams;
+/// Serializes as `{}`: tsgo rejects the `null` a unit struct would produce.
+pub struct InitializedParams {}
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 pub struct GenericRegistrationOptions {
@@ -2794,6 +2795,7 @@ mod tests {
     use super::ConfigurationItem;
     use super::DiagnosticMessage;
     use super::InitializeParams;
+    use super::InitializedParams;
     use super::LanguageString;
     use super::MarkedString;
     use super::MarkupContent;
@@ -2822,6 +2824,11 @@ mod tests {
     {
         let value = serde_json::from_str::<T>(json).unwrap();
         assert_eq!(&value, expected);
+    }
+
+    #[test]
+    fn initialized_params_serialize_as_empty_object() {
+        assert_eq!(serde_json::to_string(&InitializedParams {}).unwrap(), "{}");
     }
 
     #[test]
