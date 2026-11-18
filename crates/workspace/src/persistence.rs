@@ -318,12 +318,19 @@ pub(crate) fn write_workspace_state(
     })
 }
 
-/// Carries the hand-edited `lint` section of the file being replaced over to `json`.
+/// Carries the hand-edited `lint` section of the file being replaced over to `json`, adding every
+/// missing switch with its default so all of them are visible to edit.
 pub(crate) fn with_user_settings(json: String, existing: Option<&str>) -> String {
-    let lint = existing
+    let mut lint = existing
         .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
-        .and_then(|mut state| state.get_mut("lint").map(serde_json::Value::take));
-    let Some(lint) = lint else { return json };
+        .and_then(|mut state| state.get_mut("lint").map(serde_json::Value::take))
+        .filter(serde_json::Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({}));
+    for (key, default) in language::LINT_SWITCHES {
+        if lint.get(key).is_none() {
+            lint[key] = (if *default { "on" } else { "off" }).into();
+        }
+    }
     match serde_json::from_str::<serde_json::Value>(&json) {
         Ok(mut state) => {
             state["lint"] = lint;
@@ -582,14 +589,25 @@ mod tests {
     #[test]
     fn with_user_settings_keeps_the_lint_section() {
         let json = r#"{"docks":{}}"#.to_owned();
-        assert_eq!(with_user_settings(json.clone(), None), json);
-        assert_eq!(with_user_settings(json.clone(), Some(r#"{"docks":{"x":1}}"#)), json);
-        assert_eq!(with_user_settings(json.clone(), Some("not json")), json);
-
-        let merged = with_user_settings(json, Some(r#"{"lint":{"rust":"off"},"docks":{"x":1}}"#));
+        let merged = with_user_settings(json, Some(r#"{"lint":{"clippy":"off","rust":"off"},"docks":{"x":1}}"#));
         let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
+        assert_eq!(merged["lint"]["clippy"], "off");
         assert_eq!(merged["lint"]["rust"], "off");
+        assert_eq!(merged["lint"]["stylelint"], "on");
+        assert_eq!(merged["lint"]["biome"], "off");
         assert_eq!(merged["docks"], serde_json::json!({}));
+    }
+
+    #[test]
+    fn with_user_settings_writes_every_lint_switch() {
+        let all = serde_json::json!({ "clippy": "on", "stylelint": "on", "biome": "off" });
+        let json = r#"{"docks":{}}"#.to_owned();
+        for existing in [None, Some(r#"{"docks":{"x":1}}"#), Some("not json"), Some(r#"{"lint":"on"}"#)] {
+            let merged: serde_json::Value = serde_json::from_str(&with_user_settings(json.clone(), existing)).unwrap();
+            assert_eq!(merged["lint"], all);
+            assert_eq!(merged["docks"], serde_json::json!({}));
+        }
+        assert_eq!(with_user_settings("not json".to_owned(), None), "not json");
     }
 
     #[test]

@@ -38,8 +38,9 @@ migrator, or Vim/Helix mode.
     rust-analyzer), `stylelint` (on) and `biome` (off). A server
     that is off isn't started and shows as not installed in the LSP menu.
     Switches are read when a server starts, so a change needs a restart. The
-    app keeps `lint` when it rewrites the file, but only reads it from each
-    worktree's own root.
+    app keeps `lint` when it rewrites the file and adds any missing switch
+    with its default, so every switch is always listed; it only reads `lint`
+    from each worktree's own root.
 - Tabs persist only their own state. An editor tab on a file keeps only its
   path: on restore the file is read from disk, and nothing else (scroll,
   selections, folds, unsaved edits) is kept, so editing or scrolling a file

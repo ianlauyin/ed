@@ -23,10 +23,12 @@ use gpui::AsyncApp;
 use gpui::Entity;
 use gpui::SharedString;
 use gpui::Task;
+use language::WORKSPACE_STATE_FILE;
 use language::language_settings::LanguageSettings;
 use language::language_settings::RewrapBehavior;
 use language::language_settings::SemanticTokenRules;
 use language::language_settings::WordsCompletionMode;
+use language::lint_enabled;
 #[allow(clippy::wildcard_imports)]
 pub(crate) use language::*;
 use lsp::InitializeParams;
@@ -40,8 +42,6 @@ use task::TaskTemplate;
 use task::TaskTemplates;
 use task::TaskVariables;
 use task::VariableName;
-use language::WORKSPACE_STATE_FILE;
-use language::lint_enabled;
 use util::ResultExt as _;
 use util::merge_json_value_into;
 use util::rel_path::RelPath;
@@ -219,7 +219,7 @@ impl LspAdapter for RustLspAdapter {
         _: &mut AsyncApp,
     ) -> Result<Option<serde_json::Value>> {
         let state = delegate.read_text_file(RelPath::from_unix_str(WORKSPACE_STATE_FILE).expect("valid path")).await;
-        let clippy = lint_enabled(state.ok().as_deref(), "clippy", true);
+        let clippy = lint_enabled(state.ok().as_deref(), language::CLIPPY.0, language::CLIPPY.1);
         let clippy_configs = if clippy { existing_clippy_configs(delegate.worktree_root_path()).await } else { vec![] };
         Ok(Some(initialization_options(&clippy_configs, clippy)))
     }
@@ -1130,10 +1130,7 @@ mod tests {
         let mut expected = base;
         expected["vfs"] = json!({ "extraIncludes": ["/p/clippy.toml", "/p/.clippy.toml"] });
         assert_eq!(
-            initialization_options(
-                &[PathBuf::from("/p/clippy.toml"), PathBuf::from("/p/.clippy.toml")],
-                true
-            ),
+            initialization_options(&[PathBuf::from("/p/clippy.toml"), PathBuf::from("/p/.clippy.toml")], true),
             expected
         );
     }

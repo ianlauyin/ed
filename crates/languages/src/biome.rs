@@ -36,7 +36,7 @@ impl LspAdapter for BiomeLspAdapter {
     }
 
     fn lint_switch(&self) -> Option<(&'static str, bool)> {
-        Some(("biome", false))
+        Some(language::BIOME)
     }
 
     fn binary_name(&self) -> String {

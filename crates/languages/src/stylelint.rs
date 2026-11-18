@@ -43,7 +43,7 @@ impl LspAdapter for StylelintLspAdapter {
     }
 
     fn lint_switch(&self) -> Option<(&'static str, bool)> {
-        Some(("stylelint", true))
+        Some(language::STYLELINT)
     }
 
     fn binary_name(&self) -> String {
