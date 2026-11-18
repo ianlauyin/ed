@@ -42,6 +42,10 @@ impl LspAdapter for StylelintLspAdapter {
         StylelintLspAdapter::SERVER_NAME
     }
 
+    fn lint_switch(&self) -> Option<(&'static str, bool)> {
+        Some(("stylelint", true))
+    }
+
     fn binary_name(&self) -> String {
         StylelintLspAdapter::BIN.into()
     }

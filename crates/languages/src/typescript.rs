@@ -508,7 +508,7 @@ fn semantic_token_rules() -> SemanticTokenRules {
         .expect("failed to parse typescript semantic_token_rules.json")
 }
 
-pub(crate) fn languages(fs: Arc<dyn Fs>) -> Vec<LanguageDef> {
+pub(crate) fn languages(fs: Arc<dyn Fs>, biome: Arc<dyn LspAdapter>) -> Vec<LanguageDef> {
     let rules = semantic_token_rules();
     let tsgo: Arc<dyn LspAdapter> = Arc::new(TsgoLspAdapter::new(Arc::clone(&fs)));
     let context: Arc<dyn ContextProvider> = Arc::new(TypeScriptContextProvider::new(fs));
@@ -516,7 +516,7 @@ pub(crate) fn languages(fs: Arc<dyn Fs>) -> Vec<LanguageDef> {
         .into_iter()
         .map(|(dir, grammar)| LanguageDef {
             grammar: Some(grammar),
-            adapters: vec![Arc::clone(&tsgo)],
+            adapters: vec![Arc::clone(&tsgo), Arc::clone(&biome)],
             context: Some(Arc::clone(&context)),
             semantic_token_rules: Some(rules.clone()),
             ..LanguageDef::new(dir, settings())

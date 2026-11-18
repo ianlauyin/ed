@@ -18,6 +18,7 @@ mod language_registry;
 
 pub mod language_settings;
 mod library;
+mod lint;
 mod manifest;
 mod outline;
 mod runnable;
@@ -52,6 +53,8 @@ pub use diagnostic::RelatedLocation;
 pub use diagnostic_set::DiagnosticEntry;
 pub use diagnostic_set::DiagnosticEntryRef;
 pub use fallback_highlight::FallbackHighlighter;
+pub use lint::WORKSPACE_STATE_FILE;
+pub use lint::lint_enabled;
 use gpui::App;
 use gpui::AsyncApp;
 use gpui::Entity;
@@ -351,6 +354,19 @@ impl CachedLspAdapter {
         delegate: &Arc<dyn LspAdapterDelegate>,
         cx: &AsyncApp,
     ) -> Result<LanguageServerBinary> {
+        if let Some((key, default)) = self.adapter.lint_switch() {
+            let text = match RelPath::from_unix_str(WORKSPACE_STATE_FILE) {
+                Ok(path) => delegate.read_text_file(path).await.ok(),
+                Err(_) => None,
+            };
+            if !lint_enabled(text.as_deref(), key, default) {
+                return Err(ServerNotInstalled(format!(
+                    "language server {} is turned off: set `lint.{key}` to \"on\" in {WORKSPACE_STATE_FILE}",
+                    self.name(),
+                ))
+                .into());
+            }
+        }
         self.adapter.find_binary(delegate, cx).await
     }
 
@@ -447,6 +463,12 @@ pub trait LspAdapter: 'static + Send + Sync {
     /// when the server is not installed.
     fn binary_name(&self) -> String {
         self.name().0.to_string()
+    }
+
+    /// For linter servers: the `lint.<key>` switch in `.ed/workspace.json` and whether it is
+    /// on by default. A server that is off isn't started.
+    fn lint_switch(&self) -> Option<(&'static str, bool)> {
+        None
     }
 
     /// Finds the binary to start the server with. Adapters override this instead of

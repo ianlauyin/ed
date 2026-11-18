@@ -33,11 +33,13 @@ migrator, or Vim/Helix mode.
     Unreadable files are ignored.
     Identical contents aren't rewritten. Windows with no root folder aren't
     persisted.
-    The one hand-edited section is `lint` (`{ "lint": { "rust": "check" | "clippy" | "off" } }`,
-    default `clippy`): rust-analyzer's check-on-save, read when the server
-    starts, so a change needs a server restart. `off` disables check-on-save
-    diagnostics only. The app keeps `lint` when it rewrites the file, but only
-    reads it from each worktree's own root.
+    The one hand-edited section is `lint`: `"on"` / `"off"` switches for the
+    linters, `clippy` (default on; off runs plain `cargo check` in
+    rust-analyzer), `stylelint` (on) and `biome` (off). A server
+    that is off isn't started and shows as not installed in the LSP menu.
+    Switches are read when a server starts, so a change needs a restart. The
+    app keeps `lint` when it rewrites the file, but only reads it from each
+    worktree's own root.
 - Tabs persist only their own state. An editor tab on a file keeps only its
   path: on restore the file is read from disk, and nothing else (scroll,
   selections, folds, unsaved edits) is kept, so editing or scrolling a file

@@ -40,6 +40,8 @@ use task::TaskTemplate;
 use task::TaskTemplates;
 use task::TaskVariables;
 use task::VariableName;
+use language::WORKSPACE_STATE_FILE;
+use language::lint_enabled;
 use util::ResultExt as _;
 use util::merge_json_value_into;
 use util::rel_path::RelPath;
@@ -217,10 +219,9 @@ impl LspAdapter for RustLspAdapter {
         _: &mut AsyncApp,
     ) -> Result<Option<serde_json::Value>> {
         let state = delegate.read_text_file(RelPath::from_unix_str(WORKSPACE_STATE_FILE).expect("valid path")).await;
-        let lint = state.ok().map_or(RustLint::Clippy, |text| parse_rust_lint(&text));
-        let clippy_configs =
-            if lint == RustLint::Clippy { existing_clippy_configs(delegate.worktree_root_path()).await } else { vec![] };
-        Ok(Some(initialization_options(&clippy_configs, lint)))
+        let clippy = lint_enabled(state.ok().as_deref(), "clippy", true);
+        let clippy_configs = if clippy { existing_clippy_configs(delegate.worktree_root_path()).await } else { vec![] };
+        Ok(Some(initialization_options(&clippy_configs, clippy)))
     }
 
     fn process_diagnostics(&self, params: &mut lsp::PublishDiagnosticsParams, _: LanguageServerId) {
@@ -926,35 +927,13 @@ async fn existing_clippy_configs(worktree_root: &Path) -> Vec<PathBuf> {
     configs
 }
 
-const WORKSPACE_STATE_FILE: &str = ".ed/workspace.json";
-
-/// How rust-analyzer checks on save, from `lint.rust` in the project's `.ed/workspace.json`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RustLint {
-    Check,
-    Clippy,
-    Off,
-}
-
-/// Anything missing or unrecognized means clippy.
-fn parse_rust_lint(text: &str) -> RustLint {
-    let state: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
-    match state.pointer("/lint/rust").and_then(|value| value.as_str()) {
-        Some("check") => RustLint::Check,
-        Some("off") => RustLint::Off,
-        _ => RustLint::Clippy,
-    }
-}
-
-/// rust-analyzer options, plus the clippy configs at `paths` as `vfs.extraIncludes`.
-fn initialization_options(paths: &[PathBuf], lint: RustLint) -> serde_json::Value {
+/// rust-analyzer options, plus the clippy configs at `paths` as `vfs.extraIncludes`. With clippy
+/// off, check-on-save runs plain `cargo check`.
+fn initialization_options(paths: &[PathBuf], clippy: bool) -> serde_json::Value {
     let mut options = json!({
-        "check": { "command": if lint == RustLint::Check { "check" } else { "clippy" } },
+        "check": { "command": if clippy { "clippy" } else { "check" } },
         "cargo": { "features": "all" },
     });
-    if lint == RustLint::Off {
-        options["checkOnSave"] = json!(false);
-    }
     if !paths.is_empty() {
         options["vfs"] = json!({ "extraIncludes": paths });
     }
@@ -1086,9 +1065,7 @@ mod tests {
     use super::RustLspAdapter;
     use super::dedup_diagnostics;
     use super::existing_clippy_configs;
-    use super::RustLint;
     use super::initialization_options;
-    use super::parse_rust_lint;
     use super::str;
     use super::test_mod_filter;
 
@@ -1148,37 +1125,24 @@ mod tests {
                 "check": { "command": "clippy" },
             "cargo": { "features": "all" },
         });
-        assert_eq!(initialization_options(&[], RustLint::Clippy), base);
+        assert_eq!(initialization_options(&[], true), base);
 
         let mut expected = base;
         expected["vfs"] = json!({ "extraIncludes": ["/p/clippy.toml", "/p/.clippy.toml"] });
         assert_eq!(
             initialization_options(
                 &[PathBuf::from("/p/clippy.toml"), PathBuf::from("/p/.clippy.toml")],
-                RustLint::Clippy
+                true
             ),
             expected
         );
     }
 
     #[test]
-    fn initialization_options_follow_lint() {
-        let check = initialization_options(&[], RustLint::Check);
-        assert_eq!(check["check"]["command"], "check");
-        assert_eq!(check.get("checkOnSave"), None);
-
-        let off = initialization_options(&[], RustLint::Off);
-        assert_eq!(off["checkOnSave"], false);
-    }
-
-    #[test]
-    fn parse_rust_lint_reads_workspace_state() {
-        assert_eq!(parse_rust_lint(r#"{ "lint": { "rust": "check" } }"#), RustLint::Check);
-        assert_eq!(parse_rust_lint(r#"{ "lint": { "rust": "off" } }"#), RustLint::Off);
-        assert_eq!(parse_rust_lint(r#"{ "lint": { "rust": "clippy" } }"#), RustLint::Clippy);
-        assert_eq!(parse_rust_lint(r#"{ "lint": { "rust": "nope" } }"#), RustLint::Clippy);
-        assert_eq!(parse_rust_lint(r#"{ "center_group": {} }"#), RustLint::Clippy);
-        assert_eq!(parse_rust_lint("not json"), RustLint::Clippy);
+    fn initialization_options_follow_clippy_switch() {
+        let off = initialization_options(&[], false);
+        assert_eq!(off["check"]["command"], "check");
+        assert_eq!(initialization_options(&[], true)["check"]["command"], "clippy");
     }
 
     #[test]

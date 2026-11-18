@@ -76,7 +76,8 @@
   hover, diagnostics and document symbols (the outline). Other HCL files (`.hcl`, stacks, tests) are not
   registered and stay Plain Text.
 - rust-analyzer's check runs `cargo clippy` unless the project's
-  `lint.rust` (`.ed/workspace.json`, see `configuration.md`) says `check` or `off`. Clippy's Cargo-group lints
+  `lint.clippy` (`.ed/workspace.json`, see `configuration.md`) is `"off"`, which
+  runs `cargo check`. Clippy's Cargo-group lints
   (`wildcard_dependencies`, etc.) have no span and are reported at line 1 of
   the clippy config, once per crate and target. rust-analyzer drops
   diagnostics for files outside its VFS, and a virtual workspace root isn't in
@@ -188,8 +189,8 @@
   otherwise a server that never starts would have no menu entry. Any other
   startup problem (spawn or initialize failure, tsgo finding
   TypeScript < 7) is still a failure ("Failed to run …", "Error").
-- JavaScript, TypeScript and TSX run one server: `tsgo`. vtsls,
-  typescript-language-server, Biome and ESLint are removed.
+- JavaScript, TypeScript and TSX run one required server, `tsgo`. vtsls,
+  typescript-language-server and ESLint are removed.
   - `tsgo` is the TypeScript 7 native language server (`tsc --lsp --stdio`).
     It provides completions, navigation, rename, hover, inlay hints and type
     errors. Only TypeScript 7+ is supported: the nearest
@@ -211,6 +212,11 @@
   npx (the server needs Node ≥ 22.17). There is no formatting.
 - Go has no language server (gopls is removed); Go files keep tree-sitter
   highlighting, outline, runnables and tasks.
+- `biome` (`biome lsp-proxy`) runs for JavaScript, TypeScript, TSX, JSON, JSONC
+  and CSS (alongside the other servers for those) only when `lint.biome` is
+  `"on"` (default off). It provides lint diagnostics and code actions and
+  resolves from `node_modules/.bin` above the worktree root, then `PATH`, then
+  npx. `lint.stylelint` (default on) switches Stylelint off the same way.
 - There are no `lsp.<server>` settings. Each adapter hardcodes its server's
   binary arguments, initialization options and workspace configuration
   (rust-analyzer: clippy check, all cargo features). A
@@ -244,8 +250,7 @@
   `__virtual__` paths are not resolved, and tsgo only uses
   `node_modules/typescript` (never `.yarn/sdks`).
   Yarn remains usable as a package manager / task runner (`yarn.lock` detection).
-- Biome and Prettier are not used at all: no server, formatter, plugin host or
-  setting.
+- Prettier is not used at all, and Biome only as the optional lint server.
 - External library sources (e.g. dependency crates) open as library worktrees,
   see "External libraries" in `project-panel.md`. Each language recognizes its
   own library paths through a `LibraryProvider` registered by the `languages`

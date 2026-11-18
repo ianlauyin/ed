@@ -72,10 +72,10 @@ pub(crate) fn settings() -> LanguageSettings {
     }
 }
 
-pub(crate) fn languages(fs: Arc<dyn Fs>) -> Vec<LanguageDef> {
+pub(crate) fn languages(biome: Arc<dyn LspAdapter>, fs: Arc<dyn Fs>) -> Vec<LanguageDef> {
     vec![LanguageDef {
         grammar: Some(tree_sitter_css::LANGUAGE.into()),
-        adapters: vec![Arc::new(CssLspAdapter), Arc::new(StylelintLspAdapter::new(fs))],
+        adapters: vec![Arc::new(CssLspAdapter), biome, Arc::new(StylelintLspAdapter::new(fs))],
         ..LanguageDef::new("css", settings())
     }]
 }
