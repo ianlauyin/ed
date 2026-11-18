@@ -61,8 +61,8 @@
   outline. LSP symbols are fetched per buffer, so in a multibuffer refreshing one
   file never cancels another file's pending fetch.
 - Diff, Git Commit, Go Mod, Go Work, Terraform, Terraform Vars and TOML are
-  still registered languages (file matching, comments, brackets, gopls for Go
-  Mod/Work, terraform-ls for Terraform, tombi for TOML, Diff's
+  still registered languages (file matching, comments, brackets,
+  terraform-ls for Terraform, tombi for TOML, Diff's
   keep-trailing-whitespace settings, the Git Commit editor)
   but have no grammar, so they get rough highlighting only and none of the
   structure-aware features.
@@ -141,14 +141,11 @@
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
 - Python tooling is uv-only:
-  - The only Python language servers are `ty` (types, completions) and `ruff`
-    (lint, format, organize imports); both run by default and `ruff` is the
-    formatter. pyright, basedpyright and pylsp are removed.
-  - Each resolves from the worktree's `.venv/bin`, then `PATH`, then
-    `uvx <tool> server` (latest release from uv's cache).
+  - Python has no language server (ty, ruff, pyright, basedpyright and pylsp
+    are removed): no completions, diagnostics or formatter. Files keep
+    tree-sitter highlighting, outline, runnables and tasks.
   - There is no toolchain/virtual-environment discovery, selector, status bar
-    item or persisted toolchain. The only environment ed knows is `.venv` at
-    the worktree root; ty finds it on its own.
+    item or persisted toolchain.
   - Built-in Python tasks (run file/module/selection, pytest) run
     through `uv run python …` from the worktree root.
   - `terminal.detect_venv` (bool, default true): terminals and tasks opened in a
@@ -191,8 +188,8 @@
   otherwise a server that never starts would have no menu entry. Any other
   startup problem (spawn or initialize failure, tsgo finding
   TypeScript < 7) is still a failure ("Failed to run …", "Error").
-- JavaScript, TypeScript and TSX run two servers, `tsgo` and `biome`. vtsls,
-  typescript-language-server and ESLint are removed.
+- JavaScript, TypeScript and TSX run one server: `tsgo`. vtsls,
+  typescript-language-server, Biome and ESLint are removed.
   - `tsgo` is the TypeScript 7 native language server (`tsc --lsp --stdio`).
     It provides completions, navigation, rename, hover, inlay hints and type
     errors. Only TypeScript 7+ is supported: the nearest
@@ -205,18 +202,15 @@
     moved to TypeScript 7, and drop Prettier formatting support in favour of Biome.
   - JavaScript gets the same tsgo features. Type errors only show where the
     project opts in (`checkJs` / `// @ts-check`).
-- `biome` (`biome lsp-proxy`) runs for JavaScript, TypeScript, TSX, JSON, JSONC
-  and CSS (alongside the JSON and CSS servers for those). It provides lint
-  diagnostics and code actions (`source.fixAll.biome`,
-  `source.organizeImports.biome`). It resolves like the Biome formatter, from the
-  worktree root. Formatting stays on the Biome CLI (below).
 - `stylelint` (`stylelint-language-server --stdio`, from
-  `@stylelint/language-server`) also runs for CSS, after the CSS server and
-  Biome. It provides lint diagnostics and code actions
+  `@stylelint/language-server`) also runs for CSS, after the CSS server.
+  It provides lint diagnostics and code actions
   (`source.fixAll.stylelint`) using the project's own `stylelint` and config; in
   projects without `stylelint` installed it reports nothing. It resolves from the
   nearest `node_modules/.bin` at or above the worktree root, then `PATH`, then
-  npx (the server needs Node ≥ 22.17). Formatting stays on Biome.
+  npx (the server needs Node ≥ 22.17). Formatting stays on the Biome / Prettier CLI (below).
+- Go has no language server (gopls is removed); Go files keep tree-sitter
+  highlighting, outline, runnables and tasks.
 - There are no `lsp.<server>` settings. Each adapter hardcodes its server's
   binary arguments, initialization options and workspace configuration
   (rust-analyzer: nightly rustfmt, clippy check, all cargo features). A

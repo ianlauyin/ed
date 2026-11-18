@@ -19,7 +19,6 @@ use rust::CargoManifestProvider;
 use rust_embed::RustEmbed;
 
 mod bash;
-mod biome;
 mod css;
 mod diff;
 mod env;
@@ -44,22 +43,21 @@ pub(crate) use package_json::PackageJson;
 pub(crate) use package_json::PackageJsonData;
 
 pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
-    let biome: Arc<dyn LspAdapter> = Arc::new(biome::BiomeLspAdapter::new(Arc::clone(&fs)));
     let definitions = [
         bash::languages(),
-        css::languages(Arc::clone(&biome), Arc::clone(&fs)),
+        css::languages(Arc::clone(&fs)),
         diff::languages(),
         env::languages(),
         git_commit::languages(),
         go::languages(),
         html::languages(),
-        json::languages(Arc::clone(&languages), Arc::clone(&biome)),
+        json::languages(Arc::clone(&languages)),
         markdown::languages(),
         python::languages(),
         rust::languages(),
         terraform::languages(),
         tombi::languages(),
-        typescript::languages(fs, biome),
+        typescript::languages(fs),
         yaml::languages(),
     ];
     for definition in definitions.into_iter().flatten() {

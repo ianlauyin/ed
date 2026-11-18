@@ -82,6 +82,7 @@ mod tests {
     use super::OsString;
     use super::PathBuf;
     use super::resolve_command;
+    use super::working_dir;
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = env::temp_dir().join(format!("biome-{name}-{}", process::id()));

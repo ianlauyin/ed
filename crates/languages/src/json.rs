@@ -261,19 +261,19 @@ pub(crate) fn settings() -> LanguageSettings {
     }
 }
 
-pub(crate) fn languages(registry: Arc<LanguageRegistry>, biome: Arc<dyn LspAdapter>) -> Vec<LanguageDef> {
+pub(crate) fn languages(registry: Arc<LanguageRegistry>) -> Vec<LanguageDef> {
     let adapter: Arc<dyn LspAdapter> = Arc::new(JsonLspAdapter::new(registry));
     let context: Arc<dyn ContextProvider> = Arc::new(JsonTaskProvider);
     vec![
         LanguageDef {
             grammar: Some(tree_sitter_json::LANGUAGE.into()),
-            adapters: vec![Arc::clone(&adapter), Arc::clone(&biome)],
+            adapters: vec![Arc::clone(&adapter)],
             context: Some(Arc::clone(&context)),
             ..LanguageDef::new("json", settings())
         },
         LanguageDef {
             grammar: Some(tree_sitter_json::LANGUAGE.into()),
-            adapters: vec![adapter, biome],
+            adapters: vec![adapter],
             context: Some(context),
             file_types: &["tsconfig*.json"],
             ..LanguageDef::new("jsonc", settings())
