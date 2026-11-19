@@ -385,10 +385,7 @@ pub(crate) fn languages() -> Vec<LanguageDef> {
             context: Some(Arc::clone(&context)),
             ..LanguageDef::new("go", settings())
         },
-        LanguageDef {
-            context: Some(Arc::clone(&context)),
-            ..LanguageDef::new("gomod", mod_settings())
-        },
+        LanguageDef { context: Some(Arc::clone(&context)), ..LanguageDef::new("gomod", mod_settings()) },
         LanguageDef { context: Some(context), ..LanguageDef::new("gowork", mod_settings()) },
     ]
 }

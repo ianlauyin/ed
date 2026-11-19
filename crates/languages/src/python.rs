@@ -186,7 +186,7 @@ pub(crate) fn settings() -> LanguageSettings {
 pub(crate) fn languages() -> Vec<LanguageDef> {
     vec![LanguageDef {
         grammar: Some(tree_sitter_python::LANGUAGE.into()),
-                context: Some(Arc::new(PythonContextProvider)),
+        context: Some(Arc::new(PythonContextProvider)),
         manifest_name: Some(SharedString::new_static("pyproject.toml").into()),
         ..LanguageDef::new("python", settings())
     }]

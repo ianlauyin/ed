@@ -43,15 +43,9 @@ use crate::pane;
 use crate::pane::Pane;
 use crate::searchable::SearchableItemHandle;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct SaveOptions {
     pub autosave: bool,
-}
-
-impl Default for SaveOptions {
-    fn default() -> Self {
-        Self { autosave: false }
-    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]

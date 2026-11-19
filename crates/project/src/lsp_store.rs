@@ -2537,18 +2537,6 @@ impl LspStore {
         hasher.finalize().as_slice().try_into().expect("sha256 digest is 32 bytes")
     }
 
-    pub fn environment_for_buffer(
-        &self,
-        buffer: &Entity<Buffer>,
-        cx: &mut Context<Self>,
-    ) -> Shared<Task<Option<FxHashMap<String, String>>>> {
-        if let Some(environment) = &Some(self.local.environment.clone()) {
-            environment.update(cx, |env, cx| env.buffer_environment(buffer, &self.worktree_store, cx))
-        } else {
-            Task::ready(None).shared()
-        }
-    }
-
     pub fn language_server_adapter_for_id(&self, id: LanguageServerId) -> Option<Arc<CachedLspAdapter>> {
         match self.local.language_servers.get(&id)? {
             LanguageServerState::Running { adapter, .. } => Some(Arc::clone(adapter)),

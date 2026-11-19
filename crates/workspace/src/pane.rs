@@ -1873,9 +1873,7 @@ impl Pane {
             return Ok(true);
         };
 
-        if save_intent == SaveIntent::Save
-            && cx.update(|_window, cx| !item.capability(cx).editable())?
-        {
+        if save_intent == SaveIntent::Save && cx.update(|_window, cx| !item.capability(cx).editable())? {
             return Ok(true);
         }
 

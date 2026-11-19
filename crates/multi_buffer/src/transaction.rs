@@ -234,15 +234,6 @@ impl MultiBuffer {
         self.history.start_transaction(now)
     }
 
-    pub fn last_transaction_id(&self, cx: &App) -> Option<TransactionId> {
-        if let Some(buffer) = self.as_singleton() {
-            buffer.read(cx).peek_undo_stack().map(text::HistoryEntry::transaction_id)
-        } else {
-            let last_transaction = self.history.undo_stack.last()?;
-            Some(last_transaction.id)
-        }
-    }
-
     pub fn end_transaction(&mut self, cx: &mut Context<Self>) -> Option<TransactionId> {
         self.end_transaction_at(Instant::now(), cx)
     }

@@ -1230,6 +1230,7 @@ pub struct ClientInfo {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
 /// Serializes as `{}`: tsgo rejects the `null` a unit struct would produce.
+#[allow(clippy::empty_structs_with_brackets)]
 pub struct InitializedParams {}
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]

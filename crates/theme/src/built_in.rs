@@ -401,7 +401,7 @@ mod tests {
     fn card_is_darker_than_chrome() {
         assert_eq!(CHROME, 0x3b414d);
         assert_eq!(CARD, 0x282c33);
-        assert!(CARD < CHROME);
+        const { assert!(CARD < CHROME) };
     }
 
     #[test]
@@ -447,7 +447,10 @@ mod tests {
         let theme = theme();
         let syntax = theme.syntax();
         assert_eq!(syntax.style_for_name("keyword").and_then(|style| style.color), Some(color(0xb477cf)));
-        assert_eq!(syntax.style_for_name("emphasis.strong").and_then(|style| style.font_weight), Some(FontWeight::BOLD));
+        assert_eq!(
+            syntax.style_for_name("emphasis.strong").and_then(|style| style.font_weight),
+            Some(FontWeight::BOLD)
+        );
         assert!(syntax.highlight_id("string.escape").is_some());
         assert_eq!(syntax.style_for_name("variable").and_then(|style| style.color), Some(color(SAND)));
         assert_eq!(syntax.style_for_name("variant").and_then(|style| style.color), Some(color(0x73ade9)));

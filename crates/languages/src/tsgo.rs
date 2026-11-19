@@ -82,14 +82,14 @@ impl LspAdapter for TsgoLspAdapter {
     /// `typescript`, or with an older one, run the latest 7.x through npx and leave
     /// the project untouched.
     async fn find_binary(&self, delegate: &Arc<dyn LspAdapterDelegate>, _: &AsyncApp) -> Result<LanguageServerBinary> {
-        if let Some(installed) = self.installed_typescript(delegate.worktree_root_path()).await {
-            if is_supported_version(&installed.version) {
-                return Ok(LanguageServerBinary {
-                    path: installed.bin,
-                    env: Some(delegate.shell_env().await),
-                    arguments: Self::ARGUMENTS.iter().map(Into::into).collect(),
-                });
-            }
+        if let Some(installed) = self.installed_typescript(delegate.worktree_root_path()).await
+            && is_supported_version(&installed.version)
+        {
+            return Ok(LanguageServerBinary {
+                path: installed.bin,
+                env: Some(delegate.shell_env().await),
+                arguments: Self::ARGUMENTS.iter().map(Into::into).collect(),
+            });
         }
 
         npx::npx_binary(delegate, &[Self::NPX_PACKAGE], "tsc", Self::ARGUMENTS).await.ok_or_else(|| {

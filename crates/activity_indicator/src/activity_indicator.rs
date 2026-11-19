@@ -497,9 +497,7 @@ const MAX_MESSAGE_LEN: usize = 50;
 
 impl Render for ActivityIndicator {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let result = h_flex()
-            .id("activity-indicator")
-            .on_action(cx.listener(Self::show_error_message));
+        let result = h_flex().id("activity-indicator").on_action(cx.listener(Self::show_error_message));
 
         let Some(content) = self.content_to_render(cx) else {
             return result;
