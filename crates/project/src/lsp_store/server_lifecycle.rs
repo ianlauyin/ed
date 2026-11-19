@@ -248,11 +248,10 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
             .collect()
     }
 
+    // Reads from disk, not the worktree snapshot: servers start on project open before the scan has
+    // reached `.ed/` (often gitignored), and the lint switches must still apply.
     async fn read_text_file(&self, path: &RelPath) -> Result<String> {
-        let entry =
-            self.worktree.entry_for_path(path).with_context(|| format!("no worktree entry for path {path:?}"))?;
-        let abs_path = self.worktree.absolutize(&entry.path);
-        self.fs.load(&abs_path).await
+        self.fs.load(&self.worktree.absolutize(path)).await
     }
 }
 
