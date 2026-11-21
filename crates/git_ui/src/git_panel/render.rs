@@ -525,7 +525,8 @@ impl GitPanel {
             )
             .with_handle(self.commit_menu_handle.clone())
             .menu({
-                let git_panel = cx.entity();
+                // Weak: the menu handle the panel owns keeps this builder.
+                let git_panel = cx.weak_entity();
                 let has_previous_commit = self.head_commit(cx).is_some();
                 let amend = self.amend_pending();
                 let signoff = self.signoff_enabled;
@@ -537,7 +538,7 @@ impl GitPanel {
                             .when_some(keybinding_target.clone(), |el, keybinding_target| el.context(keybinding_target))
                             .when(has_previous_commit, |this| {
                                 this.toggleable_entry("Amend", amend, IconPosition::Start, Some(Box::new(Amend)), {
-                                    let git_panel = git_panel.downgrade();
+                                    let git_panel = git_panel.clone();
                                     move |_, cx| {
                                         git_panel
                                             .update(cx, |git_panel, cx| {
