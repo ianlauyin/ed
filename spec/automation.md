@@ -62,7 +62,7 @@ Metal, so the OS sees no UI structure; the app reports what it painted itself.
 - GPUI only sends focus-in/out events while the window is active (frontmost),
   so checks that depend on a pane becoming active on focus need the app in
   front; a background window keeps keyboard focus but no pane activates.
-- `state` lists the left, bottom and right docks: open or not, the visible
+- `state` lists the left and bottom docks: open or not, the visible
   panel's persistent name, and whether the dock holds keyboard focus.
 - `state` also lists the project's language servers with the progress work
   each reports in flight. `wait-lsp`

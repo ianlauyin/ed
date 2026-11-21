@@ -179,7 +179,8 @@
   no refresh/stop button or `ToggleDiagnosticsRefresh`; restarting a language
   server clears and republishes its diagnostics.
 - No outline modal ("Go to Symbol in Editor", `outline::Toggle`,
-  `cmd-shift-o`): the outline panel is the way to browse a buffer's symbols.
+  `cmd-shift-o`) and no outline panel: nothing lists a buffer's symbols.
+  Symbols are reached through project symbols and symbol navigation.
 - Read-only editors (Git History revisions and commit diffs, read-only
   buffers) share the editing UI but leave out what can only edit: controls
   follow the editor's capability, not the mode it is shown in, and are hidden

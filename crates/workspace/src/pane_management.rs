@@ -135,21 +135,16 @@ impl Workspace {
         use ActivateInDirectionTarget as Target;
         enum Origin {
             LeftDock,
-            RightDock,
             BottomDock,
             Center,
         }
 
-        let origin: Origin = [
-            (&self.left_dock, Origin::LeftDock),
-            (&self.right_dock, Origin::RightDock),
-            (&self.bottom_dock, Origin::BottomDock),
-        ]
-        .into_iter()
-        .find_map(|(dock, origin)| {
-            (dock.focus_handle(cx).contains_focused(window, cx) && dock.read(cx).is_open()).then_some(origin)
-        })
-        .unwrap_or(Origin::Center);
+        let origin: Origin = [(&self.left_dock, Origin::LeftDock), (&self.bottom_dock, Origin::BottomDock)]
+            .into_iter()
+            .find_map(|(dock, origin)| {
+                (dock.focus_handle(cx).contains_focused(window, cx) && dock.read(cx).is_open()).then_some(origin)
+            })
+            .unwrap_or(Origin::Center);
 
         let get_last_active_pane = || {
             let pane = self
@@ -173,7 +168,7 @@ impl Workspace {
                         SplitDirection::Up => None,
                         SplitDirection::Down => try_dock(&self.bottom_dock),
                         SplitDirection::Left => try_dock(&self.left_dock),
-                        SplitDirection::Right => try_dock(&self.right_dock),
+                        SplitDirection::Right => None,
                     }
                 }
             }
@@ -182,23 +177,14 @@ impl Workspace {
                 if let Some(last_active_pane) = get_last_active_pane() {
                     Some(Target::Pane(last_active_pane))
                 } else {
-                    try_dock(&self.bottom_dock).or_else(|| try_dock(&self.right_dock))
+                    try_dock(&self.bottom_dock)
                 }
             }
 
-            (Origin::LeftDock | Origin::RightDock, SplitDirection::Down) => try_dock(&self.bottom_dock),
+            (Origin::LeftDock, SplitDirection::Down) => try_dock(&self.bottom_dock),
 
             (Origin::BottomDock, SplitDirection::Up) => get_last_active_pane().map(Target::Pane),
             (Origin::BottomDock, SplitDirection::Left) => try_dock(&self.left_dock),
-            (Origin::BottomDock, SplitDirection::Right) => try_dock(&self.right_dock),
-
-            (Origin::RightDock, SplitDirection::Left) => {
-                if let Some(last_active_pane) = get_last_active_pane() {
-                    Some(Target::Pane(last_active_pane))
-                } else {
-                    try_dock(&self.bottom_dock).or_else(|| try_dock(&self.left_dock))
-                }
-            }
 
             _ => None,
         };

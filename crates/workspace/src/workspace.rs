@@ -271,8 +271,6 @@ actions!(
         ClearAllNotifications,
         /// Rotates the left dock through its panels, then closes it.
         CycleLeftDock,
-        /// Rotates the right dock through its panels, then closes it.
-        CycleRightDock,
         /// Clears all navigation history, including forward/backward navigation, recently opened files, and recently closed tabs. **This action is irreversible**.
         ClearNavigationHistory,
         /// Closes the active dock.
@@ -320,8 +318,6 @@ actions!(
         ToggleBottomDock,
         /// Toggles the left dock.
         ToggleLeftDock,
-        /// Toggles the right dock.
-        ToggleRightDock,
         /// Toggles zoom on the active pane.
         ToggleZoom,
         /// Toggles maximizing the active editor pane within the center area,
@@ -768,13 +764,12 @@ pub struct Workspace {
     zoomed: Option<AnyWeakView>,
     previous_dock_drag_coordinates: Option<Point<Pixels>>,
     /// Open/close overlay state of each dock (left, bottom, right).
-    dock_motions: [Rc<DockMotion>; 3],
+    dock_motions: [Rc<DockMotion>; 2],
     zoomed_position: Option<DockPosition>,
     maximized_pane: Option<WeakEntity<Pane>>,
     center: PaneGroup,
     left_dock: Entity<Dock>,
     bottom_dock: Entity<Dock>,
-    right_dock: Entity<Dock>,
     panes: Vec<Entity<Pane>>,
     panes_by_item: FxHashMap<EntityId, WeakEntity<Pane>>,
     active_pane: Entity<Pane>,
@@ -976,27 +971,18 @@ impl Workspace {
 
         let left_dock = Dock::new(DockPosition::Left, modal_layer.clone(), window, cx);
         let bottom_dock = Dock::new(DockPosition::Bottom, modal_layer.clone(), window, cx);
-        let right_dock = Dock::new(DockPosition::Right, modal_layer.clone(), window, cx);
         let left_dock_buttons = cx.new(|cx| PanelButtons::new(left_dock.clone(), cx));
         let bottom_dock_buttons = cx.new(|cx| PanelButtons::new(bottom_dock.clone(), cx));
-        let right_dock_buttons = cx.new(|cx| PanelButtons::new(right_dock.clone(), cx));
         let status_bar = cx.new(|cx| {
             let mut status_bar = StatusBar::new(&center_pane.clone(), window, cx);
             status_bar.add_left_item(left_dock_buttons, window, cx);
-            status_bar.add_right_item(right_dock_buttons, window, cx);
             status_bar.add_right_item(bottom_dock_buttons, window, cx);
             status_bar
         });
 
         let workspace = cx.entity();
-        let editor_view = cx.new(|cx| {
-            ModeView::new(
-                &workspace,
-                WorkspaceMode::Editor,
-                &[left_dock.clone(), bottom_dock.clone(), right_dock.clone()],
-                cx,
-            )
-        });
+        let editor_view = cx
+            .new(|cx| ModeView::new(&workspace, WorkspaceMode::Editor, &[left_dock.clone(), bottom_dock.clone()], cx));
         let git_history_view = cx.new(|cx| ModeView::new(&workspace, WorkspaceMode::GitHistory, &[], cx));
         let terminal_mode_view = cx.new(|cx| ModeView::new(&workspace, WorkspaceMode::Terminal, &[], cx));
         let window_header = cx.new(|cx| window_header::WindowHeader::new(&workspace, &left_dock, &project, cx));
@@ -1049,7 +1035,6 @@ impl Workspace {
             suppressed_notifications: FxHashSet::default(),
             left_dock,
             bottom_dock,
-            right_dock,
             _panels_task: None,
             project: project.clone(),
 
@@ -1134,7 +1119,8 @@ impl Workspace {
             let (window, workspace): (WindowHandle<Workspace>, Entity<Workspace>) = if let Some(window) =
                 window_to_replace
             {
-                let workspace = window.update(cx, |_, window, cx| {
+                let workspace = window.update(cx, |old_workspace, window, cx| {
+                    old_workspace.stop_language_servers(cx);
                     replace_window_workspace(window, cx, |window, cx| {
                         let mut workspace = Workspace::new(project_handle.clone(), Arc::clone(&app_state), window, cx);
 
@@ -1928,12 +1914,6 @@ impl Workspace {
             context.set("left_dock", active_panel.panel_key());
         }
 
-        if self.right_dock.read(cx).is_open()
-            && let Some(active_panel) = self.right_dock.read(cx).active_panel()
-        {
-            context.set("right_dock", active_panel.panel_key());
-        }
-
         if self.bottom_dock.read(cx).is_open()
             && let Some(active_panel) = self.bottom_dock.read(cx).active_panel()
         {
@@ -2057,14 +2037,8 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &ToggleLeftDock, window, cx| {
                 this.toggle_dock(DockPosition::Left, window, cx);
             }))
-            .on_action(cx.listener(|workspace: &mut Workspace, _: &ToggleRightDock, window, cx| {
-                workspace.toggle_dock(DockPosition::Right, window, cx);
-            }))
             .on_action(cx.listener(|workspace: &mut Workspace, _: &CycleLeftDock, window, cx| {
                 workspace.cycle_dock(DockPosition::Left, window, cx);
-            }))
-            .on_action(cx.listener(|workspace: &mut Workspace, _: &CycleRightDock, window, cx| {
-                workspace.cycle_dock(DockPosition::Right, window, cx);
             }))
             .on_action(cx.listener(|workspace: &mut Workspace, _: &ToggleBottomDock, window, cx| {
                 workspace.toggle_dock(DockPosition::Bottom, window, cx);
@@ -2355,7 +2329,6 @@ impl Workspace {
             .unwrap_or_else(|| self.center.first_pane());
         parts.push(FocusablePart::landmark(center_pane.read(cx).focus_handle(cx)));
 
-        parts.extend(dock_part(&self.right_dock));
         parts.extend(dock_part(&self.bottom_dock));
         // Region navigation lands on the status bar's first control rather than
         // the toolbar container.
@@ -2422,6 +2395,12 @@ impl Workspace {
         window.root::<Workspace>().flatten()
     }
 
+    /// Stops the project's language servers when the workspace leaves its window,
+    /// so they don't outlive it if anything still holds the project.
+    fn stop_language_servers(&self, cx: &mut App) {
+        self.project.read(cx).lsp_store().update(cx, |lsp_store, cx| lsp_store.stop_all_language_servers(cx));
+    }
+
     /// Closes this workspace's window once it consents (save prompts).
     pub fn close_window(&mut self, _: &CloseWindow, window: &mut Window, cx: &mut Context<Self>) {
         let Some(window_handle) = window.window_handle().downcast::<Workspace>() else {
@@ -2439,7 +2418,8 @@ impl Workspace {
             flush_windows_serialization(&[window_handle], cx).await;
 
             window_handle
-                .update(cx, |_, window, _cx| {
+                .update(cx, |workspace, window, cx| {
+                    workspace.stop_language_servers(cx);
                     window.remove_window();
                 })
                 .context("removing the closed window")?;

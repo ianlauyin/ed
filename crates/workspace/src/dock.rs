@@ -276,7 +276,6 @@ impl Focusable for Dock {
 pub enum DockPosition {
     Left,
     Bottom,
-    Right,
 }
 
 impl DockPosition {
@@ -284,13 +283,12 @@ impl DockPosition {
         match self {
             Self::Left => "Left",
             Self::Bottom => "Bottom",
-            Self::Right => "Right",
         }
     }
 
     pub const fn axis(&self) -> Axis {
         match self {
-            Self::Left | Self::Right => Axis::Horizontal,
+            Self::Left => Axis::Horizontal,
             Self::Bottom => Axis::Vertical,
         }
     }
@@ -749,7 +747,6 @@ impl Dock {
         match self.position {
             DockPosition::Left => crate::ToggleLeftDock.boxed_clone(),
             DockPosition::Bottom => crate::ToggleBottomDock.boxed_clone(),
-            DockPosition::Right => crate::ToggleRightDock.boxed_clone(),
         }
     }
 
@@ -828,15 +825,6 @@ impl Render for Dock {
                             .h(RESIZE_HANDLE_SIZE)
                             .cursor_row_resize(),
                     ),
-                    DockPosition::Right => deferred(
-                        handle
-                            .absolute()
-                            .top(px(0.))
-                            .left(-RESIZE_HANDLE_SIZE / 2.)
-                            .h_full()
-                            .w(RESIZE_HANDLE_SIZE)
-                            .cursor_col_resize(),
-                    ),
                 }
             };
 
@@ -881,9 +869,8 @@ impl Render for PanelButtons {
         let dock = self.dock.read(cx);
         let active_index = dock.active_panel_index;
         let is_open = dock.is_open;
-        let dock_position = dock.position;
 
-        let mut buttons: Vec<_> = dock
+        let buttons: Vec<_> = dock
             .panel_entries
             .iter()
             .enumerate()
@@ -935,18 +922,13 @@ impl Render for PanelButtons {
             })
             .collect();
 
-        if dock_position == DockPosition::Right {
-            buttons.reverse();
-        }
-
         let has_buttons = !buttons.is_empty();
 
         h_flex()
             .gap_1()
-            .when(
-                has_buttons && (dock.position == DockPosition::Bottom || dock.position == DockPosition::Right),
-                |this| this.child(Divider::vertical().color(DividerColor::Border)),
-            )
+            .when(has_buttons && dock.position == DockPosition::Bottom, |this| {
+                this.child(Divider::vertical().color(DividerColor::Border))
+            })
             .children(buttons)
             .when(has_buttons && dock.position == DockPosition::Left, |this| {
                 this.child(Divider::vertical().color(DividerColor::Border))

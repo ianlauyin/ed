@@ -3370,10 +3370,6 @@ impl Editor {
         })
     }
 
-    pub const fn file_header_size(&self) -> u32 {
-        FILE_HEADER_HEIGHT
-    }
-
     pub fn restore(
         &mut self,
         revert_changes: FxHashMap<BufferId, Vec<(Range<text::Anchor>, Rope)>>,
@@ -3584,8 +3580,6 @@ pub enum EditorEvent {
     TransactionBegun {
         transaction_id: clock::Lamport,
     },
-    /// LSP document symbols for some buffer were fetched or dropped.
-    DocumentSymbolsChanged,
     PushedToNavHistory {
         anchor: Anchor,
         is_deactivate: bool,

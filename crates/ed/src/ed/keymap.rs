@@ -405,7 +405,6 @@ fn build(build_action: BuildAction<'_>) -> Vec<KeyBinding> {
     k.bind("cmd-3", "mode::Terminal");
     k.bind("cmd-`", "workspace::ToggleZoom");
     k.bind("cmd-b", "workspace::CycleLeftDock");
-    k.bind("cmd-r", "workspace::CycleRightDock");
     k.bind("cmd-j", "terminal_panel::ToggleShell");
     k.bind("ctrl-alt-0", "workspace::ResetActiveDockSize");
     k.bind_input("ctrl-alt--", "workspace::DecreaseActiveDockSize", json!({"px": 0}));
@@ -479,17 +478,6 @@ fn build(build_action: BuildAction<'_>) -> Vec<KeyBinding> {
 
     k.group(Some("ProjectSearchBar && !in_replace"));
     k.bind("cmd-enter", "project_search::SearchInNew");
-
-    k.group(Some("OutlinePanel && not_editing"));
-    k.bind("escape", "menu::Cancel");
-    k.bind("left", "outline_panel::CollapseSelectedEntry");
-    k.bind("right", "outline_panel::ExpandSelectedEntry");
-    k.bind("cmd-alt-c", "workspace::CopyPath");
-    k.bind("alt-cmd-shift-c", "workspace::CopyRelativePath");
-    k.bind("alt-cmd-r", "outline_panel::RevealInFileManager");
-    k.bind("space", "outline_panel::OpenSelectedEntry");
-    k.bind("shift-down", "menu::SelectNext");
-    k.bind("shift-up", "menu::SelectPrevious");
 
     k.group(Some("ProjectPanel"));
     k.bind("left", "project_panel::CollapseSelectedEntry");

@@ -1144,10 +1144,6 @@ impl Item for ProjectSearchView {
 }
 
 impl ProjectSearchView {
-    pub fn get_matches(&self, cx: &App) -> Vec<Range<Anchor>> {
-        self.entity.read(cx).match_ranges.clone()
-    }
-
     fn open_text_finder(&mut self, _: &OpenTextFinder, window: &mut Window, cx: &mut Context<Self>) {
         TextFinder::open_from_project_search(cx.entity(), window, cx).detach();
     }

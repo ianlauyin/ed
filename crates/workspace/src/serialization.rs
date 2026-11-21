@@ -224,11 +224,9 @@ impl Workspace {
 
                 let docks = serialized_workspace.docks;
 
-                for (dock, serialized_dock) in &mut [
-                    (&mut workspace.right_dock, docks.right),
-                    (&mut workspace.left_dock, docks.left),
-                    (&mut workspace.bottom_dock, docks.bottom),
-                ] {
+                for (dock, serialized_dock) in
+                    &mut [(&mut workspace.left_dock, docks.left), (&mut workspace.bottom_dock, docks.bottom)]
+                {
                     dock.update(cx, |dock, cx| {
                         dock.restore_serialized_state(serialized_dock.clone(), window, cx);
                     });

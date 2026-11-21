@@ -18,7 +18,6 @@ pub(super) fn app_menus(_cx: &mut App) -> Vec<Menu> {
         MenuItem::action("Reset All Zoom", ed_actions::ResetAllZoom),
         MenuItem::separator(),
         MenuItem::action("Cycle Left Dock", workspace::CycleLeftDock),
-        MenuItem::action("Cycle Right Dock", workspace::CycleRightDock),
         MenuItem::action("Toggle Bottom Dock", workspace::ToggleBottomDock),
         MenuItem::submenu(Menu {
             name: "Editor Layout".into(),
@@ -35,7 +34,6 @@ pub(super) fn app_menus(_cx: &mut App) -> Vec<Menu> {
         MenuItem::action("Unfold All", actions::UnfoldAll),
         MenuItem::separator(),
         MenuItem::action("Project Panel", project_panel::ToggleFocus),
-        MenuItem::action("Outline Panel", outline_panel::ToggleFocus),
         MenuItem::action("Terminal Panel", terminal_panel::Toggle),
     ];
 

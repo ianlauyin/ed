@@ -246,7 +246,6 @@ fn main() {
         tab_switcher::init(cx);
         project_symbols::init(cx);
         project_panel::init(cx);
-        outline_panel::init(cx);
 
         search::init(cx);
         lsp_locations::init(cx);

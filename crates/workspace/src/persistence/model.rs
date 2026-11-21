@@ -116,8 +116,6 @@ pub struct DockStructure {
     #[serde(default)]
     pub left: DockData,
     #[serde(default)]
-    pub right: DockData,
-    #[serde(default)]
     pub bottom: DockData,
 }
 

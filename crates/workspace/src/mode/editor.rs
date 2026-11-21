@@ -27,7 +27,6 @@ use ui::prelude::div;
 use ui::prelude::h_flex;
 use ui::prelude::px;
 use ui::prelude::v_flex;
-use ui::utils;
 
 use crate::CARD_GAP;
 use crate::Pane;
@@ -60,9 +59,7 @@ impl Workspace {
                     .children(self.render_dock(DockPosition::Bottom, &self.bottom_dock, window, cx))
                     .children(self.render_dock_transition(DockPosition::Bottom, &self.bottom_dock, cx)),
             )
-            .children(self.render_dock(DockPosition::Right, &self.right_dock, window, cx))
-            .children(self.render_dock_transition(DockPosition::Left, &self.left_dock, cx))
-            .children(self.render_dock_transition(DockPosition::Right, &self.right_dock, cx));
+            .children(self.render_dock_transition(DockPosition::Left, &self.left_dock, cx));
 
         self.mode_container(cx)
             .child({
@@ -75,9 +72,6 @@ impl Workspace {
 
                             if bounds_changed {
                                 this.left_dock
-                                    .update(cx, |dock, cx| dock.clamp_panel_size(bounds.size.width, window, cx));
-
-                                this.right_dock
                                     .update(cx, |dock, cx| dock.clamp_panel_size(bounds.size.width, window, cx));
 
                                 this.bottom_dock
@@ -98,9 +92,6 @@ impl Workspace {
                         match e.drag(cx).0 {
                             DockPosition::Left => {
                                 workspace.resize_left_dock(e.event.position.x - workspace.bounds.left(), window, cx);
-                            }
-                            DockPosition::Right => {
-                                workspace.resize_right_dock(workspace.bounds.right() - e.event.position.x, window, cx);
                             }
                             DockPosition::Bottom => {
                                 workspace.resize_bottom_dock(
@@ -152,7 +143,6 @@ impl Workspace {
 
         let dock_element_id = match position {
             DockPosition::Left => "left-dock",
-            DockPosition::Right => "right-dock",
             DockPosition::Bottom => "bottom-dock",
         };
         // The left dock is the sidebar: the window header sits above it.
@@ -165,12 +155,6 @@ impl Workspace {
             .overflow_hidden()
             .flex_none()
             .when(has_header, |this| this.flex_col().child(self.render_sidebar_header(cx)))
-            // The right dock keeps the card gap from the window's top edge, like top-row tab bars,
-            // so a panel's header row lines up with the tabs.
-            .when(position == DockPosition::Right && dock.read(cx).visible_panel().is_some(), |this| {
-                this.flex_col()
-                    .child(utils::window_drag_area(div().id("right-dock-top-gap")).flex_none().w_full().h(CARD_GAP))
-            })
             .child(div().flex().flex_1().min_h_0().size_full().child(dock.clone()));
 
         // Apply sizing only when the dock is open. When closed the dock is still
@@ -181,7 +165,6 @@ impl Workspace {
             // Separate the open dock from the center cards.
             container = match position {
                 DockPosition::Left => container.pr(CARD_GAP),
-                DockPosition::Right => container.pl(CARD_GAP),
                 DockPosition::Bottom => container.pt(CARD_GAP),
             };
             // Docks flex-shrink and clamp, so the stored size can differ from what's drawn.
@@ -337,7 +320,6 @@ const fn dock_index(position: DockPosition) -> usize {
     match position {
         DockPosition::Left => 0,
         DockPosition::Bottom => 1,
-        DockPosition::Right => 2,
     }
 }
 
@@ -346,7 +328,6 @@ fn dock_overlay_bounds(position: DockPosition, region: Bounds<Pixels>, offset: P
     let (left, top, right, bottom) = (region.left(), region.top(), region.right(), region.bottom());
     match position {
         DockPosition::Left => Bounds::from_corners(point(left + offset, top), point(left + offset + span, bottom)),
-        DockPosition::Right => Bounds::from_corners(point(right - offset - span, top), point(right - offset, bottom)),
         DockPosition::Bottom => {
             Bounds::from_corners(point(left, bottom - offset - span), point(right, bottom - offset))
         }
@@ -442,10 +423,6 @@ mod tests {
             Bounds::from_corners(point(px(60.), px(20.)), point(px(160.), px(620.)))
         );
         assert_eq!(
-            dock_overlay_bounds(DockPosition::Right, region, offset, span),
-            Bounds::from_corners(point(px(860.), px(20.)), point(px(960.), px(620.)))
-        );
-        assert_eq!(
             dock_overlay_bounds(DockPosition::Bottom, region, offset, span),
             Bounds::from_corners(point(px(10.), px(470.)), point(px(1010.), px(570.)))
         );
@@ -453,9 +430,9 @@ mod tests {
 
     #[test]
     fn dock_indices_are_distinct() {
-        let mut indices = [DockPosition::Left, DockPosition::Bottom, DockPosition::Right].map(dock_index);
+        let mut indices = [DockPosition::Left, DockPosition::Bottom].map(dock_index);
         indices.sort_unstable();
-        assert_eq!(indices, [0, 1, 2]);
+        assert_eq!(indices, [0, 1]);
     }
 
     #[test]

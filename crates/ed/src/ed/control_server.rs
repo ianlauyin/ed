@@ -596,7 +596,6 @@ const fn dock_position_name(position: DockPosition) -> &'static str {
     match position {
         DockPosition::Left => "left",
         DockPosition::Bottom => "bottom",
-        DockPosition::Right => "right",
     }
 }
 
@@ -610,6 +609,5 @@ mod tests {
     fn dock_position_name_works() {
         assert_eq!(dock_position_name(DockPosition::Left), "left");
         assert_eq!(dock_position_name(DockPosition::Bottom), "bottom");
-        assert_eq!(dock_position_name(DockPosition::Right), "right");
     }
 }

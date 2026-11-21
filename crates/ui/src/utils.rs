@@ -3,8 +3,6 @@
 use gpui::App;
 use theme::ActiveTheme as _;
 
-use crate::font;
-
 mod apca_contrast;
 mod color_contrast;
 mod constants;
@@ -35,20 +33,6 @@ pub use with_rem_size::*;
 /// Returns true if the current theme is light or vibrant light.
 pub fn is_light(cx: &mut App) -> bool {
     cx.theme().appearance.is_light()
-}
-
-pub fn ui_text_style(cx: &App) -> gpui::TextStyle {
-    let ui_font = font::ui_font();
-    gpui::TextStyle {
-        color: cx.theme().colors().text,
-        font_family: ui_font.family.clone(),
-        font_features: ui_font.features.clone(),
-        font_fallbacks: ui_font.fallbacks.clone(),
-        font_size: gpui::AbsoluteLength::from(crate::TextSize::Default.rems(cx)),
-        font_weight: ui_font.weight,
-        line_height: gpui::relative(1.),
-        ..gpui::TextStyle::default()
-    }
 }
 
 /// Returns the platform-appropriate label for the "reveal in file manager" action.

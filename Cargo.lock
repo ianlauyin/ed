@@ -755,7 +755,6 @@ dependencies = [
  "markdown_preview",
  "menu",
  "mimalloc",
- "outline_panel",
  "paths",
  "percent-encoding",
  "project_panel",
@@ -2668,33 +2667,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f59006ce1e204c30956638535b74d317bca99477b9356dfaec54c37f6f600ab"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "outline_panel"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "ed_actions",
- "editor",
- "file_icons",
- "fuzzy",
- "git",
- "gpui",
- "indexmap",
- "language",
- "log",
- "menu",
- "project",
- "rustc-hash",
- "search",
- "smallvec",
- "theme",
- "ui",
- "util",
- "workspace",
- "worktree",
 ]
 
 [[package]]

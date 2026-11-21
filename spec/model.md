@@ -37,7 +37,7 @@ Dependencies only point downward:
 
 ```
 ed (binary: wires everything, opens windows)
- └─ feature crates: editor, project_panel, outline_panel, terminal_view,
+ └─ feature crates: editor, project_panel, terminal_view,
     git_ui, search, file_finder, picker, title_bar, diagnostics, ...
      └─ workspace          (views: window shell, panes, docks, items)
          ├─ project        (models: everything one open project knows)
@@ -99,8 +99,8 @@ Workspace                 window root, one per window; owns Entity<Project>
  ├─ git_history_center    separate PaneGroup (Git History mode)
  │   └─ Pane              tabs: Vec<Box<dyn ItemHandle>>, Toolbar
  │       └─ Item          Editor, ImageView, ProjectSearchView, ...
- ├─ left/bottom/right Dock
- │   └─ Panel             ProjectPanel, OutlinePanel, TerminalPanel, GitPanel
+ ├─ left/bottom Dock
+ │   └─ Panel             ProjectPanel, GitPanel, TerminalPanel
  ├─ StatusBar             StatusItemViews
  ├─ ModalLayer            at most one ModalView (pickers, prompts)
  ├─ ToastLayer, notifications
@@ -116,7 +116,10 @@ Workspace                 window root, one per window; owns Entity<Project>
   window (recent projects, Close Project, switching or creating a git worktree)
   first runs the current workspace's close prompts, then replaces the window's
   root with a new `Workspace` (`replace_window_workspace`); the old one leaves
-  the session and is released, staying in recent projects. Nothing
+  the session and is released, staying in recent projects. Its language
+  servers are stopped explicitly at that point, and when its window closes,
+  rather than waiting for the project to be released: a leaked project must
+  not keep servers (gigabytes each) running. Nothing
   keeps a second workspace alive in the background, and there are no
   per-window project groups or workspace sidebar.
 - Only the window's root workspace writes the window title / edited state.
@@ -179,9 +182,11 @@ downcasts to the item types it cares about, and (re)subscribes to that item.
 
 - A `Panel` emits `PanelEvent` (`Activate`, `Close`, `ZoomIn/Out`), which the
   workspace handles. `Dock` observes each panel to re-render.
-- Every panel has one fixed dock (project, git: left; terminal: bottom;
-  outline: right). Panels can't be moved: there is no dock position setting,
-  "Dock Left/Right/Bottom" menu, or move-panel action.
+- There are two docks, left and bottom; there is no right dock and no outline
+  panel, so the editor keeps the full width beside the sidebar. Every panel
+  has one fixed dock (project, git: left; terminal: bottom). Panels can't be
+  moved: there is no dock position setting, "Dock Left/Bottom" menu, or
+  move-panel action.
 - Panels are loaded asynchronously (each panel's `load`) and added when ready; dock layout is restored after all
   of them (`finish_dock_restoration`).
 - Opening or closing a dock is animated visually only: layout jumps to the

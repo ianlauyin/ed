@@ -41,7 +41,6 @@ lsp_locations.workspace = true
 markdown_preview.workspace = true
 menu.workspace = true
 mimalloc = { version = "0.1", optional = true }
-outline_panel.workspace = true
 paths.workspace = true
 project_panel.workspace = true
 project_symbols.workspace = true

@@ -21,14 +21,12 @@ use theme::SyntaxTheme;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::Editor;
-use crate::EditorEvent;
 use crate::LSP_REQUEST_DEBOUNCE_TIMEOUT;
 use crate::display_map::DisplaySnapshot;
 
 impl Editor {
     /// Returns all document outline items for a buffer, using LSP or
     /// tree-sitter based on the `document_symbols` setting.
-    /// External consumers (outline panel) should use this.
     pub fn buffer_outline_items(
         &self,
         buffer_id: BufferId,
@@ -67,8 +65,7 @@ impl Editor {
 
     /// Fetches document symbols from the LSP for buffers that have the setting
     /// enabled. Called from `update_lsp_data` on edits, server events, etc.
-    /// When the fetch completes, stores results in `self.lsp_document_symbols`
-    /// and emits `DocumentSymbolsChanged` so the outline panel picks up the new data.
+    /// When the fetch completes, stores results in `self.lsp_document_symbols`.
     pub(super) fn refresh_document_symbols(&mut self, for_buffer: Option<BufferId>, cx: &mut Context<Self>) {
         if !self.lsp_data_enabled() {
             return;
@@ -89,20 +86,10 @@ impl Editor {
             .unique_by(|buffer| buffer.read(cx).buffer_id())
             .collect::<Vec<_>>();
 
-        let mut symbols_altered = false;
         let multi_buffer = self.buffer().clone();
         self.lsp_document_symbols.retain(|buffer_id, _| {
-            let Some(buffer) = multi_buffer.read(cx).buffer(*buffer_id) else {
-                symbols_altered = true;
-                return false;
-            };
-            let retain = lsp_symbols_enabled(buffer.read(cx), cx);
-            symbols_altered |= !retain;
-            retain
+            multi_buffer.read(cx).buffer(*buffer_id).is_some_and(|buffer| lsp_symbols_enabled(buffer.read(cx), cx))
         });
-        if symbols_altered {
-            cx.emit(EditorEvent::DocumentSymbolsChanged);
-        }
 
         self.refresh_document_symbols_tasks.retain(|buffer_id, _| {
             multi_buffer.read(cx).buffer(*buffer_id).is_some_and(|buffer| lsp_symbols_enabled(buffer.read(cx), cx))
@@ -140,7 +127,6 @@ impl Editor {
                                 }
                             }
                             editor.lsp_document_symbols.insert(buffer_id, items);
-                            cx.emit(EditorEvent::DocumentSymbolsChanged);
                         })
                         .ok();
                 })

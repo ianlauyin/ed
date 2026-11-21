@@ -303,17 +303,6 @@ impl ClickEvent {
         }
     }
 
-    /// Returns whether the click focused the element.
-    ///
-    /// `Keyboard`: false, keyboard clicks only work if an element is already focused
-    /// `Mouse`: Whether this was the first focusing click.
-    pub const fn first_focus(&self) -> bool {
-        match self {
-            ClickEvent::Keyboard(_) => false,
-            ClickEvent::Mouse(event) => event.down.first_mouse,
-        }
-    }
-
     /// Returns the click count of the click event.
     ///
     /// `Keyboard`: Always 1

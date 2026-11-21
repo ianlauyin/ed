@@ -111,11 +111,9 @@ because it hurt readability; an opaque window is also cheaper to composite.
   shown, or while something is zoomed, the same group moves to the start of the
   top-left pane's tab bar, at the same x, so nothing jumps when the sidebar is
   toggled. A zoomed dock covers the panes, so it gets a header row of its own.
-- Tab bars are 36px high. Top-row tab bars, the sidebar header, an open right
-  dock and a zoomed dock's header keep the 8px card gap from the window's top
-  edge (the gap moves the window). Panel header rows one tab high (the outline
-  panel's search bar) thus line up with the tab row, their bottom line level
-  with the tabs' bottom edge, so the tabs
+- Tab bars are 36px high. Top-row tab bars, the sidebar header and a zoomed
+  dock's header keep the 8px card gap from the window's top
+  edge (the gap moves the window), so the tabs
   sit as far from the edge as the cards do from the sides. macOS doesn't fix
   the titlebar height for a transparent, full-size-content window: the row is
   ours. The top row is laid out like every other pane row: the card gap, then
@@ -214,7 +212,7 @@ because it hurt readability; an opaque window is also cheaper to composite.
     as elsewhere.
   - `workspace::NewTerminal` opens in terminal mode's active pane while that
     mode is shown, else in the terminal panel. "Open in Terminal"
-    (`workspace::OpenTerminal`, from the project panel, outline panel, tab and
+    (`workspace::OpenTerminal`, from the project panel, tab and
     file header menus) opens a shell in that directory in terminal mode and
     switches to it.
   - Pane navigation (`ActivatePane*`, next/previous pane) stays among the
@@ -266,7 +264,8 @@ because it hurt readability; an opaque window is also cheaper to composite.
   pane. The active pane has no border.
 - The workspace has no settings (`WorkspaceSettingsContent`,
   `StatusBarSettings` and `PreviewTabsSettings` are gone). Fixed behaviour:
-  - Layout: the bottom dock sits between the left and right docks. Splitting
+  - Layout: the bottom dock sits to the right of the left dock, under the
+    panes. Splitting
     goes right or down. Split drop targets are 20% of the pane's smaller
     side. Resizing the left dock resizes all its panels; other docks resize
     only the active panel. No max tab count.
@@ -300,13 +299,13 @@ because it hurt readability; an opaque window is also cheaper to composite.
 - Actions act only in the mode they belong to; in other modes they are ignored
   rather than switching modes, so switching is always explicit (`cmd-1`,
   `cmd-2`, `cmd-3`). Docks belong to Editor mode: toggling, opening, closing, focusing
-  or resizing docks and panels (`cmd-b`, `cmd-r`, `cmd-j`, …)
+  or resizing docks and panels (`cmd-b`, `cmd-j`, …)
   does nothing in Git History.
 - One key per dock, no per-panel shortcuts (the panel `ToggleFocus` actions
   stay in the command palette and View menu):
-  - `cmd-b` / `cmd-r` (`workspace::CycleLeftDock` / `CycleRightDock`) rotate
+  - `cmd-b` (`workspace::CycleLeftDock`) rotates
     the dock: hidden → first enabled panel → next enabled panel → … → hidden
-    (left: project → git → hidden; right: outline → hidden). The rotation
+    (project → git → hidden). The rotation
     follows what is visible, not focus: a hidden dock always starts at its
     first panel, and a press on an open dock advances even when focus is in
     the editor. The shown panel takes focus; closing returns focus to the
@@ -340,7 +339,7 @@ because it hurt readability; an opaque window is also cheaper to composite.
   bottom). There is no proportional "flex width" mode and no
   `terminal.flexible` setting. A side dock may shrink when space is tight but
   springs back to its stored width.
-- The project, git (commit) and outline panels, and the Git History sidebar,
+- The project and git (commit) panels, and the Git History sidebar,
   share a 240px minimum width (`dock::SIDEBAR_MIN_WIDTH`): dragging or the
   dock-size actions stop there instead of storing a smaller width.
 - Tabs fill the tab bar's full height with rounded top corners. The active tab's
@@ -441,14 +440,6 @@ because it hurt readability; an opaque window is also cheaper to composite.
   side, keeping square content corners (editor background, scrollbars) inside
   the rounded edge. If the radius grows, the inset must grow so that
   inset >= radius × (1 − 1/√2).
-- Symbols in the outline panel render in the UI
-  font at the project panel's label size, not the buffer font. Syntax highlight
-  colours are kept, but theme font weight and style are dropped, so every entry
-  (e.g. bold markdown headings) uses the same weight and style.
-- In multi-buffer views (search results, diffs) the outline panel always shows
-  excerpts, symbols and search matches under each file. The upstream
-  `ToggleSymbols` action, its filter-bar button and the
-  `outline_panel.multi_buffer_hide_symbols` setting are removed.
 - There is a single UI density. The upstream `unstable.ui_density` setting
   (compact/comfortable) is removed, and `DynamicSpacing` is a plain enum whose
   `BaseXX` variant is XX px at a 16px rem; `px()` scales it with the UI font

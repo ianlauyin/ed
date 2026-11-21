@@ -74,8 +74,7 @@ migrator, or Vim/Helix mode.
   launch `NSScreen.mainScreen` is the menu bar's screen, i.e. the primary
   display unless displays have separate Spaces)), dock layout for new
   windows, native (macOS) window state, the Text Finder's last query and
-  filters, git panel commit drafts/signoff/commit-editor collapse, outline panel
-  state, and the registry of git worktrees ed created.
+  filters, git panel commit drafts/signoff/commit-editor collapse, and the registry of git worktrees ed created.
 - There is no restricted mode or worktree trust: every opened project is
   trusted, so its project settings apply and its language servers start
   without a prompt.
@@ -122,10 +121,6 @@ migrator, or Vim/Helix mode.
     settings (see `project-panel.md`);
   - status bar: no active file name item; the cursor position item always
     uses the long selection format (`2 selections, 3 lines, 12 characters`);
-  - outline panel: docked right only, 360px default width, 20px indent with
-    indent guides, file and folder icons (no folder chevrons), single-child
-    directories auto-fold, the active entry is always revealed, outlines are
-    not collapsed by default depth; there are no outline panel settings;
   - file finder: file icons, width `window − 768px` (at least the default
     modal width), the active file is skipped as the first history match unless
     the query has a position, ignored files follow the worktree unless toggled,

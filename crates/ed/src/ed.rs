@@ -66,7 +66,6 @@ use language::Capability;
 use language_tools::lsp_button;
 use language_tools::lsp_button::LspButton;
 use language_tools::lsp_log_view::LspLogToolbarItemView;
-use outline_panel::OutlinePanel;
 use project_panel::ProjectPanel;
 use search::project_search::ProjectSearchBar;
 use terminal_view::terminal_panel;
@@ -287,11 +286,9 @@ fn initialize_panels(window: &Window, cx: &Context<Workspace>) -> Task<anyhow::R
         }
 
         let project_panel = ProjectPanel::load(&workspace_handle, cx);
-        let outline_panel = OutlinePanel::load(&workspace_handle, cx);
         let terminal_panel = TerminalPanel::load(&workspace_handle, cx);
         let git_panel = GitPanel::load(&workspace_handle, cx);
         add_panel(project_panel, &workspace_handle, cx);
-        add_panel(outline_panel, &workspace_handle, cx);
         add_panel(terminal_panel, &workspace_handle, cx);
         add_panel(git_panel, &workspace_handle, cx);
 
@@ -375,14 +372,6 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         .register_action(
             |workspace: &mut Workspace, _: &ToggleFocus, window: &mut Window, cx: &mut Context<Workspace>| {
                 workspace.toggle_panel_focus::<ProjectPanel>(window, cx);
-            },
-        )
-        .register_action(
-            |workspace: &mut Workspace,
-             _: &outline_panel::ToggleFocus,
-             window: &mut Window,
-             cx: &mut Context<Workspace>| {
-                workspace.toggle_panel_focus::<OutlinePanel>(window, cx);
             },
         )
         .register_action(

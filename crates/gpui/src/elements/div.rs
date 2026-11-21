@@ -3203,11 +3203,6 @@ impl ScrollHandle {
             (ix, px(0.))
         }
     }
-
-    /// Get the count of children for scrollable item.
-    pub fn children_count(&self) -> usize {
-        self.0.borrow().child_bounds.len()
-    }
 }
 
 #[cfg(test)]

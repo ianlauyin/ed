@@ -34,12 +34,8 @@ impl Workspace {
         &self.bottom_dock
     }
 
-    pub const fn right_dock(&self) -> &Entity<Dock> {
-        &self.right_dock
-    }
-
-    pub const fn all_docks(&self) -> [&Entity<Dock>; 3] {
-        [&self.left_dock, &self.bottom_dock, &self.right_dock]
+    pub const fn all_docks(&self) -> [&Entity<Dock>; 2] {
+        [&self.left_dock, &self.bottom_dock]
     }
 
     pub fn capture_dock_state(&self, _window: &Window, cx: &App) -> DockStructure {
@@ -50,11 +46,6 @@ impl Workspace {
         // by the dock code in `Dock::new` and `Dock::add_panel`.
         let left_dock_zoom = self.zoomed_position == Some(DockPosition::Left);
 
-        let right_dock = self.right_dock.read(cx);
-        let right_visible = right_dock.is_open();
-        let right_active_panel = right_dock.active_panel().map(|panel| panel.persistent_name().to_owned());
-        let right_dock_zoom = self.zoomed_position == Some(DockPosition::Right);
-
         let bottom_dock = self.bottom_dock.read(cx);
         let bottom_visible = bottom_dock.is_open();
         let bottom_active_panel = bottom_dock.active_panel().map(|panel| panel.persistent_name().to_owned());
@@ -62,15 +53,12 @@ impl Workspace {
 
         DockStructure {
             left: DockData { visible: left_visible, active_panel: left_active_panel, zoom: left_dock_zoom },
-            right: DockData { visible: right_visible, active_panel: right_active_panel, zoom: right_dock_zoom },
             bottom: DockData { visible: bottom_visible, active_panel: bottom_active_panel, zoom: bottom_dock_zoom },
         }
     }
 
     pub fn set_dock_structure(&self, docks: DockStructure, window: &mut Window, cx: &mut Context<Self>) {
-        for (dock, data) in
-            [(&self.left_dock, docks.left), (&self.bottom_dock, docks.bottom), (&self.right_dock, docks.right)]
-        {
+        for (dock, data) in [(&self.left_dock, docks.left), (&self.bottom_dock, docks.bottom)] {
             dock.update(cx, |dock, cx| {
                 dock.restore_serialized_state(data, window, cx);
             });
@@ -78,7 +66,7 @@ impl Workspace {
     }
 
     pub fn finish_dock_restoration(&self, cx: &mut App) {
-        for dock in [&self.left_dock, &self.bottom_dock, &self.right_dock] {
+        for dock in [&self.left_dock, &self.bottom_dock] {
             dock.update(cx, |dock, _| {
                 dock.finish_restoration();
             });
@@ -88,21 +76,16 @@ impl Workspace {
     /// Returns which dock currently has focus, or `None` if focus is in the
     /// center pane or elsewhere. Does NOT fall back to any global state.
     pub fn focused_dock_position(&self, window: &Window, cx: &App) -> Option<DockPosition> {
-        [
-            (DockPosition::Left, &self.left_dock),
-            (DockPosition::Right, &self.right_dock),
-            (DockPosition::Bottom, &self.bottom_dock),
-        ]
-        .into_iter()
-        .find(|(_, dock)| dock.read(cx).is_open() && dock.focus_handle(cx).contains_focused(window, cx))
-        .map(|(position, _)| position)
+        [(DockPosition::Left, &self.left_dock), (DockPosition::Bottom, &self.bottom_dock)]
+            .into_iter()
+            .find(|(_, dock)| dock.read(cx).is_open() && dock.focus_handle(cx).contains_focused(window, cx))
+            .map(|(position, _)| position)
     }
 
     pub const fn dock_at_position(&self, position: DockPosition) -> &Entity<Dock> {
         match position {
             DockPosition::Left => &self.left_dock,
             DockPosition::Bottom => &self.bottom_dock,
-            DockPosition::Right => &self.right_dock,
         }
     }
 
@@ -392,38 +375,15 @@ impl Workspace {
     fn resize_dock(&self, dock_pos: DockPosition, new_size: Pixels, window: &mut Window, cx: &mut Context<Self>) {
         match dock_pos {
             DockPosition::Left => self.resize_left_dock(new_size, window, cx),
-            DockPosition::Right => self.resize_right_dock(new_size, window, cx),
             DockPosition::Bottom => self.resize_bottom_dock(new_size, window, cx),
         }
     }
 
     pub(super) fn resize_left_dock(&self, new_size: Pixels, window: &mut Window, cx: &mut App) {
         let workspace_width = self.bounds.size.width;
-        let mut size = new_size.min(workspace_width - RESIZE_HANDLE_SIZE);
-
-        self.right_dock.read_with(cx, |right_dock, cx| {
-            let right_dock_size = right_dock.stored_active_panel_size(window, cx).unwrap_or(Pixels::ZERO);
-            if right_dock_size + size > workspace_width {
-                size = workspace_width - right_dock_size;
-            }
-        });
-
+        let size = new_size.min(workspace_width - RESIZE_HANDLE_SIZE);
         self.left_dock.update(cx, |left_dock, cx| {
             left_dock.resize_panel_sizes(Some(size), window, cx);
-        });
-    }
-
-    pub(super) fn resize_right_dock(&self, new_size: Pixels, window: &mut Window, cx: &mut App) {
-        let workspace_width = self.bounds.size.width;
-        let mut size = new_size.min(workspace_width - RESIZE_HANDLE_SIZE);
-        self.left_dock.read_with(cx, |left_dock, cx| {
-            let left_dock_size = left_dock.stored_active_panel_size(window, cx).unwrap_or(Pixels::ZERO);
-            if left_dock_size + size > workspace_width {
-                size = workspace_width - left_dock_size;
-            }
-        });
-        self.right_dock.update(cx, |right_dock, cx| {
-            right_dock.resize_panel_sizes(Some(size), window, cx);
         });
     }
 
